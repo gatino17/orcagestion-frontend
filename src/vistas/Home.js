@@ -1,583 +1,483 @@
-import React, {} from "react";
+import React, { useState, useEffect } from "react";
+import DataTable from 'react-data-table-component';
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from '@fullcalendar/interaction';
+import timeGridPlugin from '@fullcalendar/timegrid';
 
-function Home() {
-  return (
-    <div >
-{/* Content Wrapper. Contains page content */}
-<div className="content-wrapper">
-  {/* Content Header (Page header) */}
-  <div className="content-header">
-    <div className="container-fluid">
-      <div className="row mb-2">
-        <div className="col-sm-6">
-          <h1 className="m-0">Dashboard  menu</h1>
-        </div>{/* /.col */}
-        <div className="col-sm-6">
-          <ol className="breadcrumb float-sm-right">
-            <li className="breadcrumb-item"><a href="#">Home</a></li>
-            <li className="breadcrumb-item active">Dashboard v1</li>
-          </ol>
-        </div>{/* /.col */}
-      </div>{/* /.row */}
-    </div>{/* /.container-fluid */}
-  </div>
-  {/* /.content-header */}
-  {/* Main content */}
-  <section className="content">
-    <div className="container-fluid">
-      {/* Small boxes (Stat box) */}
-      <div className="row">
-        <div className="col-lg-3 col-6">
-          {/* small box */}
-          <div className="small-box bg-info">
-            <div className="inner">
-              <h3>150</h3>
-              <p>New Orders</p>
-            </div>
-            <div className="icon">
-              <i className="ion ion-bag" />
-            </div>
-            <a href="#" className="small-box-footer">More info <i className="fas fa-arrow-circle-right" /></a>
-          </div>
-        </div>
-        {/* ./col */}
-        <div className="col-lg-3 col-6">
-          {/* small box */}
-          <div className="small-box bg-success">
-            <div className="inner">
-              <h3>53<sup style={{fontSize: 20}}>%</sup></h3>
-              <p>Bounce Rate</p>
-            </div>
-            <div className="icon">
-              <i className="ion ion-stats-bars" />
-            </div>
-            <a href="#" className="small-box-footer">More info <i className="fas fa-arrow-circle-right" /></a>
-          </div>
-        </div>
-        {/* ./col */}
-        <div className="col-lg-3 col-6">
-          {/* small box */}
-          <div className="small-box bg-warning">
-            <div className="inner">
-              <h3>44</h3>
-              <p>User Registrations</p>
-            </div>
-            <div className="icon">
-              <i className="ion ion-person-add" />
-            </div>
-            <a href="#" className="small-box-footer">More info <i className="fas fa-arrow-circle-right" /></a>
-          </div>
-        </div>
-        {/* ./col */}
-        <div className="col-lg-3 col-6">
-          {/* small box */}
-          <div className="small-box bg-danger">
-            <div className="inner">
-              <h3>65</h3>
-              <p>Unique Visitors</p>
-            </div>
-            <div className="icon">
-              <i className="ion ion-pie-graph" />
-            </div>
-            <a href="#" className="small-box-footer">More info <i className="fas fa-arrow-circle-right" /></a>
-          </div>
-        </div>
-        {/* ./col */}
-      </div>
-      {/* /.row */}
-      {/* Main row */}
-      <div className="row">
-        {/* Left col */}
-        <section className="col-lg-7 connectedSortable">
-          {/* Custom tabs (Charts with tabs)*/}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">
-                <i className="fas fa-chart-pie mr-1" />
-                Sales
-              </h3>
-              <div className="card-tools">
-                <ul className="nav nav-pills ml-auto">
-                  <li className="nav-item">
-                    <a className="nav-link active" href="#revenue-chart" data-toggle="tab">Area</a>
-                  </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="#sales-chart" data-toggle="tab">Donut</a>
-                  </li>
-                </ul>
-              </div>
-            </div>{/* /.card-header */}
-            <div className="card-body">
-              <div className="tab-content p-0">
-                {/* Morris chart - Sales */}
-                <div className="chart tab-pane active" id="revenue-chart" style={{position: 'relative', height: 300}}>
-                  <canvas id="revenue-chart-canvas" height={300} style={{height: 300}} />
-                </div>
-                <div className="chart tab-pane" id="sales-chart" style={{position: 'relative', height: 300}}>
-                  <canvas id="sales-chart-canvas" height={300} style={{height: 300}} />
-                </div>
-              </div>
-            </div>{/* /.card-body */}
-          </div>
-          {/* /.card */}
-          {/* DIRECT CHAT */}
-          <div className="card direct-chat direct-chat-primary">
-            <div className="card-header">
-              <h3 className="card-title">Direct Chat</h3>
-              <div className="card-tools">
-                <span title="3 New Messages" className="badge badge-primary">3</span>
-                <button type="button" className="btn btn-tool" data-card-widget="collapse">
-                  <i className="fas fa-minus" />
-                </button>
-                <button type="button" className="btn btn-tool" title="Contacts" data-widget="chat-pane-toggle">
-                  <i className="fas fa-comments" />
-                </button>
-                <button type="button" className="btn btn-tool" data-card-widget="remove">
-                  <i className="fas fa-times" />
-                </button>
-              </div>
-            </div>
-            {/* /.card-header */}
-            <div className="card-body">
-              {/* Conversations are loaded here */}
-              <div className="direct-chat-messages">
-                {/* Message. Default to the left */}
-                <div className="direct-chat-msg">
-                  <div className="direct-chat-infos clearfix">
-                    <span className="direct-chat-name float-left">Alexander Pierce</span>
-                    <span className="direct-chat-timestamp float-right">23 Jan 2:00 pm</span>
-                  </div>
-                  {/* /.direct-chat-infos */}
-                  <img className="direct-chat-img" src="dist/img/user1-128x128.jpg" alt="message user image" />
-                  {/* /.direct-chat-img */}
-                  <div className="direct-chat-text">
-                    Is this template really for free? That's unbelievable!
-                  </div>
-                  {/* /.direct-chat-text */}
-                </div>
-                {/* /.direct-chat-msg */}
-                {/* Message to the right */}
-                <div className="direct-chat-msg right">
-                  <div className="direct-chat-infos clearfix">
-                    <span className="direct-chat-name float-right">Sarah Bullock</span>
-                    <span className="direct-chat-timestamp float-left">23 Jan 2:05 pm</span>
-                  </div>
-                  {/* /.direct-chat-infos */}
-                  <img className="direct-chat-img" src="dist/img/user3-128x128.jpg" alt="message user image" />
-                  {/* /.direct-chat-img */}
-                  <div className="direct-chat-text">
-                    You better believe it!
-                  </div>
-                  {/* /.direct-chat-text */}
-                </div>
-                {/* /.direct-chat-msg */}
-                {/* Message. Default to the left */}
-                <div className="direct-chat-msg">
-                  <div className="direct-chat-infos clearfix">
-                    <span className="direct-chat-name float-left">Alexander Pierce</span>
-                    <span className="direct-chat-timestamp float-right">23 Jan 5:37 pm</span>
-                  </div>
-                  {/* /.direct-chat-infos */}
-                  <img className="direct-chat-img" src="dist/img/user1-128x128.jpg" alt="message user image" />
-                  {/* /.direct-chat-img */}
-                  <div className="direct-chat-text">
-                    Working with AdminLTE on a great new app! Wanna join?
-                  </div>
-                  {/* /.direct-chat-text */}
-                </div>
-                {/* /.direct-chat-msg */}
-                {/* Message to the right */}
-                <div className="direct-chat-msg right">
-                  <div className="direct-chat-infos clearfix">
-                    <span className="direct-chat-name float-right">Sarah Bullock</span>
-                    <span className="direct-chat-timestamp float-left">23 Jan 6:10 pm</span>
-                  </div>
-                  {/* /.direct-chat-infos */}
-                  <img className="direct-chat-img" src="dist/img/user3-128x128.jpg" alt="message user image" />
-                  {/* /.direct-chat-img */}
-                  <div className="direct-chat-text">
-                    I would love to.
-                  </div>
-                  {/* /.direct-chat-text */}
-                </div>
-                {/* /.direct-chat-msg */}
-              </div>
-              {/*/.direct-chat-messages*/}
-              {/* Contacts are loaded here */}
-              <div className="direct-chat-contacts">
-                <ul className="contacts-list">
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user1-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          Count Dracula
-                          <small className="contacts-list-date float-right">2/28/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">How have you been? I was...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user7-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          Sarah Doe
-                          <small className="contacts-list-date float-right">2/23/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">I will be waiting for...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user3-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          Nadia Jolie
-                          <small className="contacts-list-date float-right">2/20/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">I'll call you back at...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user5-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          Nora S. Vans
-                          <small className="contacts-list-date float-right">2/10/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">Where is your new...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user6-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          John K.
-                          <small className="contacts-list-date float-right">1/27/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">Can I take a look at...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                  <li>
-                    <a href="#">
-                      <img className="contacts-list-img" src="dist/img/user8-128x128.jpg" alt="User Avatar" />
-                      <div className="contacts-list-info">
-                        <span className="contacts-list-name">
-                          Kenneth M.
-                          <small className="contacts-list-date float-right">1/4/2015</small>
-                        </span>
-                        <span className="contacts-list-msg">Never mind I found...</span>
-                      </div>
-                      {/* /.contacts-list-info */}
-                    </a>
-                  </li>
-                  {/* End Contact Item */}
-                </ul>
-                {/* /.contacts-list */}
-              </div>
-              {/* /.direct-chat-pane */}
-            </div>
-            {/* /.card-body */}
-            <div className="card-footer">
-              <form action="#" method="post">
-                <div className="input-group">
-                  <input type="text" name="message" placeholder="Type Message ..." className="form-control" />
-                  <span className="input-group-append">
-                    <button type="button" className="btn btn-primary">Send</button>
-                  </span>
-                </div>
-              </form>
-            </div>
-            {/* /.card-footer*/}
-          </div>
-          {/*/.direct-chat */}
-          {/* TO DO List */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">
-                <i className="ion ion-clipboard mr-1" />
-                To Do List
-              </h3>
-              <div className="card-tools">
-                <ul className="pagination pagination-sm">
-                  <li className="page-item"><a href="#" className="page-link">«</a></li>
-                  <li className="page-item"><a href="#" className="page-link">1</a></li>
-                  <li className="page-item"><a href="#" className="page-link">2</a></li>
-                  <li className="page-item"><a href="#" className="page-link">3</a></li>
-                  <li className="page-item"><a href="#" className="page-link">»</a></li>
-                </ul>
-              </div>
-            </div>
-            {/* /.card-header */}
-            <div className="card-body">
-              <ul className="todo-list" data-widget="todo-list">
-                <li>
-                  {/* drag handle */}
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  {/* checkbox */}
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo1" id="todoCheck1" />
-                    <label htmlFor="todoCheck1" />
-                  </div>
-                  {/* todo text */}
-                  <span className="text">Design a nice theme</span>
-                  {/* Emphasis label */}
-                  <small className="badge badge-danger"><i className="far fa-clock" /> 2 mins</small>
-                  {/* General tools such as edit or delete*/}
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-                <li>
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo2" id="todoCheck2" defaultChecked />
-                    <label htmlFor="todoCheck2" />
-                  </div>
-                  <span className="text">Make the theme responsive</span>
-                  <small className="badge badge-info"><i className="far fa-clock" /> 4 hours</small>
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-                <li>
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo3" id="todoCheck3" />
-                    <label htmlFor="todoCheck3" />
-                  </div>
-                  <span className="text">Let theme shine like a star</span>
-                  <small className="badge badge-warning"><i className="far fa-clock" /> 1 day</small>
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-                <li>
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo4" id="todoCheck4" />
-                    <label htmlFor="todoCheck4" />
-                  </div>
-                  <span className="text">Let theme shine like a star</span>
-                  <small className="badge badge-success"><i className="far fa-clock" /> 3 days</small>
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-                <li>
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo5" id="todoCheck5" />
-                    <label htmlFor="todoCheck5" />
-                  </div>
-                  <span className="text">Check your messages and notifications</span>
-                  <small className="badge badge-primary"><i className="far fa-clock" /> 1 week</small>
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-                <li>
-                  <span className="handle">
-                    <i className="fas fa-ellipsis-v" />
-                    <i className="fas fa-ellipsis-v" />
-                  </span>
-                  <div className="icheck-primary d-inline ml-2">
-                    <input type="checkbox" defaultValue name="todo6" id="todoCheck6" />
-                    <label htmlFor="todoCheck6" />
-                  </div>
-                  <span className="text">Let theme shine like a star</span>
-                  <small className="badge badge-secondary"><i className="far fa-clock" /> 1 month</small>
-                  <div className="tools">
-                    <i className="fas fa-edit" />
-                    <i className="fas fa-trash-o" />
-                  </div>
-                </li>
-              </ul>
-            </div>
-            {/* /.card-body */}
-            <div className="card-footer clearfix">
-              <button type="button" className="btn btn-primary float-right"><i className="fas fa-plus" /> Add item</button>
-            </div>
-          </div>
-          {/* /.card */}
-        </section>
-        {/* /.Left col */}
-        {/* right col (We are only adding the ID to make the widgets sortable)*/}
-        <section className="col-lg-5 connectedSortable">
-          {/* Map card */}
-          <div className="card bg-gradient-primary">
-            <div className="card-header border-0">
-              <h3 className="card-title">
-                <i className="fas fa-map-marker-alt mr-1" />
-                Visitors
-              </h3>
-              {/* card tools */}
-              <div className="card-tools">
-                <button type="button" className="btn btn-primary btn-sm daterange" title="Date range">
-                  <i className="far fa-calendar-alt" />
-                </button>
-                <button type="button" className="btn btn-primary btn-sm" data-card-widget="collapse" title="Collapse">
-                  <i className="fas fa-minus" />
-                </button>
-              </div>
-              {/* /.card-tools */}
-            </div>
-            <div className="card-body">
-              <div id="world-map" style={{height: 250, width: '100%'}} />
-            </div>
-            {/* /.card-body*/}
-            <div className="card-footer bg-transparent">
-              <div className="row">
-                <div className="col-4 text-center">
-                  <div id="sparkline-1" />
-                  <div className="text-white">Visitors</div>
-                </div>
-                {/* ./col */}
-                <div className="col-4 text-center">
-                  <div id="sparkline-2" />
-                  <div className="text-white">Online</div>
-                </div>
-                {/* ./col */}
-                <div className="col-4 text-center">
-                  <div id="sparkline-3" />
-                  <div className="text-white">Sales</div>
-                </div>
-                {/* ./col */}
-              </div>
-              {/* /.row */}
-            </div>
-          </div>
-          {/* /.card */}
-          {/* solid sales graph */}
-          <div className="card bg-gradient-info">
-            <div className="card-header border-0">
-              <h3 className="card-title">
-                <i className="fas fa-th mr-1" />
-                Sales Graph
-              </h3>
-              <div className="card-tools">
-                <button type="button" className="btn bg-info btn-sm" data-card-widget="collapse">
-                  <i className="fas fa-minus" />
-                </button>
-                <button type="button" className="btn bg-info btn-sm" data-card-widget="remove">
-                  <i className="fas fa-times" />
-                </button>
-              </div>
-            </div>
-            <div className="card-body">
-              <canvas className="chart" id="line-chart" style={{minHeight: 250, height: 250, maxHeight: 250, maxWidth: '100%'}} />
-            </div>
-            {/* /.card-body */}
-            <div className="card-footer bg-transparent">
-              <div className="row">
-                <div className="col-4 text-center">
-                  <input type="text" className="knob" data-readonly="true" defaultValue={20} data-width={60} data-height={60} data-fgcolor="#39CCCC" />
-                  <div className="text-white">Mail-Orders</div>
-                </div>
-                {/* ./col */}
-                <div className="col-4 text-center">
-                  <input type="text" className="knob" data-readonly="true" defaultValue={50} data-width={60} data-height={60} data-fgcolor="#39CCCC" />
-                  <div className="text-white">Online</div>
-                </div>
-                {/* ./col */}
-                <div className="col-4 text-center">
-                  <input type="text" className="knob" data-readonly="true" defaultValue={30} data-width={60} data-height={60} data-fgcolor="#39CCCC" />
-                  <div className="text-white">In-Store</div>
-                </div>
-                {/* ./col */}
-              </div>
-              {/* /.row */}
-            </div>
-            {/* /.card-footer */}
-          </div>
-          {/* /.card */}
-          {/* Calendar */}
-          <div className="card bg-gradient-success">
-            <div className="card-header border-0">
-              <h3 className="card-title">
-                <i className="far fa-calendar-alt" />
-                Calendar orca
-              </h3>
-              {/* tools card */}
-              <div className="card-tools">
-                {/* button with a dropdown */}
-                <div className="btn-group">
-                  <button type="button" className="btn btn-success btn-sm dropdown-toggle" data-toggle="dropdown" data-offset={-52}>
-                    <i className="fas fa-bars" />
-                  </button>
-                  <div className="dropdown-menu" role="menu">
-                    <a href="#" className="dropdown-item">Add new event</a>
-                    <a href="#" className="dropdown-item">Clear events</a>
-                    <div className="dropdown-divider" />
-                    <a href="#" className="dropdown-item">View calendar</a>
-                  </div>
-                </div>
-                <button type="button" className="btn btn-success btn-sm" data-card-widget="collapse">
-                  <i className="fas fa-minus" />
-                </button>
-                <button type="button" className="btn btn-success btn-sm" data-card-widget="remove">
-                  <i className="fas fa-times" />
-                </button>
-              </div>
-              {/* /. tools */}
-            </div>
-            {/* /.card-header */}
-            <div className="card-body pt-0">
-              {/*The calendar */}
-              <div id="calendar" style={{width: '100%'}} />
-            </div>
-            {/* /.card-body */}
-          </div>
-          {/* /.card */}
-        </section>
-        {/* right col */}
-      </div>
-      {/* /.row (main row) */}
-    </div>{/* /.container-fluid */}
-  </section>
-  {/* /.content */}
-</div>
 
-    </div>
-  );
-}
+
+import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
+import { cargarEncargados } from '../controllers/encargadosControllers';
+import { cargarCentrosClientes } from "../controllers/centrosControllers";
+
+const Home = () => {
+    const [actividades, setActividades] = useState([]);
+    const [totalCentrosOperativos, setTotalCentrosOperativos] = useState(0);
+    const [encargados, setEncargados] = useState([]);
+    const [centros, setCentros] = useState([]);  // Estado para los centros
+    const [loading, setLoading] = useState(true);
+
+    // Estado para actividad en edición y mostrar modal
+    const [editarActividad, setEditarActividad] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+  
+
+    // Campos del formulario
+    const [nombreActividad, setNombreActividad] = useState('');
+    const [fechaReclamo, setFechaReclamo] = useState('');
+    const [fechaInicio, setFechaInicio] = useState('');
+    const [fechaTermino, setFechaTermino] = useState('');
+    const [area, setArea] = useState('');
+    const [prioridad, setPrioridad] = useState('');
+    
+    const [centroId, setCentroId] = useState('');
+    const [estadoActividad, setEstadoActividad] = useState('En progreso');
+    
+    const [encargadoId, setEncargadoId] = useState('');  // Encargado principal
+    const [ayudanteId, setAyudanteId] = useState('');  // Ayudante
+
+    
+    useEffect(() => {
+      const fetchData = async () => {
+          setLoading(true);
+  
+          const centrosData = await cargarCentrosClientes(); // Carga centros
+          setCentros(centrosData); // Asigna los datos de los centros
+          setTotalCentrosOperativos(centrosData.length); // Calcula el total de centros operativos
+  
+          const actividadesData = await cargarActividades(); // Carga actividades
+          setActividades(actividadesData);
+  
+          const encargadosData = await cargarEncargados(); // Carga encargados
+          setEncargados(encargadosData);
+                              
+          setLoading(false);
+      };
+      fetchData();
+    }, []);
+ 
+    const handleGuardarActividad = async () => {
+        const datosActividad = {
+          nombre_actividad: nombreActividad,
+          fecha_reclamo: fechaReclamo || null,
+          fecha_inicio: fechaInicio || null,
+          fecha_termino: fechaTermino || null,
+          area: area || null,
+          prioridad: prioridad || null,
+          tecnico_encargado: encargadoId ? parseInt(encargadoId, 10) : null,
+          tecnico_ayudante: ayudanteId ? parseInt(ayudanteId, 10) : null,
+          estado: estadoActividad || null,
+          centro_id: centroId ? parseInt(centroId, 10) : null,
+        };
+      
+        try {
+          if (editarActividad) {
+            await modificarActividad(editarActividad.id_actividad, datosActividad);
+            alert('Actividad actualizada exitosamente');
+          } else {
+            await agregarActividad(datosActividad);
+            alert('Actividad creada exitosamente');
+          }
+      
+          const actividadesActualizadas = await cargarActividades();
+          setActividades(actividadesActualizadas);
+          setShowModal(false);
+          resetForm();
+        } catch (error) {
+          alert(`Error al guardar la actividad: ${error.message}`);
+          console.error(error);
+        }
+      };
+
+    const resetForm = () => {
+        setNombreActividad('');
+        setFechaReclamo('');
+        setFechaInicio('');
+        setFechaTermino('');
+        setArea('');
+        setPrioridad('');
+        setEncargadoId('');
+        setAyudanteId('');
+        setCentroId('');
+        setEstadoActividad('En progreso');
+        setEditarActividad(null);
+    };
+
+    const calcularTiempoSolucion = (fechaInicio, fechaTermino) => {
+        if (!fechaTermino) return ''; // Si no hay fecha de término, devolver en blanco
+    
+        const inicio = new Date(fechaInicio);
+        const termino = new Date(fechaTermino);
+    
+        // Normalizar horas para comparar días completos
+        inicio.setHours(0, 0, 0, 0);
+        termino.setHours(23, 59, 59, 999);
+    
+        // Calcular diferencia en días
+        const diffTime = termino - inicio;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Convertir milisegundos a días
+    
+        return diffDays;
+    };
+    
+    const calcularNoches = (fechaInicio, fechaTermino) => {
+      const dias = calcularTiempoSolucion(fechaInicio, fechaTermino);
+      return dias > 1 ? dias - 1 : 0; // Si hay más de un día, resta 1; si no, devuelve 0
+    };
+ 
+    const formatearFecha = (fecha) => {
+      if (!fecha) return ''; // Si no hay fecha, retorna vacío
+  
+      const fechaObj = new Date(fecha);
+  
+      // Ajustar fecha para eliminar el desfase de la zona horaria
+      fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
+  
+      const dia = String(fechaObj.getDate()).padStart(2, '0'); // Día con dos dígitos
+      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0'); // Mes con dos dígitos
+      const año = fechaObj.getFullYear(); // Año completo
+  
+      return `${dia}/${mes}/${año}`; // Retornar en formato DD/MM/YYYY
+    };
+  
+    const actividadesDelMesActual = actividades.filter((actividad) => {
+      const fechaInicio = new Date(actividad.fecha_inicio);
+      const mesActual = new Date().getMonth(); // Mes actual (0 = Enero, 11 = Diciembre)
+      const añoActual = new Date().getFullYear(); // Año actual
+  
+      return fechaInicio.getMonth() === mesActual && fechaInicio.getFullYear() === añoActual;
+    });
+  
+    
+    const getEstadoColor = (estado) => {
+        switch (estado) {
+            case 'Finalizado':
+                return 'green';
+            case 'En progreso':
+                return 'orange';
+            case 'Pendiente':
+                return 'blue';
+            case 'Cancelado':
+                return 'red';
+            default:
+                return 'gray'; // Color por defecto para cualquier otro estado
+        }
+    };
+    
+
+    // Filtra los encargados para evitar seleccionar el mismo encargado como ayudante
+    const filteredAyudantes = encargados.filter(encargado => encargado.id_encargado !== parseInt(encargadoId));
+
+
+    const columns = [
+        { name: 'ID', selector: row => row.id_actividad, sortable: true, width: '50px' },
+        { name: 'Nombre', selector: row => row.nombre_actividad, sortable: true, wrap: true },
+        { name: 'Encargado Principal', selector: row => row.encargado_principal?.nombre_encargado || 'No asignado', sortable: true },
+        { name: 'Ayudante', selector: row => row.encargado_ayudante?.nombre_encargado || 'No asignado', sortable: true },
+        { name: 'Fecha Término', selector: row => formatearFecha(row.fecha_termino), sortable: true },
+        { 
+            name: 'Estado', 
+            selector: row => row.estado, 
+            sortable: true, 
+            cell: row => (
+                <span style={{ color: getEstadoColor(row.estado), fontWeight: 'bold' }}>
+                    {row.estado}
+                </span>
+            )
+        },
+        { name: 'Cliente', selector: row => row.centro?.cliente || 'No asignado', sortable: true },
+        
+        { 
+            name: 'Dias', 
+            selector: row => calcularTiempoSolucion(row.fecha_inicio, row.fecha_termino), 
+            sortable: true, 
+            width: '80px' 
+        },
+        { 
+          name: 'Noches',
+          selector: row => calcularNoches(row.fecha_inicio, row.fecha_termino),
+          sortable: true,
+          width: '80px' 
+        },
+        
+    ];
+
+    const getColorByActividad = (prioridad) => {
+        const colores = {
+            Alta: "red",
+            Media: "orange",
+            Baja: "green",
+            Urgente: "purple",
+        };
+        return colores[prioridad] || "gray"; // Color por defecto
+    };
+    
+        
+    return (
+        <div className="container-fluid">
+            <h3>Programación de Actividades</h3>
+            {/* Tarjetas */}
+            <div className="row mb-3">
+              <div className="col-lg-4 col-6">
+                <div className="small-box bg-info">
+                  <div className="inner">
+                    <h3>{totalCentrosOperativos}</h3>
+                    <p>Total Centros Operativos</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-lg-4 col-6">
+                <div className="small-box bg-success">
+                  <div className="inner">
+                  <h3>2</h3>
+                  <p>Total Centros facturando</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-lg-4 col-6">
+                <div className="small-box bg-warning">
+                  <div className="inner">                    
+                    
+                    <h3>{actividadesDelMesActual.length}</h3>
+                    <p>Actividades Mes Actual</p>
+                    
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+    
+          
+    
+            {/* Dividir la vista */}
+            <div className="row">
+                {/* Sección del Listado */}
+                <div className="col-md-6">
+                    <div className="card w-100">
+                        <div className="card-body">
+                            <DataTable
+                                columns={columns}
+                                data={actividades}
+                                progressPending={loading}
+                                pagination
+                                highlightOnHover
+                                pointerOnHover
+                                responsive
+                                noDataComponent="No hay actividades disponibles"
+                                className="w-100"
+                            />
+                        </div>
+                    </div>
+                </div>
+    
+                {/* Sección del Calendario */}
+                <div className="col-md-6">
+                    <div className="card w-100">
+                        <div className="card-body">
+                            <h5>Calendario</h5>
+                            <FullCalendar
+                                    plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+                                    initialView="dayGridMonth"
+                                    headerToolbar={{
+                                        left: 'prev,next today',
+                                        center: 'title',
+                                        right: 'dayGridMonth,timeGridWeek,timeGridDay',
+                                    }}
+                                    views={{
+                                        dayGridMonth: { buttonText: 'Mes' },
+                                        timeGridWeek: { buttonText: 'Semana' },
+                                        timeGridDay: { buttonText: 'Día' },
+                                    }}
+                                    events={actividades
+                                        .filter((actividad) => actividad.fecha_inicio && actividad.fecha_termino)
+                                        .map((actividad) => {
+                                        // Convertir las fechas adecuadamente
+                                        const fechaInicio = new Date(actividad.fecha_inicio);
+                                        const fechaTermino = new Date(actividad.fecha_termino);
+
+                                        // Ajustar horas para evitar el desfase (opcional)
+                                        fechaInicio.setUTCHours(12, 0, 0); // Ajustar a mediodía
+                                        fechaTermino.setUTCHours(12, 0, 0);
+
+                                        return {
+                                            id: actividad.id_actividad,
+                                            title: actividad.nombre_actividad,
+                                            start: fechaInicio.toISOString(),
+                                            end: fechaTermino.toISOString(),
+                                            color: getColorByActividad(actividad.prioridad),
+                                        };
+                                        })}
+                                    editable={true}
+                                    selectable={true}
+                                    eventContent={(eventInfo) => {
+                                        return (
+                                        <div>
+                                            <b>{eventInfo.event.title}</b> {/* Muestra solo el título */}
+                                        </div>
+                                        );
+                                    }}
+                                    />
+                                
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            {/* Modal para crear/editar actividad */}
+            {showModal && (
+                <div className="modal fade show" tabIndex="-1" style={{ display: 'block' }}>
+                    <div className="modal-dialog modal-dialog-scrollable">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">{editarActividad ? 'Editar Actividad' : 'Crear Actividad'}</h5>
+                                <button type="button" className="close" onClick={() => setShowModal(false)}>
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                                <form>
+                                    <div className="form-group">
+                                        <label>Nombre de la Actividad</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            value={nombreActividad}
+                                            onChange={(e) => setNombreActividad(e.target.value)}
+                                        />
+                                    </div>
+    
+                                    {/* Encargado Principal */}
+                                    <div className="form-group">
+                                        <label>Encargado Principal</label>
+                                        <select
+                                            className="form-control"
+                                            value={encargadoId}
+                                            onChange={(e) => setEncargadoId(e.target.value)}
+                                        >
+                                            <option value="">Seleccione Encargado</option>
+                                            {encargados.map((encargado) => (
+                                                <option key={encargado.id_encargado} value={encargado.id_encargado}>
+                                                    {encargado.nombre_encargado}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+    
+                                    {/* Ayudante */}
+                                    <div className="form-group">
+                                        <label>Ayudante</label>
+                                        <select
+                                            className="form-control"
+                                            value={ayudanteId}
+                                            onChange={(e) => setAyudanteId(e.target.value)}
+                                        >
+                                            <option value="">Seleccione Ayudante</option>
+                                            {filteredAyudantes.map((ayudante) => (
+                                                <option key={ayudante.id_encargado} value={ayudante.id_encargado}>
+                                                    {ayudante.nombre_encargado}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+    
+                                    {/* Selector de Centro */}
+                                    <div className="form-group">
+                                        <label>Centro</label>
+                                        <select
+                                            className="form-control"
+                                            value={centroId}
+                                            onChange={(e) => setCentroId(e.target.value)}
+                                        >
+                                            <option value="">Seleccione un centro</option>
+                                            {centros.map((centro) => (
+                                                <option key={centro.id} value={centro.id}>
+                                                    {centro.nombre} - {centro.cliente}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+    
+                                    <div className="form-group">
+                                        <label>Fecha Reclamo</label>
+                                        <input
+                                            type="date"
+                                            className="form-control"
+                                            value={fechaReclamo}
+                                            onChange={(e) => setFechaReclamo(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Fecha Inicio</label>
+                                        <input
+                                            type="date"
+                                            className="form-control"
+                                            value={fechaInicio}
+                                            onChange={(e) => setFechaInicio(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Fecha Término</label>
+                                        <input
+                                            type="date"
+                                            className="form-control"
+                                            value={fechaTermino}
+                                            onChange={(e) => setFechaTermino(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Área</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            value={area}
+                                            onChange={(e) => setArea(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Prioridad</label>
+                                        <select
+                                            className="form-control"
+                                            value={prioridad}
+                                            onChange={(e) => setPrioridad(e.target.value)}
+                                        >
+                                            <option value="">Seleccione Prioridad</option>
+                                            <option value="Alta">Alta</option>
+                                            <option value="Media">Media</option>
+                                            <option value="Baja">Baja</option>
+                                            <option value="Urgente">Urgente</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Estado</label>
+                                        <select
+                                            className="form-control"
+                                            value={estadoActividad}
+                                            onChange={(e) => setEstadoActividad(e.target.value)}
+                                        >
+                                            <option value="En progreso">En Progreso</option>
+                                            <option value="Finalizado">Finalizado</option>
+                                            <option value="Pendiente">Pendiente</option>
+                                            <option value="Cancelado">Cancelado</option>
+                                        </select>
+                                    </div>
+                                </form>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                                    Cerrar
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={handleGuardarActividad}>
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+    
+};
 
 export default Home;

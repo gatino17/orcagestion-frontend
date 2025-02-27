@@ -1,59 +1,183 @@
-import React, { useEffect } from 'react';
-//import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
 import './App.css';
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SideNav from "./components/SideNav";
+import PrivateRoute from "./components/PrivateRoute";
 
-//vistas
+// Vistas
+import Login from "./vistas/Login";
 import Home from "./vistas/Home";
-import Soporte from "./vistas/Soporte"; // Importa la nueva vista
-import Clientes from "./vistas/Clientes"; // Importa la nueva vista
+import Soporte from "./vistas/Soporte";
+import Clientes from "./vistas/Clientes";
 import Calendario from "./vistas/Calendario";
 import HistorialTrabajos from "./vistas/HistorialTrabajos";
-import HistorialCentro from "./vistas/HistorialCentro";
+import HistorialCentros from "./vistas/HistorialCentros";
 import DatosIP from "./vistas/DatosIP";
 import ConsultaCentro from "./vistas/ConsultaCentro";
 import Usuarios from "./vistas/Usuarios";
+import Centros from "./vistas/Centros";
+import Tecnicos from "./vistas/Tecnicos";
+import RegistrosDocumentos from './vistas/RegistrosDocumentos';
 
 function App() {
-    // Hook para manipular el `body` y agregar clases de AdminLTE
-    useEffect(() => {
-      document.body.classList.add('sidebar-mini', 'sidebar-collapse');
-  
-      // Cleanup: Remover las clases cuando el componente se desmonte, si es necesario
-      return () => {
-        document.body.classList.remove('sidebar-mini', 'sidebar-collapse');
-      };
-    }, []);
-  return (
-    <Router>
-      <div className="wrapper">
-        <Header />
-        <SideNav />
-        
-        {/* Definir las rutas */}
-        <div className="content-wrapper">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/soporte" element={<Soporte />} /> {/* Ruta para la vista de Soporte */}
-            <Route path="/clientes" element={<Clientes />} /> 
-            <Route path="/calendario" element={<Calendario />} />
-            <Route path="/historial-trabajos" element={<HistorialTrabajos />} />
-            <Route path="/historial-centro" element={<HistorialCentro />} />
-            <Route path="/datos-ip" element={<DatosIP />} />
-            <Route path="/consulta-centro" element={<ConsultaCentro />} />
-            <Route path="/usuarios" element={<Usuarios />} />
-          </Routes>
-        </div>
+    const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
+    //const [userRole, setUserRole] = useState(null);
 
-        <Footer />
-      </div>
-    </Router>
-  );
+    useEffect(() => {
+      const token = localStorage.getItem('token');
+      if (token) {
+          try {
+              const decodedToken = jwtDecode(token);
+              console.log("Token decodificado:", decodedToken);
+               // Guarda el rol del usuario
+          } catch (error) {
+              console.error("Error al decodificar el token:", error);
+          }
+      }
+    }, []);
+
+    useEffect(() => {
+        document.body.classList.add('sidebar-mini', 'sidebar-collapse');
+        return () => {
+            document.body.classList.remove('sidebar-mini', 'sidebar-collapse');
+        };
+    }, []);
+
+    const handleLoginSuccess = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+          jwtDecode(token);
+          
+      }
+      setIsAuthenticated(true);
+    };
+  
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        setIsAuthenticated(false);
+    };
+
+    return (
+        <Router>
+            <div className="wrapper">
+                {isAuthenticated && <Header onLogout={handleLogout} />}
+                {isAuthenticated && <SideNav />}
+
+                <div className="content-wrapper">
+                    <Routes>
+                        <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />} />
+
+                        <Route
+                            path="/"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
+                                    <Home />
+                                </PrivateRoute>
+                            }
+                        />
+                        {/* Rutas protegidas */}
+                        <Route
+                            path="/soporte"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                                    <Soporte />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/clientes"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                                    <Clientes />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/calendario"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                                    <Calendario />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/historial-trabajos"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                                    <HistorialTrabajos />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/historial-centro"
+                            element={
+                              <PrivateRoute allowedRoles={['admin','finanzas', 'operaciones']}>
+                                    <HistorialCentros />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/datos-ip"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                                    <DatosIP />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/consulta-centro"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
+                                    <ConsultaCentro />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/usuarios"
+                            element={
+                              <PrivateRoute allowedRoles={['admin']}>
+                                    <Usuarios />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/centros"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                                    <Centros />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/tecnicos"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                                    <Tecnicos />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/registrosdocumentos"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                                    <RegistrosDocumentos />
+                                </PrivateRoute>
+                            }
+                        />
+
+                        <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
+                    </Routes>
+                </div>
+
+                {isAuthenticated && <Footer />}
+            </div>
+        </Router>
+    );
 }
 
 export default App;

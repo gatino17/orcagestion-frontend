@@ -1,15 +1,41 @@
-// Función para simular la obtención de usuarios (debería venir de un API o base de datos)
-export const obtenerUsuarios = (setUsuarios) => {
-    // Simulación de usuarios (esto se puede cambiar por una llamada real a la API)
-    const usuariosFicticios = [
-      { id: 1, nombre: 'Juan Pérez', correo: 'juan.perez@example.com', rol: 'Admin' },
-      { id: 2, nombre: 'Ana Gómez', correo: 'ana.gomez@example.com', rol: 'Usuario' },
-      { id: 3, nombre: 'Carlos López', correo: 'carlos.lopez@example.com', rol: 'Técnico' },
-    ];
-  
-    // Simula un retraso de red
-    setTimeout(() => {
-      setUsuarios(usuariosFicticios);
-    }, 1000);
-  };
-  
+// src/controllers/usuariosControllers.js
+import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from '../api';
+
+export const cargarUsuarios = async (setUsuarios) => {
+    try {
+        const usuarios = await obtenerUsuarios();
+        setUsuarios(usuarios);
+    } catch (error) {
+        console.error('Error al cargar usuarios:', error);
+    }
+};
+
+export const agregarUsuario = async (usuario, callback) => {
+    try {
+        await crearUsuario(usuario);
+        callback(); // Llama a la función para actualizar la vista (por ejemplo, cargarUsuarios)
+    } catch (error) {
+        console.error('Error al agregar usuario:', error);
+    }
+};
+
+// Y así para actualizar y eliminar usuarios
+// Función para actualizar un usuario y recargar la lista
+export const modificarUsuario = async (id, usuario, callback) => {
+  try {
+      await actualizarUsuario(id, usuario);
+      callback(); // Llama a la función para recargar la lista de usuarios
+  } catch (error) {
+      console.error('Error al actualizar usuario:', error);
+  }
+};
+
+// Función para eliminar un usuario y recargar la lista
+export const borrarUsuario = async (id, callback) => {
+  try {
+      await eliminarUsuario(id);
+      callback(); // Llama a la función para recargar la lista de usuarios
+  } catch (error) {
+      console.error('Error al eliminar usuario:', error);
+  }
+};
