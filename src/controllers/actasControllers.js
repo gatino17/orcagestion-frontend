@@ -51,7 +51,7 @@ export const cargarActas = async (setActividades, setServiciosAdicionales, filtr
       
         // 🛠 Convertimos id_centro en nombre_centro si es necesario
         const filtrosConvertidos = {
-            id_cliente: filtros.id_cliente,
+            cliente_id: filtros.id_cliente || filtros.cliente_id,
             nombre_centro: filtros.nombre_centro || filtros.id_centro,  // ✅ Aseguramos que el nombre se use en vez del ID
         };
 

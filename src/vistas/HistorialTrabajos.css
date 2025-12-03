@@ -1,0 +1,114 @@
+.history-page {
+  padding-bottom: 2rem;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.history-header h2 {
+  margin: 0;
+}
+
+.history-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.metric-card {
+  border-radius: 18px;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+.metric-card span {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.metric-card h3 {
+  margin: 0.4rem 0 0;
+}
+
+.metric-card.success {
+  background: #ecfdf5;
+  border-color: #16a34a;
+  color: #065f46;
+}
+
+.metric-card.warning {
+  background: #fefce8;
+  border-color: #ca8a04;
+  color: #854d0e;
+}
+
+.metric-card.info {
+  background: #eef2ff;
+  border-color: #4f46e5;
+  color: #312e81;
+}
+
+.metric-card.danger {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+
+.metric-card.neutral {
+  background: #f1f5f9;
+  border-color: #0f172a;
+  color: #0f172a;
+}
+
+.history-filters label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pill {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.pill-baja { background: #dcfce7; color: #166534; }
+.pill-media { background: #fef9c3; color: #a16207; }
+.pill-alta { background: #fee2e2; color: #b91c1c; }
+.pill-urgente { background: #fecaca; color: #7f1d1d; }
+.pill-ninguna { background: #e2e8f0; color: #1e293b; }
+
+.state-en-progreso { background: #fde68a; color: #92400e; }
+.state-pendiente { background: #dbeafe; color: #2563eb; }
+.state-finalizado { background: #dcfce7; color: #15803d; }
+.state-cancelado { background: #fee2e2; color: #b91c1c; }
+.state-sin-estado { background: #e2e8f0; color: #475569; }
+
+.table-meta {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.table-actions button {
+  margin-right: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .history-header {
+    flex-direction: column;
+  }
+}

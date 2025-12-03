@@ -12,6 +12,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import Login from "./vistas/Login";
 import Home from "./vistas/Home";
 import Soporte from "./vistas/Soporte";
+import SoporteDetalle from "./vistas/SoporteDetalle";
 import Clientes from "./vistas/Clientes";
 import Calendario from "./vistas/Calendario";
 import HistorialTrabajos from "./vistas/HistorialTrabajos";
@@ -40,13 +41,6 @@ function App() {
       }
     }, []);
 
-    useEffect(() => {
-        document.body.classList.add('sidebar-mini', 'sidebar-collapse');
-        return () => {
-            document.body.classList.remove('sidebar-mini', 'sidebar-collapse');
-        };
-    }, []);
-
     const handleLoginSuccess = () => {
       const token = localStorage.getItem('token');
       if (token) {
@@ -64,7 +58,7 @@ function App() {
 
     return (
         <Router>
-            <div className="wrapper">
+            <div className={`wrapper ${!isAuthenticated ? 'wrapper-login' : ''}`}>
                 {isAuthenticated && <Header onLogout={handleLogout} />}
                 {isAuthenticated && <SideNav />}
 
@@ -86,6 +80,14 @@ function App() {
                             element={
                               <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <Soporte />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/soporte/detalle"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                                    <SoporteDetalle />
                                 </PrivateRoute>
                             }
                         />

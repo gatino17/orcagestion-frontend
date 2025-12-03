@@ -29,6 +29,28 @@ Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
+## Docker
+
+Build the production image:
+
+```bash
+docker build -t orcagestion:latest .
+```
+
+Run it (published on port 8081 -> container port 80):
+
+```bash
+docker run --rm -p 8081:80 orcagestion:latest
+```
+
+Or with Docker Compose (builds and runs on 8081):
+
+```bash
+docker compose up --build -d
+```
+
+If you need `REACT_APP_*` variables, make sure they are available at build time (for example in a `.env` file in the project root before building).
+
 ### `npm run eject`
 
 **Note: this is a one-way operation. Once you `eject`, you can't go back!**

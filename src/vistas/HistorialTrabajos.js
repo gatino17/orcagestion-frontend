@@ -1,530 +1,535 @@
-import React, { useState, useEffect, useCallback  } from "react";
-import DataTable from 'react-data-table-component';
-import { cargarActividades, borrarActividad, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
-import { cargarEncargados } from '../controllers/encargadosControllers';
+import React, { useEffect, useMemo, useState } from "react";
+import DataTable from "react-data-table-component";
+import {
+  cargarActividades,
+  borrarActividad,
+  modificarActividad,
+  agregarActividad
+} from "../controllers/actividadesControllers";
+import { cargarEncargados } from "../controllers/encargadosControllers";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
+import "./HistorialTrabajos.css";
 
-const HistorialTrabajos = () => {
-    const [actividades, setActividades] = useState([]);
-    const [encargados, setEncargados] = useState([]);
-    const [centros, setCentros] = useState([]);  // Estado para los centros
-    const [loading, setLoading] = useState(true);
-    const [actividadesFiltradas, setActividadesFiltradas] = useState([]);
+const estadoOptions = [
+  { label: "Todos", value: "" },
+  { label: "En progreso", value: "en progreso" },
+  { label: "Pendiente", value: "pendiente" },
+  { label: "Finalizado", value: "finalizado" },
+  { label: "Cancelado", value: "cancelado" }
+];
 
-    // Estado para actividad en edición y mostrar modal
-    const [editarActividad, setEditarActividad] = useState(null);
-    const [showModal, setShowModal] = useState(false);
-       
+const prioridadOptions = [
+  { label: "Todas", value: "" },
+  { label: "Baja", value: "baja" },
+  { label: "Media", value: "media" },
+  { label: "Alta", value: "alta" },
+  { label: "Urgente", value: "urgente" }
+];
 
-    // Campos del formulario
-    const [nombreActividad, setNombreActividad] = useState('');
-    const [fechaReclamo, setFechaReclamo] = useState('');
-    const [fechaInicio, setFechaInicio] = useState('');
-    const [fechaTermino, setFechaTermino] = useState('');
-    const [area, setArea] = useState('');
-    const [prioridad, setPrioridad] = useState('');
-    
-    const [centroId, setCentroId] = useState('');
-    const [estadoActividad, setEstadoActividad] = useState('En progreso');
-    
-    const [encargadoId, setEncargadoId] = useState('');  // Encargado principal
-    const [ayudanteId, setAyudanteId] = useState('');  // Ayudante
+function HistorialTrabajos() {
+  const [actividades, setActividades] = useState([]);
+  const [encargados, setEncargados] = useState([]);
+  const [centros, setCentros] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    const [filterCliente, setFilterCliente] = useState('');
-    const [filterCentro, setFilterCentro] = useState('');
-    const [filterFechaInicio, setFilterFechaInicio] = useState('');
-    const [filterFechaTermino, setFilterFechaTermino] = useState('');
-    const [filterNombreActividad, setFilterNombreActividad] = useState('');
+  const [editarActividad, setEditarActividad] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
+  const [nombreActividad, setNombreActividad] = useState("");
+  const [fechaReclamo, setFechaReclamo] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaTermino, setFechaTermino] = useState("");
+  const [area, setArea] = useState("");
+  const [prioridad, setPrioridad] = useState("");
+  const [centroId, setCentroId] = useState("");
+  const [estadoActividad, setEstadoActividad] = useState("En progreso");
+  const [encargadoId, setEncargadoId] = useState("");
+  const [ayudanteId, setAyudanteId] = useState("");
 
-    const filtrarActividades = useCallback(() => {
-        let actividadesFiltradas = actividades;
-      
-        if (filterCliente) {
-          actividadesFiltradas = actividadesFiltradas.filter(actividad =>
-            (actividad.centro?.cliente?.toLowerCase() || '').includes(filterCliente.toLowerCase())
-          );
-        }
-      
-        if (filterCentro) {
-          actividadesFiltradas = actividadesFiltradas.filter(actividad =>
-            (actividad.centro?.nombre?.toLowerCase() || '').includes(filterCentro.toLowerCase())
-          );
-        }
-      
-        if (filterNombreActividad) {
-          actividadesFiltradas = actividadesFiltradas.filter(actividad =>
-            (actividad.nombre_actividad?.toLowerCase() || '').includes(filterNombreActividad.toLowerCase())
-          );
-        }
-      
-        // Filtro por rango de fechas de reclamo
-        if (filterFechaInicio && filterFechaTermino) {
-          const fechaInicio = new Date(filterFechaInicio);
-          const fechaTermino = new Date(filterFechaTermino);
-          actividadesFiltradas = actividadesFiltradas.filter(actividad => {
-            const fechaReclamo = new Date(actividad.fecha_reclamo);
-            return fechaReclamo >= fechaInicio && fechaReclamo <= fechaTermino;
-          });
-        }
-      
-        return actividadesFiltradas;
-      }, [filterCliente, filterCentro, filterNombreActividad, filterFechaInicio, filterFechaTermino, actividades]);
-      
-      
-      
-      // Función para limpiar todos los filtros
-        const limpiarFiltros = () => {
-            setFilterCliente('');
-            setFilterCentro('');
-            setFilterNombreActividad('');
-            setFilterFechaInicio('');
-            setFilterFechaTermino('');
-            setActividadesFiltradas(actividades);
-        };
-
-      
-// Contar actividades por estado
-    const resumenEstado = {
-        finalizado: actividadesFiltradas.filter(actividad => actividad.estado.toLowerCase() === 'finalizado').length,
-        enProgreso: actividadesFiltradas.filter(actividad => actividad.estado.toLowerCase() === 'en progreso').length,
-        cancelado: actividadesFiltradas.filter(actividad => actividad.estado.toLowerCase() === 'cancelado').length,
-        pendiente: actividadesFiltradas.filter(actividad => actividad.estado.toLowerCase() === 'pendiente').length,
+  const [filtros, setFiltros] = useState({
+    cliente: "",
+    centro: "",
+    nombre: "",
+    fechaInicio: "",
+    fechaFin: "",
+    estado: "",
+    prioridad: "",
+    encargado: ""
+  });
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const data = await cargarActividades();
+      setActividades(data);
+      setEncargados(await cargarEncargados());
+      setCentros(await cargarCentrosClientes());
+      setLoading(false);
     };
-    
-    // Ejecutar filtrado cada vez que los filtros o actividades cambien
-    useEffect(() => {
-        const resultadoFiltrado = filtrarActividades(); // Aplica los filtros y devuelve un arreglo
-        setActividadesFiltradas(resultadoFiltrado); // Actualiza el estado con los resultados filtrados
-    }, [filtrarActividades]);
-  
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            const data = await cargarActividades();
-            setActividades(data);
-            const encargadosData = await cargarEncargados(); // Carga encargados
-            setEncargados(encargadosData);
-            const centrosData = await cargarCentrosClientes(); // Carga centros
-            setCentros(centrosData);
-            
-            setLoading(false);
-        };
-        fetchData();
-    }, []);
+    fetchData();
+  }, []);
 
-   
-    
+  const resetForm = () => {
+    setNombreActividad("");
+    setFechaReclamo("");
+    setFechaInicio("");
+    setFechaTermino("");
+    setArea("");
+    setPrioridad("");
+    setEncargadoId("");
+    setAyudanteId("");
+    setCentroId("");
+    setEstadoActividad("En progreso");
+    setEditarActividad(null);
+  };
 
-    const handleEliminarActividad = async (id) => {
-        if (window.confirm("¿Estás seguro de que deseas eliminar esta actividad?")) {
-            await borrarActividad(id);
-            setActividades((prevActividades) => prevActividades.filter((act) => act.id_actividad !== id));
-        }
-    };
+  const calcularTiempoSolucion = (inicio, fin) => {
+    if (!inicio || !fin) return 0;
+    const start = new Date(inicio);
+    const end = new Date(fin);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : 0;
+  };
 
-    const handleEditarActividad = (actividad) => {
-        // Setea los valores del formulario según la actividad seleccionada
-        setEditarActividad(actividad);
-        setNombreActividad(actividad.nombre_actividad || '');
-        setFechaReclamo(actividad.fecha_reclamo || '');
-        setFechaInicio(actividad.fecha_inicio || '');
-        setFechaTermino(actividad.fecha_termino || '');
-        setArea(actividad.area || '');
-        setPrioridad(actividad.prioridad || '');
-        setEncargadoId(actividad.encargado_principal?.id_encargado || '');
-        setAyudanteId(actividad.encargado_ayudante?.id_encargado || '');
-        setCentroId(actividad.centro?.id_centro || '');
-        setEstadoActividad(actividad.estado || 'En progreso');
-        setShowModal(true);
-    };
+  const formatearFecha = (fecha) => {
+    if (!fecha) return "";
+    const f = new Date(fecha);
+    f.setMinutes(f.getMinutes() + f.getTimezoneOffset());
+    return `${String(f.getDate()).padStart(2, "0")}/${String(f.getMonth() + 1).padStart(2, "0")}/${f.getFullYear()}`;
+  };
+  const actividadesFiltradas = useMemo(() => {
+    return actividades.filter((actividad) => {
+      const cliente = actividad.centro?.cliente?.toLowerCase() || "";
+      const centro = actividad.centro?.nombre?.toLowerCase() || "";
+      const nombre = actividad.nombre_actividad?.toLowerCase() || "";
+      const estado = actividad.estado?.toLowerCase() || "";
+      const prioridadAct = actividad.prioridad?.toLowerCase() || "";
+      const encargado = actividad.encargado_principal?.nombre_encargado?.toLowerCase() || "";
+      const clienteFiltro = filtros.cliente.toLowerCase();
+      const centroFiltro = filtros.centro.toLowerCase();
+      const nombreFiltro = filtros.nombre.toLowerCase();
+      const estadoFiltro = filtros.estado.toLowerCase();
+      const prioridadFiltro = filtros.prioridad.toLowerCase();
+      const encargadoFiltro = filtros.encargado.toLowerCase();
+      const fechaCondicion =
+        (!filtros.fechaInicio || new Date(actividad.fecha_reclamo) >= new Date(filtros.fechaInicio)) &&
+        (!filtros.fechaFin || new Date(actividad.fecha_reclamo) <= new Date(filtros.fechaFin));
 
-    const handleGuardarActividad = async () => {
-        const datosActividad = {
-          nombre_actividad: nombreActividad,
-          fecha_reclamo: fechaReclamo || null,
-          fecha_inicio: fechaInicio || null,
-          fecha_termino: fechaTermino || null,
-          area: area || null,
-          prioridad: prioridad || null,
-          tecnico_encargado: encargadoId ? parseInt(encargadoId, 10) : null,
-          tecnico_ayudante: ayudanteId ? parseInt(ayudanteId, 10) : null,
-          estado: estadoActividad || null,
-          centro_id: centroId ? parseInt(centroId, 10) : null,
-        };
-      
-        try {
-          if (editarActividad) {
-            await modificarActividad(editarActividad.id_actividad, datosActividad);
-            alert('Actividad actualizada exitosamente');
-          } else {
-            await agregarActividad(datosActividad);
-            alert('Actividad creada exitosamente');
-          }
-      
-          const actividadesActualizadas = await cargarActividades();
-          setActividades(actividadesActualizadas);
-          setShowModal(false);
-          resetForm();
-        } catch (error) {
-          alert(`Error al guardar la actividad: ${error.message}`);
-          console.error(error);
-        }
-      };
+      return (
+        cliente.includes(clienteFiltro) &&
+        centro.includes(centroFiltro) &&
+        nombre.includes(nombreFiltro) &&
+        fechaCondicion &&
+        (estadoFiltro ? estado === estadoFiltro : true) &&
+        (prioridadFiltro ? prioridadAct === prioridadFiltro : true) &&
+        (encargadoFiltro ? encargado.includes(encargadoFiltro) : true)
+      );
+    });
+  }, [actividades, filtros]);
 
-    const resetForm = () => {
-        setNombreActividad('');
-        setFechaReclamo('');
-        setFechaInicio('');
-        setFechaTermino('');
-        setArea('');
-        setPrioridad('');
-        setEncargadoId('');
-        setAyudanteId('');
-        setCentroId('');
-        setEstadoActividad('En progreso');
-        setEditarActividad(null);
+  const resumenEstado = useMemo(() => {
+    const base = { finalizado: 0, enProgreso: 0, cancelado: 0, pendiente: 0 };
+    actividadesFiltradas.forEach((act) => {
+      const key = act.estado?.toLowerCase();
+      if (key === "finalizado") base.finalizado++;
+      if (key === "en progreso") base.enProgreso++;
+      if (key === "cancelado") base.cancelado++;
+      if (key === "pendiente") base.pendiente++;
+    });
+    return base;
+  }, [actividadesFiltradas]);
+
+  const totalDias = useMemo(
+    () => actividadesFiltradas.reduce((acc, act) => acc + calcularTiempoSolucion(act.fecha_inicio, act.fecha_termino), 0),
+    [actividadesFiltradas]
+  );
+
+  const encargadosOptions = useMemo(
+    () => [{ value: "", label: "Todos los tecnicos" }].concat(
+      encargados.map((enc) => ({ value: enc.nombre_encargado.toLowerCase(), label: enc.nombre_encargado }))
+    ),
+    [encargados]
+  );
+  const handleEliminarActividad = async (id) => {
+    if (window.confirm("Seguro que deseas eliminar esta actividad?")) {
+      await borrarActividad(id);
+      setActividades((prev) => prev.filter((act) => act.id_actividad !== id));
+    }
+  };
+
+  const handleEditarActividad = (actividad) => {
+    setEditarActividad(actividad);
+    setNombreActividad(actividad.nombre_actividad || "");
+    setFechaReclamo(actividad.fecha_reclamo || "");
+    setFechaInicio(actividad.fecha_inicio || "");
+    setFechaTermino(actividad.fecha_termino || "");
+    setArea(actividad.area || "");
+    setPrioridad(actividad.prioridad || "");
+    setEncargadoId(actividad.encargado_principal?.id_encargado || "");
+    setAyudanteId(actividad.encargado_ayudante?.id_encargado || "");
+    setCentroId(actividad.centro?.id_centro || "");
+    setEstadoActividad(actividad.estado || "En progreso");
+    setShowModal(true);
+  };
+
+  const handleGuardarActividad = async () => {
+    const payload = {
+      nombre_actividad: nombreActividad,
+      fecha_reclamo: fechaReclamo || null,
+      fecha_inicio: fechaInicio || null,
+      fecha_termino: fechaTermino || null,
+      area: area || null,
+      prioridad: prioridad || null,
+      tecnico_encargado: encargadoId ? parseInt(encargadoId, 10) : null,
+      tecnico_ayudante: ayudanteId ? parseInt(ayudanteId, 10) : null,
+      estado: estadoActividad || null,
+      centro_id: centroId ? parseInt(centroId, 10) : null
     };
 
-    const calcularTiempoSolucion = (fechaInicio, fechaTermino) => {
-        if (!fechaTermino) return ''; // Si no hay fecha de término, devolver en blanco
-    
-        const inicio = new Date(fechaInicio);
-        const termino = new Date(fechaTermino);
-    
-        // Normalizar horas para comparar días completos
-        inicio.setHours(0, 0, 0, 0);
-        termino.setHours(23, 59, 59, 999);
-    
-        // Calcular diferencia en días
-        const diffTime = termino - inicio;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Convertir milisegundos a días
-    
-        return diffDays;
-    };
-    
-    const getEstadoColor = (estado) => {
-        switch (estado) {
-            case 'Finalizado':
-                return 'green';
-            case 'En progreso':
-                return 'orange';
-            case 'Pendiente':
-                return 'blue';
-            case 'Cancelado':
-                return 'red';
-            default:
-                return 'gray'; // Color por defecto para cualquier otro estado
-        }
-    };
-    
-    const formatearFecha = (fecha) => {
-        if (!fecha) return ''; // Si no hay fecha, retorna vacío
-    
-        const fechaObj = new Date(fecha);
-    
-        // Ajustar fecha para eliminar el desfase de la zona horaria
-        fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
-    
-        const dia = String(fechaObj.getDate()).padStart(2, '0'); // Día con dos dígitos
-        const mes = String(fechaObj.getMonth() + 1).padStart(2, '0'); // Mes con dos dígitos
-        const año = fechaObj.getFullYear(); // Año completo
-    
-        return `${dia}/${mes}/${año}`; // Retornar en formato DD/MM/YYYY
-    };
+    try {
+      if (editarActividad) {
+        await modificarActividad(editarActividad.id_actividad, payload);
+      } else {
+        await agregarActividad(payload);
+      }
+      const updated = await cargarActividades();
+      setActividades(updated);
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      alert(`Error al guardar la actividad: ${error.message}`);
+    }
+  };
 
-    // Filtra los encargados para evitar seleccionar el mismo encargado como ayudante
-    const filteredAyudantes = encargados.filter(encargado => encargado.id_encargado !== parseInt(encargadoId));
-
-
-    const columns = [
-        { name: 'ID', selector: row => row.id_actividad, sortable: true, width: '50px' },
-        { name: 'Nombre', selector: row => row.nombre_actividad, sortable: true, wrap: true },
-        { name: 'Fecha Reclamo', selector: row => formatearFecha(row.fecha_reclamo), sortable: true },
-        { name: 'Fecha Inicio', selector: row => formatearFecha(row.fecha_inicio), sortable: true },
-        { name: 'Fecha Término', selector: row => formatearFecha(row.fecha_termino), sortable: true },
-        { name: 'Área', selector: row => row.area, sortable: true, width: '90px' },
-        { name: 'Prioridad', selector: row => row.prioridad, sortable: true, width: '98px' },
-        { 
-            name: 'Estado', 
-            selector: row => row.estado, 
-            sortable: true, 
-            width: '98px',
-            cell: row => (
-                <span style={{ color: getEstadoColor(row.estado), fontWeight: 'bold' }}>
-                    {row.estado}
-                </span>
-            )
-        },
-        
-        { name: 'Centro', selector: row => row.centro?.nombre || 'No asignado', sortable: true },
-        { name: 'Cliente', selector: row => row.centro?.cliente || 'No asignado', sortable: true },
-        { name: 'Encargado Principal', selector: row => row.encargado_principal?.nombre_encargado || 'No asignado', sortable: true },
-        { name: 'Ayudante', selector: row => row.encargado_ayudante?.nombre_encargado || 'No asignado', sortable: true },
-        { 
-            name: 'Dias', 
-            selector: row => calcularTiempoSolucion(row.fecha_inicio, row.fecha_termino), 
-            sortable: true, 
-            width: '80px' 
-        },
-        
-        {
-            name: 'Acciones',
-            cell: row => (
-                <div className="d-flex justify-content-around">
-                    <button className="btn btn-warning btn-sm" onClick={() => handleEditarActividad(row)}>
-                        <i className="fas fa-edit"></i>
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleEliminarActividad(row.id_actividad)}>
-                        <i className="fas fa-trash-alt"></i>
-                    </button>
-                </div>
-            ),
-            ignoreRowClick: true,
-            allowOverflow: true,
-            button: true,
-        },
-    ];
-
-    return (
-        <div className="container-fluid">
-            <h3>Historial de Trabajos</h3>
-            {/* Tarjetas de resumen */}
-            <div className="row mb-3">
-                <div className="col-md-3">
-                    <div className="card text-white bg-success">
-                        <div className="card-header"><h6>Finalizados</h6></div>
-                        <div className="card-body"><h5>{resumenEstado.finalizado}</h5></div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card text-white bg-warning">
-                        <div className="card-header"><h6>En Progreso</h6></div>
-                        <div className="card-body"><h5>{resumenEstado.enProgreso}</h5></div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card text-white bg-danger">
-                        <div className="card-header"><h6>Cancelados</h6></div>
-                        <div className="card-body"><h5>{resumenEstado.cancelado}</h5></div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card text-white bg-secondary">
-                        <div className="card-header"><h6>Pendientes</h6></div>
-                        <div className="card-body"><h5>{resumenEstado.pendiente}</h5></div>
-                    </div>
-                </div>
-            </div>
-               
-            {/* Tarjeta para Filtros Generales */}
-            <div className="col-md-12 mb-4">
-                <div className="card">
-                    <div className="card-header">
-                    <h5>Buscar Actividad</h5>
-                    </div>
-                    <div className="card-body">
-                    <div className="row">
-                       {/* Filtro por Nombre de Actividad */}
-                        <div className="col-md-3 mb-2">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por nombre de actividad"
-                            value={filterNombreActividad}
-                            onChange={(e) => setFilterNombreActividad(e.target.value)}
-                        />
-                        </div>
-                        {/* Filtro por Cliente */}
-                        <div className="col-md-3 mb-2">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por cliente"
-                            value={filterCliente}
-                            onChange={(e) => setFilterCliente(e.target.value)}
-                        />
-                        </div>
-
-                        {/* Filtro por Centro */}
-                        <div className="col-md-3 mb-2">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por centro"
-                            value={filterCentro}
-                            onChange={(e) => setFilterCentro(e.target.value)}
-                        />
-                        </div>
-
-                        {/* Filtros de Rango de Fecha */}
-                                <div className="col-md-3 mb-2 d-flex align-items-center">
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        placeholder="Fecha inicio"
-                                        value={filterFechaInicio}
-                                        onChange={(e) => setFilterFechaInicio(e.target.value)}
-                                    />
-                                    <span className="mx-2">-</span>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        placeholder="Fecha término"
-                                        value={filterFechaTermino}
-                                        onChange={(e) => setFilterFechaTermino(e.target.value)}
-                                    />
-                                    {/* Botón de limpiar filtros */}
-                                    <button className="btn btn-sm btn-primary ml-2" onClick={limpiarFiltros}>
-                                        <i class="fas fa-sync-alt"> </i>
-                                    </button>
-                                </div>
-
-                    </div>
-                    </div>
-                </div>
-            </div>
-                    
-
-            {/* Botón de Crear Actividad */}
-            <div className="my-3">
-                <button
-                    className="btn btn-primary"
-                    style={{ maxWidth: '150px' }}
-                    onClick={() => {
-                        resetForm();
-                        setEditarActividad(null);
-                        setShowModal(true);
-                    }}
-                >
-                    Crear Actividad
-                </button>
-            </div>
-            
-            {/* Tarjeta que ocupa el ancho completo */}
-            <div className="card w-100">
-                <div className="card-body">
-                    <DataTable
-                        columns={columns}
-                        data={actividadesFiltradas}
-                        progressPending={loading}
-                        pagination
-                        highlightOnHover
-                        pointerOnHover
-                        responsive
-                        noDataComponent="No hay actividades disponibles"
-                        className="w-100"
-                    />
-                </div>
-            </div>
-            
-            {/* Modal para crear/editar actividad */}
-            {showModal && (
-                <div className="modal fade show" tabIndex="-1" style={{ display: 'block' }}>
-                    <div className="modal-dialog modal-dialog-scrollable">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">{editarActividad ? 'Editar Actividad' : 'Crear Actividad'}</h5>
-                                <button type="button" className="close" onClick={() => setShowModal(false)}>&times;</button>
-                            </div>
-                            <div className="modal-body style={{ maxHeight: '70vh', overflowY: 'auto'">
-                                <form>
-                                    <div className="form-group">
-                                        <label>Nombre de la Actividad</label>
-                                        <input type="text" className="form-control" value={nombreActividad} onChange={(e) => setNombreActividad(e.target.value)} />
-                                    </div>
-
-                                    {/* Encargado Principal */}
-                                    <div className="form-group">
-                                        <label>Encargado Principal</label>
-                                        <select className="form-control" value={encargadoId} onChange={(e) => setEncargadoId(e.target.value)}>
-                                            <option value="">Seleccione Encargado</option>
-                                            {encargados.map(encargado => (
-                                                <option key={encargado.id_encargado} value={encargado.id_encargado}>
-                                                    {encargado.nombre_encargado}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    {/* Ayudante */}
-                                    <div className="form-group">
-                                        <label>Ayudante</label>
-                                        <select className="form-control" value={ayudanteId} onChange={(e) => setAyudanteId(e.target.value)}>
-                                            <option value="">Seleccione Ayudante</option>
-                                            {filteredAyudantes.map(ayudante => (
-                                                <option key={ayudante.id_encargado} value={ayudante.id_encargado}>
-                                                    {ayudante.nombre_encargado}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                   
-                                     {/* Selector de Centro */}                                    
-                                     <div className="form-group">
-                                        <label>Centro</label>
-                                        <select
-                                            className="form-control"
-                                            value={centroId}
-                                            onChange={(e) => setCentroId(e.target.value)}
-                                        >
-                                            <option value="">Seleccione un centro</option>
-                                            {centros && centros.map(centro => (
-                                                <option key={centro.id} value={centro.id}>
-                                                    {centro.nombre} - {centro.cliente}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    
-                                    <div className="form-group">
-                                        <label>Fecha Reclamo</label>
-                                        <input type="date" className="form-control" value={fechaReclamo} onChange={(e) => setFechaReclamo(e.target.value)} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Fecha Inicio</label>
-                                        <input type="date" className="form-control" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Fecha Término</label>
-                                        <input type="date" className="form-control" value={fechaTermino} onChange={(e) => setFechaTermino(e.target.value)} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Área</label>
-                                        <input type="text" className="form-control" value={area} onChange={(e) => setArea(e.target.value)} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Prioridad</label>
-                                        <select className="form-control" value={prioridad} onChange={(e) => setPrioridad(e.target.value)}>
-                                            <option value="">Seleccione Prioridad</option>
-                                            <option value="Alta">Alta</option>
-                                            <option value="Media">Media</option>
-                                            <option value="Baja">Baja</option>
-                                            <option value="Urgente">Urgente</option>
-                                        </select>
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Estado</label>
-                                        <select className="form-control" value={estadoActividad} onChange={(e) => setEstadoActividad(e.target.value)}>
-                                            <option value="En progreso">En Progreso</option>
-                                            <option value="Finalizado">Finalizado</option>
-                                            <option value="Pendiente">Pendiente</option>
-                                            <option value="Cancelado">Cancelado</option>
-                                        </select>
-                                    </div>
-                                </form>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cerrar</button>
-                                <button type="button" className="btn btn-primary" onClick={handleGuardarActividad}>Guardar Cambios</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+  const filteredAyudantes = encargados.filter(
+    (encargado) => encargado.id_encargado !== parseInt(encargadoId || 0, 10)
+  );
+  const columns = [
+    { name: "ID", selector: (row) => row.id_actividad, width: "70px", sortable: true },
+    {
+      name: "Actividad",
+      selector: (row) => row.nombre_actividad,
+      sortable: true,
+      grow: 2,
+      cell: (row) => (
+        <div>
+          <strong>{row.nombre_actividad}</strong>
+          <div className="table-meta">{row.centro?.cliente || "Sin cliente"}</div>
         </div>
-    );
-};
+      )
+    },
+    { name: "Fecha inicio", selector: (row) => formatearFecha(row.fecha_inicio), sortable: true },
+    { name: "Fecha fin", selector: (row) => formatearFecha(row.fecha_termino), sortable: true },
+    { name: "Area", selector: (row) => row.area || "-", sortable: true },
+    {
+      name: "Prioridad",
+      selector: (row) => row.prioridad,
+      sortable: true,
+      cell: (row) => (
+        <span className={`pill pill-${(row.prioridad || "ninguna").toLowerCase()}`}>
+          {row.prioridad || "-"}
+        </span>
+      )
+    },
+    {
+      name: "Estado",
+      selector: (row) => row.estado,
+      sortable: true,
+      cell: (row) => (
+        <span className={`pill state-${(row.estado || "sin estado").toLowerCase().replace(/\s+/g, "-")}`}>
+          {row.estado}
+        </span>
+      )
+    },
+    { name: "Centro", selector: (row) => row.centro?.nombre || "Sin centro", sortable: true },
+    {
+      name: "Tecnico",
+      selector: (row) => row.encargado_principal?.nombre_encargado || "No asignado",
+      sortable: true
+    },
+    {
+      name: "Dias",
+      selector: (row) => calcularTiempoSolucion(row.fecha_inicio, row.fecha_termino),
+      width: "80px",
+      sortable: true
+    },
+    {
+      name: "Acciones",
+      button: true,
+      cell: (row) => (
+        <div className="table-actions">
+          <button className="btn btn-warning btn-sm" onClick={() => handleEditarActividad(row)}>
+            <i className="fas fa-edit" />
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={() => handleEliminarActividad(row.id_actividad)}>
+            <i className="fas fa-trash-alt" />
+          </button>
+        </div>
+      )
+    }
+  ];
+  return (
+    <div className="history-page container-fluid">
+      <div className="history-header">
+        <div>
+          <h2>Historial de trabajos</h2>
+          <p>Consulta y depura las actividades ejecutadas por el equipo.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
+          <i className="fas fa-plus me-2" /> Nueva actividad
+        </button>
+      </div>
+
+      <div className="history-metrics">
+        <div className="metric-card success">
+          <span>Finalizados</span>
+          <h3>{resumenEstado.finalizado}</h3>
+        </div>
+        <div className="metric-card warning">
+          <span>En progreso</span>
+          <h3>{resumenEstado.enProgreso}</h3>
+        </div>
+        <div className="metric-card info">
+          <span>Pendientes</span>
+          <h3>{resumenEstado.pendiente}</h3>
+        </div>
+        <div className="metric-card danger">
+          <span>Cancelados</span>
+          <h3>{resumenEstado.cancelado}</h3>
+        </div>
+        <div className="metric-card neutral">
+          <span>Dias acumulados</span>
+          <h3>{totalDias}</h3>
+        </div>
+      </div>
+
+      <div className="history-filters card">
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-3">
+              <label>Nombre actividad</label>
+              <input
+                className="form-control"
+                value={filtros.nombre}
+                onChange={(e) => setFiltros({ ...filtros, nombre: e.target.value })}
+                placeholder="Buscar por nombre"
+              />
+            </div>
+            <div className="col-md-3">
+              <label>Cliente</label>
+              <input
+                className="form-control"
+                value={filtros.cliente}
+                onChange={(e) => setFiltros({ ...filtros, cliente: e.target.value })}
+                placeholder="Ej. Caleta Bay"
+              />
+            </div>
+            <div className="col-md-3">
+              <label>Centro</label>
+              <input
+                className="form-control"
+                value={filtros.centro}
+                onChange={(e) => setFiltros({ ...filtros, centro: e.target.value })}
+                placeholder="Nombre centro"
+              />
+            </div>
+            <div className="col-md-3">
+              <label>Tecnico</label>
+              <select
+                className="form-control"
+                value={filtros.encargado}
+                onChange={(e) => setFiltros({ ...filtros, encargado: e.target.value })}
+              >
+                {encargadosOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label>Estado</label>
+              <select
+                className="form-control"
+                value={filtros.estado}
+                onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
+              >
+                {estadoOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label>Prioridad</label>
+              <select
+                className="form-control"
+                value={filtros.prioridad}
+                onChange={(e) => setFiltros({ ...filtros, prioridad: e.target.value })}
+              >
+                {prioridadOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label>Desde</label>
+              <input
+                type="date"
+                className="form-control"
+                value={filtros.fechaInicio}
+                onChange={(e) => setFiltros({ ...filtros, fechaInicio: e.target.value })}
+              />
+            </div>
+            <div className="col-md-3">
+              <label>Hasta</label>
+              <input
+                type="date"
+                className="form-control"
+                value={filtros.fechaFin}
+                onChange={(e) => setFiltros({ ...filtros, fechaFin: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="text-end mt-3">
+            <button
+              className="btn btn-outline-secondary"
+              onClick={() =>
+                setFiltros({
+                  cliente: "",
+                  centro: "",
+                  nombre: "",
+                  fechaInicio: "",
+                  fechaFin: "",
+                  estado: "",
+                  prioridad: "",
+                  encargado: ""
+                })
+              }
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-body">
+          <DataTable
+            columns={columns}
+            data={actividadesFiltradas}
+            progressPending={loading}
+            pagination
+            highlightOnHover
+            responsive
+            noDataComponent="No hay actividades disponibles"
+          />
+        </div>
+      </div>
+      {showModal && (
+        <div className="modal fade show" tabIndex="-1" style={{ display: "block" }}>
+          <div className="modal-dialog modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">{editarActividad ? "Editar actividad" : "Crear actividad"}</h5>
+                <button type="button" className="close" onClick={() => setShowModal(false)}>
+                  &times;
+                </button>
+              </div>
+              <div className="modal-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+                <form className="row g-3">
+                  <div className="col-md-12">
+                    <label>Nombre</label>
+                    <input className="form-control" value={nombreActividad} onChange={(e) => setNombreActividad(e.target.value)} />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Fecha reclamo</label>
+                    <input type="date" className="form-control" value={fechaReclamo} onChange={(e) => setFechaReclamo(e.target.value)} />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Area</label>
+                    <input className="form-control" value={area} onChange={(e) => setArea(e.target.value)} />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Fecha inicio</label>
+                    <input type="date" className="form-control" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Fecha termino</label>
+                    <input type="date" className="form-control" value={fechaTermino} onChange={(e) => setFechaTermino(e.target.value)} />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Prioridad</label>
+                    <select className="form-control" value={prioridad} onChange={(e) => setPrioridad(e.target.value)}>
+                      <option value="">Seleccione</option>
+                      <option value="Baja">Baja</option>
+                      <option value="Media">Media</option>
+                      <option value="Alta">Alta</option>
+                      <option value="Urgente">Urgente</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Estado</label>
+                    <select className="form-control" value={estadoActividad} onChange={(e) => setEstadoActividad(e.target.value)}>
+                      <option value="En progreso">En progreso</option>
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="Finalizado">Finalizado</option>
+                      <option value="Cancelado">Cancelado</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Centro</label>
+                    <select className="form-control" value={centroId} onChange={(e) => setCentroId(e.target.value)}>
+                      <option value="">Seleccione centro</option>
+                      {centros.map((centro) => (
+                        <option key={centro.id} value={centro.id}>
+                          {centro.nombre} - {centro.cliente}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Tecnico</label>
+                    <select className="form-control" value={encargadoId} onChange={(e) => setEncargadoId(e.target.value)}>
+                      <option value="">Seleccione</option>
+                      {encargados.map((enc) => (
+                        <option key={enc.id_encargado} value={enc.id_encargado}>
+                          {enc.nombre_encargado}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Ayudante</label>
+                    <select className="form-control" value={ayudanteId} onChange={(e) => setAyudanteId(e.target.value)}>
+                      <option value="">Seleccione</option>
+                      {filteredAyudantes.map((enc) => (
+                        <option key={enc.id_encargado} value={enc.id_encargado}>
+                          {enc.nombre_encargado}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Cerrar
+                </button>
+                <button className="btn btn-primary" onClick={handleGuardarActividad}>
+                  Guardar cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default HistorialTrabajos;

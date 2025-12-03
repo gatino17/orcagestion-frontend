@@ -25,7 +25,7 @@ import { cargarCentrosActas } from '../controllers/actasControllers';
 
 
 
-function ModalActividad({ actividad, onClose, recargarDatos }) {
+function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'levantamiento' }) {
     const [tipoActividad, setTipoActividad] = useState('levantamiento');
     const [fecha, setFecha] = useState('');
     const [documento, setDocumento] = useState(null);
@@ -53,6 +53,33 @@ function ModalActividad({ actividad, onClose, recargarDatos }) {
 
     
 
+
+    const formatDateInput = (value) => {
+        if (!value) return '';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return value.slice(0, 10);
+        }
+        parsed.setMinutes(parsed.getMinutes() + parsed.getTimezoneOffset());
+        return parsed.toISOString().split('T')[0];
+    };
+
+    useEffect(() => {
+        setTipoActividad(tipoInicial || 'levantamiento');
+    }, [tipoInicial]);
+
+    useEffect(() => {
+        if (!actividad || tipoActividad !== 'instalacion') return;
+        if (!fecha) {
+            const fechaCentro = actividad.instalacion_fecha || actividad.centro_fecha_instalacion || actividad.fecha_instalacion;
+            if (fechaCentro) {
+                setFecha(formatDateInput(fechaCentro));
+            }
+        }
+        if (!fechaMonitoreo && actividad.inicio_monitoreo) {
+            setFechaMonitoreo(formatDateInput(actividad.inicio_monitoreo));
+        }
+    }, [actividad, tipoActividad]);
 
     const handleGuardar = async () => {
         // Verificar si el campo de fecha está vacío para los tipos de actividad que lo requieren

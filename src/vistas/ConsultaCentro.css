@@ -1,0 +1,454 @@
+.consulta-centro-page {
+    padding: 1.5rem;
+    color: #0f172a;
+}
+
+.consulta-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.consulta-header h2 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.consulta-header p {
+    margin: 0.35rem 0 0;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.consulta-header-badge {
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    padding: 0.75rem 1rem;
+    border-radius: 14px;
+    min-width: 220px;
+}
+
+.consulta-header-badge span {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0ea5e9;
+}
+
+.consulta-header-badge strong {
+    display: block;
+    font-size: 1rem;
+}
+
+.consulta-alert {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #b91c1c;
+    padding: 0.85rem 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+.consulta-card {
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 1.5rem;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.consulta-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group label {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.filter-select {
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    padding: 0.65rem 0.9rem;
+    background: #f8fafc;
+    transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+.filter-group.disabled {
+    opacity: 0.6;
+}
+
+.filter-group.disabled .filter-select {
+    cursor: not-allowed;
+}
+
+.consulta-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.4fr);
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+    .consulta-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- INFO GENERAL (CLASES ANTIGUAS, SE PUEDEN REUSAR EN OTROS LADOS) --- */
+
+.info-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.info-item {
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 0.85rem;
+    border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.info-item.highlight {
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    background: rgba(14, 165, 233, 0.08);
+}
+
+.info-item span {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    margin-bottom: 0.35rem;
+}
+
+.info-item p {
+    margin: 0;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.info-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
+/* --- TITULOS DE LAS CARDS --- */
+
+.card-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    gap: 0.75rem;
+}
+
+/* Título específico de la info de centro */
+.info-card .card-title-center {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem; /* deja espacio antes de la ficha */
+}
+
+/* Contenedor principal debajo del título */
+.info-main {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr);
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.info-card {
+    padding: 1.25rem;
+    background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.card-title-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.card-kicker {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+/* --- ESTADO Y CHIPS --- */
+
+.status-pill {
+    background: rgba(14, 165, 233, 0.15);
+    color: #0f172a;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.info-status-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+}
+
+/* Colores por estado (ajusta según tus estados reales) */
+.status-activo {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-traslado {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-cese,
+.status-retirado {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.tag-pill {
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: #f3f4f6;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* --- FICHA DE DATOS IZQUIERDA --- */
+/* Esta clase se usa junto con .info-overview,
+   por eso aquí anulamos el grid para que quede
+   como una tarjeta completa debajo del título */
+.info-overview-table {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 0.8rem 1rem;
+    margin-top: 5rem;
+
+    /* 🔑 IMPORTANTE: anular el grid de .info-overview */
+    display: block;
+    width: 100%;
+    max-width: 420px;   /* ajústalo si la quieres más ancha/angosta */
+    margin-bottom: 1rem;
+}
+
+.meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.85rem;
+    padding: 0.2rem 0;
+    border-bottom: 1px dashed #e5e7eb;
+}
+
+.meta-row:last-child {
+    border-bottom: none;
+}
+
+.meta-label {
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.meta-value {
+    text-align: right;
+    color: #111827;
+    word-break: break-word;
+}
+
+/* --- STATS DERECHA --- */
+
+.info-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.7rem;
+}
+
+.info-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    background: #f9fafb;
+}
+
+.info-stat-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+
+.info-stat-text span {
+    display: block;
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.info-stat-text p {
+    margin: 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #0f172a;
+}
+
+/* --- ACCIONES --- */
+
+.consulta-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+/* --- TIMELINE --- */
+
+.consulta-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.timeline-section {
+    border-left: 3px solid rgba(15, 23, 42, 0.08);
+    padding-left: 1.25rem;
+    margin-left: 0.5rem;
+}
+
+.timeline-card {
+    padding: 1.75rem;
+}
+
+.timeline-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+.timeline-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+}
+
+.timeline-badge.info { background: #0ea5e9; }
+.timeline-badge.primary { background: #2563eb; }
+.timeline-badge.success { background: #22c55e; }
+.timeline-badge.warning { background: #f97316; }
+.timeline-badge.danger { background: #ef4444; }
+.timeline-badge.secondary { background: #94a3b8; color: #0f172a; }
+.timeline-badge.dark { background: #0f172a; }
+
+.timeline-item {
+    background: #f1f5f9;
+    border-radius: 16px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.timeline-date {
+    display: inline-block;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 0.35rem;
+}
+
+.timeline-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    color: #2563eb;
+}
+
+.timeline-empty {
+    margin: 0;
+    color: #94a3b8;
+}
+
+/* --- ESTADO VACÍO --- */
+
+.consulta-empty-state {
+    margin-top: 1.5rem;
+    padding: 2.5rem 1.5rem;
+    border-radius: 20px;
+    border: 1px dashed rgba(15, 23, 42, 0.15);
+    text-align: center;
+    color: #475569;
+    background: #ffffff;
+}
+
+.consulta-empty-state i {
+    font-size: 2rem;
+    color: #0ea5e9;
+    margin-bottom: 0.75rem;
+}
+
+/* --- RESPONSIVE --- */
+
+@media (max-width: 768px) {
+    .consulta-centro-page {
+        padding: 1rem;
+    }
+
+    .consulta-card {
+        padding: 1.25rem;
+    }
+
+    .consulta-actions {
+        flex-direction: column;
+    }
+
+    /* ficha y stats en una sola columna en móviles */
+    .info-main {
+        grid-template-columns: 1fr;
+    }
+}

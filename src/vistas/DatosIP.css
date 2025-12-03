@@ -1,0 +1,249 @@
+.datosip-page {
+  padding: 1rem 0 2rem;
+}
+
+.datosip-card {
+  border: none;
+  border-radius: 24px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.datosip-filters-header {
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.18), rgba(37, 99, 235, 0.2));
+  border-bottom: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.filters-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.filters-kicker {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.15rem;
+  color: #0f172a;
+  opacity: 0.7;
+}
+
+.datosip-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(37, 99, 235, 0.9));
+  box-shadow: 0 12px 30px rgba(14, 165, 233, 0.35);
+}
+
+.datosip-icon--connections {
+  background: linear-gradient(135deg, rgba(0, 184, 148, 0.9), rgba(17, 94, 89, 0.85));
+}
+
+.datosip-icon--devices {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.9));
+}
+
+.datosip-icon--muted {
+  background: rgba(148, 163, 184, 0.3);
+  color: #475569;
+  box-shadow: none;
+}
+
+.datosip-card .card-body {
+  background: #fff;
+  padding: 2rem;
+}
+
+.datosip-center-panel {
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.08), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 20px;
+  padding: 1.5rem;
+}
+
+.datosip-center-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.center-kicker {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #0284c7;
+  margin-bottom: 0.2rem;
+}
+
+.datosip-center-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem;
+}
+
+.center-grid-item {
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.05);
+}
+
+.center-grid-item .label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.center-grid-item p {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.datosip-section {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  padding: 1.5rem;
+  background: #f8fbff;
+}
+
+.datosip-section + .datosip-section {
+  margin-top: 1.5rem;
+}
+
+.datosip-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.equipos-count {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+}
+
+.datosip-card-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.datosip-card-title h5 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.datosip-card-title small {
+  color: #64748b;
+}
+
+.datosip-table thead {
+  background: linear-gradient(120deg, #0ea5e9, #2563eb);
+  color: #fff;
+}
+
+.datosip-table {
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.datosip-table thead th {
+  border: none;
+  font-weight: 600;
+}
+
+.datosip-table td,
+.datosip-table th {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  vertical-align: middle;
+}
+
+.datosip-table tbody tr:nth-child(odd) {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.datosip-table tbody tr:hover {
+  background: rgba(14, 165, 233, 0.18);
+}
+
+.datosip-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.conexion-name {
+  min-width: 220px;
+}
+
+.conexion-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.1rem;
+}
+
+.conexion-pill--teamviewer {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+}
+
+.conexion-pill--anydesk {
+  background: linear-gradient(135deg, #f97316, #f43f5e);
+}
+
+.conexion-pill--default {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+}
+
+.conexion-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .datosip-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .datosip-card .card-body {
+    padding: 1.25rem;
+  }
+}

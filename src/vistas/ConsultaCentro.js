@@ -1,457 +1,621 @@
 // ConsultaCentro.js
 import { jwtDecode } from 'jwt-decode';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    obtenerClientes,
-    obtenerCentrosPorCliente,
-    obtenerHistorialCentro,
-    obtenerHistorialCentroPDF
+  obtenerClientes,
+  obtenerCentrosPorCliente,
+  obtenerHistorialCentro,
+  obtenerHistorialCentroPDF
 } from '../controllers/consultaCentroControllers';
-
-
+import './ConsultaCentro.css';
 
 const ConsultaCentro = () => {
-    const [clientes, setClientes] = useState([]);
-    const [centros, setCentros] = useState([]);
-    const [historial, setHistorial] = useState(null);
-    const [error, setError] = useState(null);
-    const [selectedCliente, setSelectedCliente] = useState(null);
-    const [selectedCentro, setSelectedCentro] = useState(null);
-    const [showModal, setShowModal] = useState(false);
+  const [clientes, setClientes] = useState([]);
+  const [centros, setCentros] = useState([]);
+  const [historial, setHistorial] = useState(null);
+  const [error, setError] = useState(null);
+  const [selectedCliente, setSelectedCliente] = useState(null);
+  const [selectedCentro, setSelectedCentro] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [inventario, setInventario] = useState([]);
+  const [rolUsuario, setRolUsuario] = useState('');
 
-    const [inventario, setInventario] = useState([]);
+  // Cargar rol del usuario desde el token
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-    const [rolUsuario, setRolUsuario] = useState("");
+    try {
+      const decodedToken = jwtDecode(token);
+      setRolUsuario(decodedToken.rol || '');
+    } catch (tokenError) {
+      console.error('Error al decodificar el token:', tokenError);
+    }
+  }, []);
 
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const decodedToken = jwtDecode(token);
-                setRolUsuario(decodedToken.rol || ""); // Guarda el rol en el estado
-            } catch (error) {
-                console.error("Error al decodificar el token:", error);
+  // Cargar historial del centro cuando cambia el centro seleccionado
+  useEffect(() => {
+    if (!selectedCentro) return;
+
+    obtenerHistorialCentro(
+      selectedCentro,
+      (data) => {
+        setHistorial(data);
+        setInventario(data.inventario || []);
+      },
+      setError
+    );
+  }, [selectedCentro]);
+
+  // Cargar clientes al inicio
+  useEffect(() => {
+    obtenerClientes(setClientes, setError);
+  }, []);
+
+  const handleClienteChange = (clienteId) => {
+    setSelectedCliente(clienteId);
+    setSelectedCentro(null);
+    setHistorial(null);
+    setCentros([]);
+    obtenerCentrosPorCliente(
+      clienteId,
+      (data) => setCentros(ordenarCentros(data)),
+      setError
+    );
+  };
+
+  const handleCentroChange = (centroId) => {
+    setSelectedCentro(centroId);
+  };
+
+  const obtenerIdCentro = (centro) =>
+    centro?.id_centro ?? centro?.id ?? centro?.centro_id ?? centro?.idCentro;
+
+  const ordenarCentros = (listaCentros = []) => {
+    const esEstadoFinal = (estado = '') => {
+      const normalized = (estado || '').toLowerCase();
+      return normalized === 'cese' || normalized === 'retiro' || normalized === 'retirado';
+    };
+    return [...listaCentros].sort((a, b) => {
+      const estadoA = esEstadoFinal(a.estado);
+      const estadoB = esEstadoFinal(b.estado);
+      if (estadoA && !estadoB) return 1;
+      if (!estadoA && estadoB) return -1;
+      return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+    });
+  };
+
+  const estadoVisual = (estado = '') => {
+    const normalized = (estado || '').toLowerCase();
+    if (normalized === 'activo') return { label: 'Activo', color: '#16a34a' };
+    if (normalized === 'cese') return { label: 'Cese', color: '#f97316' };
+    if (normalized === 'retiro' || normalized === 'retirado') return { label: 'Retirado', color: '#dc2626' };
+    return { label: estado || 'Sin estado', color: '#6b7280' };
+  };
+
+  const centroSeleccionadoBasico = useMemo(() => {
+    if (!selectedCentro) return null;
+    return centros.find(
+      (centro) => String(obtenerIdCentro(centro)) === String(selectedCentro)
+    );
+  }, [selectedCentro, centros]);
+
+  const centroEstadoActual = centroSeleccionadoBasico?.estado
+    ? estadoVisual(centroSeleccionadoBasico.estado)
+    : null;
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return '';
+
+    const fechaObj = new Date(fecha);
+    fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
+
+    const opciones = {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    };
+    const fechaFormateada = new Intl.DateTimeFormat('es-ES', opciones).format(fechaObj);
+
+    return fechaFormateada.replace(',', '').replace(/\//g, '/') + '.';
+  };
+
+  const historialData = {
+    levantamientos: historial?.historial?.levantamientos || [],
+    instalaciones: historial?.historial?.instalaciones || [],
+    mantenciones: historial?.historial?.mantenciones || [],
+    soportes: (historial?.historial?.soportes || []).slice().sort((a, b) => {
+      const fechaA = a?.fecha_soporte ? new Date(a.fecha_soporte) : null;
+      const fechaB = b?.fecha_soporte ? new Date(b.fecha_soporte) : null;
+      if (!fechaA && !fechaB) return 0;
+      if (!fechaA) return -1;
+      if (!fechaB) return 1;
+      return fechaA - fechaB;
+    }),
+    traslados: historial?.historial?.traslados || [],
+    ceses: historial?.historial?.ceses || [],
+    retiros: historial?.historial?.retiros || []
+  };
+
+  const timelineSections = [
+    {
+      key: 'levantamientos',
+      title: 'Levantamientos',
+      color: 'info',
+      icon: 'bi bi-file-earmark-text',
+      items: historialData.levantamientos,
+      dateField: 'fecha_levantamiento',
+      idField: 'id_levantamiento'
+    },
+    {
+      key: 'instalaciones',
+      title: 'Instalaciones',
+      color: 'success',
+      icon: 'bi bi-tools',
+      items: historialData.instalaciones,
+      dateField: 'fecha_instalacion',
+      idField: 'id_instalacion'
+    },
+        {
+          key: 'mantenciones',
+          title: 'Mantenciones',
+          color: 'warning',
+          icon: 'bi bi-wrench',
+          items: historialData.mantenciones,
+          dateField: 'fecha_mantencion',
+          idField: 'id_mantencion'
+        },
+        {
+          key: 'soportes',
+          title: 'Reportes de soporte',
+          color: 'primary',
+          icon: 'bi bi-headset',
+          items: historialData.soportes,
+          dateField: 'fecha_soporte',
+          idField: 'id_soporte'
+        },
+        {
+          key: 'traslados',
+          title: 'Traslados',
+          color: 'danger',
+          icon: 'bi bi-truck',
+      items: historialData.traslados,
+      dateField: 'fecha_traslado',
+      idField: 'id_traslado'
+    },
+    {
+      key: 'ceses',
+      title: 'Ceses',
+      color: 'secondary',
+      icon: 'bi bi-x-circle',
+      items: historialData.ceses,
+      dateField: 'fecha_cese',
+      idField: 'id_cese'
+    },
+    {
+      key: 'retiros',
+      title: 'Retiros',
+      color: 'dark',
+      icon: 'bi bi-archive',
+      items: historialData.retiros,
+      dateField: 'fecha_retiro',
+      idField: 'id_retiro'
+    }
+  ];
+
+  const renderDocumento = (documento) =>
+    documento ? (
+      <a href={documento} target="_blank" rel="noopener noreferrer" className="timeline-link">
+        Ver documento
+      </a>
+    ) : (
+      <span className="text-muted">Sin documento asociado</span>
+    );
+
+  const renderExtraInfo = (sectionKey, item) => {
+    switch (sectionKey) {
+      case 'instalaciones':
+        return (
+          <p>
+            <strong>Observación:</strong> {item.observacion || 'Sin observación'}
+          </p>
+        );
+      case 'traslados':
+        return (
+          <>
+            <p>
+              <strong>Centro destino:</strong> {item.centro_destino_nombre || 'No especificado'}
+            </p>
+            <p>
+              <strong>Observación:</strong> {item.observacion || 'Sin observación'}
+            </p>
+          </>
+        );
+      case 'retiros':
+        return (
+          <p>
+            <strong>Observación:</strong> {item.observacion || 'Sin observación'}
+          </p>
+        );
+      case 'soportes':
+        return (
+          <>
+            <p>
+              <strong>Problema:</strong> {item.problema || 'Sin detalle'}
+            </p>
+            <p>
+              <strong>Tipo:</strong> {item.tipo || 'No indicado'}
+            </p>
+            {item.solucion && (
+              <p>
+                <strong>Solución:</strong> {item.solucion}
+              </p>
+            )}
+            {item.cambio_equipo && (
+              <p>
+                <strong>Equipo reemplazado:</strong> {item.equipo_cambiado || 'No especificado'}
+              </p>
+            )}
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const centroInfo = historial?.centro || null;
+  const ipList = historial?.equipos_ip || [];
+  const totalEventos = timelineSections.reduce(
+    (acc, section) => acc + section.items.length,
+    0
+  );
+
+  const centerMeta = centroInfo
+    ? [
+        {
+          label: 'Ubicación',
+          value: centroInfo.ubicacion || 'No registrada'
+        },
+        {
+          label: 'Base en tierra',
+          value: centroInfo.base_tierra ? 'Sí' : 'No'
+        },
+        {
+          label: 'Correo principal',
+          value: centroInfo.correo_centro || 'No especificado'
+        },
+        {
+          label: 'Teléfono',
+          value: centroInfo.telefono || 'No especificado'
+        }
+      ]
+    : [];
+
+  const centerStats = centroInfo
+    ? [
+        {
+          label: 'Radares',
+          value: centroInfo.cantidad_radares || 0,
+          icon: 'fas fa-broadcast-tower'
+        },
+        {
+          label: 'Cámaras',
+          value: centroInfo.cantidad_camaras || 0,
+          icon: 'fas fa-video'
+        },
+        rolUsuario === 'admin'
+          ? {
+              label: 'Valor contrato',
+              value: centroInfo.valor_contrato || 'No especificado',
+              icon: 'fas fa-file-signature'
             }
-        }
-    }, []);
+          : null
+      ].filter(Boolean)
+    : [];
 
+  return (
+    <div className="consulta-centro-page">
+      {/* HEADER */}
+      <div className="consulta-header">
+        <div>
+          <h2>Consulta de Centros</h2>
+          <p>Selecciona un cliente y explora el historial operativo de cada centro.</p>
+        </div>
+        {centroInfo && selectedCentro && (
+          <div className="consulta-header-badge">
+            <span>Centro activo</span>
+            <strong>{centroInfo.nombre}</strong>
+          </div>
+        )}
+      </div>
 
+      {error && <div className="consulta-alert">{error}</div>}
 
-    useEffect(() => {
-        if (selectedCentro) {
-            obtenerHistorialCentro(selectedCentro, (data) => {
-                setInventario(data.inventario || []);
-            }, setError);
-        }
-    }, [selectedCentro]);
-    
+      {/* FILTROS */}
+      <div className="consulta-card consulta-filters">
+        <div className="filter-group">
+          <label htmlFor="clientes">Seleccionar cliente</label>
+          <select
+            id="clientes"
+            className="filter-select"
+            value={selectedCliente || ''}
+            onChange={(e) => handleClienteChange(e.target.value)}
+          >
+            <option value="">Seleccione un cliente</option>
+            {clientes.map((cliente) => (
+              <option key={cliente.id_cliente} value={cliente.id_cliente}>
+                {cliente.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
 
-    // Obtener lista de clientes al cargar el componente
-    useEffect(() => {
-        obtenerClientes(setClientes, setError);
-    }, []);
-
-    // Manejar selección de cliente
-    const handleClienteChange = (clienteId) => {
-        console.log("Cliente seleccionado:", clienteId); // Log para verificar clienteId
-        setSelectedCliente(clienteId);
-        setSelectedCentro(null);
-        setHistorial(null);
-        obtenerCentrosPorCliente(clienteId, setCentros, setError);
-    };
-    
-
-    // Manejar selección de centro
-    const handleCentroChange = (centroId) => {
-        setSelectedCentro(centroId);
-        obtenerHistorialCentro(centroId, setHistorial, setError);
-    };
-    //formatear fehca
-    //const formatearFecha = (fecha) => {
-   //     if (!fecha) return ''; // Si no hay fecha, retorna vacío
-   //     const opciones = { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' };
-    //    return new Intl.DateTimeFormat('es-ES', opciones).format(new Date(fecha));
-   // };
-    const formatearFecha = (fecha) => {
-        if (!fecha) return ''; // Si no hay fecha, retorna vacío
-    
-        // Aseguramos que la fecha no reste un día debido a la zona horaria
-        const fechaObj = new Date(fecha);
-        fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset()); // Ajusta la zona horaria
-    
-        // Opciones para formatear la fecha
-        const opciones = { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' };
-        const fechaFormateada = new Intl.DateTimeFormat('es-ES', opciones).format(fechaObj);
-    
-        // Formatea el resultado final
-        return fechaFormateada.replace(',', '').replace(/\//g, '/') + '.';
-    };
-    
-    return (
-        <div className="container-fluid">
-            <h3>Consulta de Centros</h3>
-
-            {error && <p className="error">{error}</p>}
-
-            {/* Dropdown de clientes */}
-            <div className="dropdown-container">
-                <label htmlFor="clientes">Seleccionar Cliente:</label>
-                <div className="col-md-6">
-                    <select
-                        id="clientes"
-                        className="form-control"
-                        value={selectedCliente || ''}
-                        onChange={(e) => handleClienteChange(e.target.value)}
-                    >
-                        <option value="">Seleccione un cliente</option>
-                        {clientes.map((cliente) => (
-                            <option key={cliente.id_cliente} value={cliente.id_cliente}>
-                                {cliente.nombre}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+        <div className={`filter-group ${!selectedCliente ? 'disabled' : ''}`}>
+          <label htmlFor="centros">Seleccionar centro</label>
+          <select
+            id="centros"
+            className="filter-select"
+            value={selectedCentro || ''}
+            onChange={(e) => handleCentroChange(e.target.value)}
+            disabled={!selectedCliente}
+          >
+            <option value="">Seleccione un centro</option>
+            {centros.map((centro) => (
+              <option
+                key={centro.id_centro || centro.id}
+                value={centro.id_centro || centro.id}
+                style={{ color: estadoVisual(centro.estado).color }}
+              >
+                {centro.nombre}
+                {centro.estado ? ` - ${estadoVisual(centro.estado).label}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {/* CONTENIDO PRINCIPAL */}
+      {selectedCentro && historial ? (
+        <div className="consulta-grid">
+          {/* TARJETA: INFORMACIÓN DEL CENTRO */}
+          <div className="consulta-card info-card">
+            <div className="card-title card-title-center">
+              <div>
+                <span className="card-kicker">Centro seleccionado</span>
+                <h4 className="mb-0">{centroInfo?.nombre || 'Sin nombre'}</h4>
+                {centroInfo?.codigo_centro && (
+                  <small className="text-muted">Código: {centroInfo.codigo_centro}</small>
+                )}
+              </div>
+              <div className="info-status-block">
+                <span
+                  className={`status-pill status-${(centroInfo?.estado || 'Sin estado')
+                    .toLowerCase()
+                    .replace(/\s+/g, '-')}`}
+                >
+                  {centroInfo?.estado || 'Sin estado'}
+                </span>
+                {centroInfo?.base_tierra && (
+                  <span className="tag-pill">
+                    <i className="fas fa-home mr-1" />
+                    Base tierra
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Dropdown de centros */}
-            {selectedCliente && (
-                <div className="mb-3">
-                    <label htmlFor="centros" className="form-label">Seleccionar Centro:</label>
-                    <div className="col-md-6">                   
-                        <select
-                            id="centros"
-                            className="form-control"
-                            value={selectedCentro || ''}
-                            onChange={(e) => handleCentroChange(e.target.value)}
-                        >
-                            <option value="">Seleccione un centro </option>
-                            {centros.map((centro) => {
-                                console.log("Centro en dropdown:", centro); // Log para verificar cada centro
-                                return (
-                                    <option key={centro.id_centro} value={centro.id_centro}>
-                                        {centro.nombre}
-                                    </option>
-                                );
-                            })}
-                        </select>
-                     </div>
+            {/* 🔽 AQUÍ VA LA FICHA DE CLIENTE/UBICACIÓN/ETC, DEBAJO DEL NOMBRE */}
+            <div className="info-overview info-overview-table">
+              {centerMeta.map((meta) => (
+                <div className="meta-row" key={meta.label}>
+                  <span className="meta-label">{meta.label}</span>
+                  <span className="meta-value">{meta.value}</span>
                 </div>
-            )}
+              ))}
+            </div>
 
-            {/* Información del centro */}
-            {selectedCentro && historial && (
-                <div className="row mb-3">
-                    <div className="col-md-6">
-                        <div className="card">
-                            <div className="card-header bg-primary text-white">
-                                <h4>Información del Centro</h4>
-                            </div>
-                            <div className="card-body">
-                                <p><strong>Nombre:</strong> {historial.centro.nombre}</p>
-                                <p><strong>Ubicación:</strong> {historial.centro.ubicacion}</p>
-                                <p><strong>Estado:</strong> {historial.centro.estado}</p>
-                                {rolUsuario === 'admin' && (
-                                    <p><strong>Valor Contrato:</strong> {historial.centro.valor_contrato}</p>
-                                )}
-
-                                
-                                <p><strong>Cantidad de Radares:</strong> {historial.centro.cantidad_radares || 0}</p>
-                                <p><strong>Cantidad de Cámaras:</strong> {historial.centro.cantidad_camaras || 0}</p>
-                                <p><strong>Base en Tierra:</strong> {historial.centro.base_tierra ? 'Sí' : 'No'}</p>
-                              {/*  <p><strong>Fecha de Instalación:</strong> {formatearFecha(historial.centro.fecha_instalacion)}</p> */}
-                              {/* <p><strong>Fecha de Activación:</strong> {formatearFecha(historial.centro.fecha_activacion)}</p> */}
-                              {/* <p><strong>Fecha de Término:</strong> {formatearFecha(historial.centro.fecha_termino)}</p> */}
-                                <p><strong>Correo del Centro:</strong> {historial.centro.correo_centro || 'No especificado'}</p>
-                                <p><strong>Teléfono:</strong> {historial.centro.telefono || 'No especificado'}</p>
-                                <div className="d-flex gap-2 mt-3">
-                                <button className="btn btn-success" onClick={() => setShowModal(true)}>Ver IP</button>
-                                
-                                {inventario.length > 0 ? (
-                                    <button
-                                        className="btn btn-warning"
-                                        onClick={() => {
-                                            window.open(inventario[0].documento, "_blank");
-                                        }}
-                                    >
-                                        <strong>Ver Inventario</strong>
-                                    </button>
-                                ) : (
-                                    <button className="btn btn-secondary" disabled>No hay inventario</button>
-                                )}
-
-                                {/* Botón para descargar historial del centro en PDF */}
-                                <button
-                                    className="btn btn-danger d-flex align-items-center"
-                                    style={{ fontWeight: "bold", marginLeft: "15px" }}  // Ajusta el valor según el espacio que necesites
-                                    onClick={() => obtenerHistorialCentroPDF(selectedCentro)}
-                                >
-                                    <i className="fas fa-file-pdf me-2"></i> {/* Ícono de PDF */}
-                                    
-                                </button>
-
-                            </div>
-
-                               
-                            </div>
-                        </div>
-                    </div>
-
-                   {/* Historial del centro */}
-                   <div className="col-md-6">
-                        <div className="card">
-                            <div className="card-header bg-success text-white">
-                                <h4>Historial del Centro</h4>
-                            </div>
-                            <div className="card-body position-relative">
-                                
-                                <div className="timeline" style={{ paddingLeft: '80px' }}>
-                                     {/* Levantamientos */}
-                                    <div className="d-flex align-items-center mb-1">
-                                        <div className="circle bg-primary text-white me-3 rounded-circle d-flex justify-content-center align-items-center"
-                                         style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-file-earmark-text"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-primary" style={{ marginLeft: '1rem' }}>Levantamientos</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.levantamientos.map((l) => (
-                                                    <div key={l.id_levantamiento} className="mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(l.fecha_levantamiento)}</span>
-                                                        <p>
-                                                                {l.documento ? (
-                                                                    <a href={l.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>
-                                   
-                                    {/* Instalaciones */}
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-success text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-tools"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-success" style={{ marginLeft: '1rem' }}>Instalaciones</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.instalaciones.map((i) => (
-                                                    <div key={i.id_instalacion} className="timeline-item mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(i.fecha_instalacion)}</span>
-                                                         <p>
-                                                                {i.documento ? (
-                                                                    <a href={i.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>
-                                                        <p>
-                                                            <strong>Observación:</strong> {i.observacion || 'Sin observación'}
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>
-                                    {/* Mantenciones */}
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-warning text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-wrench"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-warning" style={{ marginLeft: '1rem' }}>Mantenciones</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.mantenciones.map((m) => (
-                                                    <div key={m.id_mantencion} className="timeline-item mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(m.fecha_mantencion)}</span>
-                                                        <p>
-                                                                {m.documento ? (
-                                                                    <a href={m.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>
-                                                        <p>
-                                                            <strong>Responsable:</strong> {m.responsable || 'No especificado'}
-                                                        </p>
-                                                        <p>
-                                                            <strong>Observación:</strong> {m.observacion || 'Sin observación'}
-                                                        </p>
-
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>      
-                                    {/* Soporte */}
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-warning text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-wrench"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-warning" style={{ marginLeft: '1rem' }}>Soportes</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                                        <div className="card-body">
-                                                            {historial.historial.soportes.map((s) => (
-                                                                <div key={s.id_soporte} className="timeline-item mb-2">
-                                                                    <span className="badge bg-info">{formatearFecha(s.fecha_soporte)}</span>
-                                                                    <p><strong>Problema:</strong> {s.problema || 'Sin problema especificado'}</p>
-                                                                    <p><strong>Solución:</strong> {s.solucion || 'Sin solución especificada'}</p>
-                                                                    <p><strong>Cambio de Equipo:</strong> {s.cambio_equipo ? 'Sí' : 'No'}</p>
-                                                                    <p><strong>Equipo Cambiado:</strong> {s.equipo_cambiado || 'No especificado'}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                    </div>     
-                                    {/* Traslados */}  
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-danger text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-truck"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-danger" style={{ marginLeft: '1rem' }}>Traslados</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.traslados.map((t) => (
-                                                    <div key={t.id_traslado} className="timeline-item mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(t.fecha_traslado)}</span>
-                                                        <p>
-                                                                {t.documento ? (
-                                                                    <a href={t.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>                                                        
-                                                        <p>
-                                                            <strong>Centro Destino:</strong> {t.centro_destino_nombre || 'No especificado'}
-                                                        </p>
-                                                        <p>
-                                                            <strong>Observación:</strong> {t.observacion || 'Sin observación'}
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>
-                                    {/* Ceses */}
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-secondary text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-x-circle"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-secondary" style={{ marginLeft: '1rem' }}>Ceses</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.ceses.map((c) => (
-                                                    <div key={c.id_cese} className="timeline-item mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(c.fecha_cese)}</span>
-                                                         <p>
-                                                                {c.documento ? (
-                                                                    <a href={c.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>
-                                    {/* Retiros */}
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="circle bg-dark text-white me-3 rounded-circle d-flex justify-content-center align-items-center" style={{ width: '10px', height: '10px', position: 'absolute',
-                                            left: '-47px', 
-                                            transform: 'translate(-50%, 0)'  }}>
-                                            <i className="bi bi-archive"></i>
-                                        </div>
-                                        <h4 className="mb-0 text-dark" style={{ marginLeft: '1rem' }}>Retiros</h4>
-                                    </div>
-                                    <div className="card mb-3 ms-5">
-                                            <div className="card-body">
-                                                {historial.historial.retiros.map((r) => (
-                                                    <div key={r.id_retiro} className="timeline-item mb-2">
-                                                        <span className="badge bg-info">{formatearFecha(r.fecha_retiro)}</span>
-                                                        <p>
-                                                                {r.documento ? (
-                                                                    <a href={r.documento} target="_blank" rel="noopener noreferrer">
-                                                                    Ver Documento
-                                                                </a>
-                                                                ) : (
-                                                                    'Sin documento asociado'
-                                                                )}
-                                                         </p>
-                                                        <p>
-                                                            <strong>Observación:</strong> {r.observacion || 'Sin observación'}
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                   </div>
+            {/* Stats: radares, cámaras, valor contrato */}
+            <div className="info-stats-grid">
+              {centerStats.map((stat) => (
+                <div className="info-stat" key={stat.label}>
+                  <div className="info-stat-icon">
+                    <i className={stat.icon} />
+                  </div>
+                  <div className="info-stat-text">
+                    <span>{stat.label}</span>
+                    <p>{stat.value}</p>
+                  </div>
                 </div>
-            )}
+              ))}
+            </div>
 
-            {/* Modal para ver IPs */}
-            {showModal && (
-                <div className="modal" style={{ display: 'block' }}>
-                    <div className="modal-dialog">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Direcciones IP</h5>
-                                <button
-                                    type="button"
-                                    className="close"
-                                    onClick={() => setShowModal(false)}
-                                >
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                {historial.equipos_ip.map((ip) => (
-                                    <p key={ip.id_equipo}><strong>{ip.nombre}:</strong> {ip.ip}</p>
-                                ))}
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowModal(false)}
-                                >
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+            {/* Acciones */}
+            <div className="consulta-actions">
+              <button className="btn btn-success" onClick={() => setShowModal(true)}>
+                <i className="fas fa-network-wired mr-2" />
+                Ver IPs
+              </button>
+
+              {inventario.length > 0 ? (
+                <button
+                  className="btn btn-warning"
+                  onClick={() => window.open(inventario[0].documento, '_blank')}
+                >
+                  <i className="fas fa-clipboard-list mr-2" />
+                  Ver inventario
+                </button>
+              ) : (
+                <button className="btn btn-secondary" disabled>
+                  <i className="fas fa-clipboard-list mr-2" />
+                  Sin inventario
+                </button>
+              )}
+
+              <button
+                className="btn btn-danger"
+                onClick={() => obtenerHistorialCentroPDF(selectedCentro)}
+              >
+                <i className="fas fa-file-pdf mr-2" />
+                PDF historial
+              </button>
+            </div>
+          </div>
+
+          {/* TARJETA: HISTORIAL */}
+          <div className="consulta-card timeline-card">
+            <div className="card-title">
+              <h4>Historial del centro</h4>
+              <small>{totalEventos} eventos</small>
+            </div>
+
+            <div className="consulta-timeline">
+              {timelineSections.map((section) => (
+                <div className="timeline-section" key={section.key}>
+                  <div className="timeline-section-header">
+                    <span className={`timeline-badge ${section.color}`}>
+                      <i className={section.icon} />
+                    </span>
+                    <h5>{section.title}</h5>
+                  </div>
+                  {section.items.length > 0 ? (
+                    section.items.map((item) => (
+                      <div
+                        className="timeline-item"
+                        key={`${section.key}-${item[section.idField] || Math.random()}`}
+                      >
+                        <span className="timeline-date">
+                          {formatearFecha(item[section.dateField])}
+                        </span>
+                        {renderDocumento(item.documento)}
+                        {renderExtraInfo(section.key, item)}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="timeline-empty">Sin registros</p>
+                  )}
                 </div>
-            )}
+              ))}
+            </div>
+          </div>
         </div>
-    );
+      ) : (
+        <div className="consulta-empty-state">
+          <i className="fas fa-map-marked-alt" />
+          <h5>Explora la información de un centro</h5>
+          <p>
+            Selecciona un cliente y luego un centro para cargar su historial y acciones
+            disponibles.
+          </p>
+        </div>
+      )}
+
+      {/* MODAL IPs */}
+      {showModal && (
+        <div className="modal" style={{ display: 'block' }}>
+          <div className="modal-dialog modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Direcciones IP</h5>
+                <button
+                  type="button"
+                  className="close"
+                  onClick={() => setShowModal(false)}
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div className="modal-body" style={{ background: '#f8fafc' }}>
+                {centroInfo && (
+                  <div
+                    style={{
+                      border: '1px solid #dbe4f3',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                      marginBottom: '16px',
+                      background: '#fff'
+                    }}
+                  >
+                    <h6 className="mb-1 text-primary">
+                      <i className="fas fa-map-marker-alt mr-2" />
+                      {centroInfo.nombre}
+                    </h6>
+                    <small className="text-muted">
+                      {centroInfo.ubicacion || 'Ubicación no registrada'}
+                    </small>
+                  </div>
+                )}
+
+                {ipList.length > 0 ? (
+                  ipList.map((ip) => (
+                    <div
+                      key={ip.id_equipo}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        marginBottom: '12px',
+                        background: '#fff',
+                        boxShadow: '0 1px 2px rgba(15,23,42,0.06)'
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <div>
+                          <h6 className="mb-1" style={{ fontWeight: 600 }}>
+                            {ip.nombre || 'Equipo sin nombre'}
+                          </h6>
+                          {ip.observacion && (
+                            <small className="text-muted">{ip.observacion}</small>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            background: '#0ea5e9',
+                            color: '#fff',
+                            padding: '4px 12px',
+                            borderRadius: '999px',
+                            fontWeight: 600,
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          {ip.ip || 'Sin IP'}
+                        </span>
+                      </div>
+                      {ip.codigo && (
+                        <div style={{ marginTop: '6px' }}>
+                          <small className="text-muted">Código:</small>{' '}
+                          <strong>{ip.codigo}</strong>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted mb-0">
+                    Sin direcciones IP registradas para este centro.
+                  </p>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default ConsultaCentro;

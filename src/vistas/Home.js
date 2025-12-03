@@ -4,8 +4,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
-
-
+import './Home.css';
 
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
@@ -141,13 +140,60 @@ const Home = () => {
       return `${dia}/${mes}/${año}`; // Retornar en formato DD/MM/YYYY
     };
   
-    const actividadesDelMesActual = actividades.filter((actividad) => {
-      const fechaInicio = new Date(actividad.fecha_inicio);
-      const mesActual = new Date().getMonth(); // Mes actual (0 = Enero, 11 = Diciembre)
-      const añoActual = new Date().getFullYear(); // Año actual
-  
-      return fechaInicio.getMonth() === mesActual && fechaInicio.getFullYear() === añoActual;
-    });
+const actividadesDelMesActual = actividades.filter((actividad) => {
+  const fechaInicio = new Date(actividad.fecha_inicio);
+  const mesActual = new Date().getMonth(); // Mes actual (0 = Enero, 11 = Diciembre)
+  const anioActual = new Date().getFullYear(); // Año actual
+
+  return fechaInicio.getMonth() === mesActual && fechaInicio.getFullYear() === anioActual;
+});
+
+const hoy = new Date();
+hoy.setHours(0, 0, 0, 0);
+
+const totalActividades = actividades.length;
+const actividadesFinalizadas = actividades.filter((act) => act.estado === 'Finalizado').length;
+const actividadesActivas = totalActividades - actividadesFinalizadas;
+const actividadesAtrasadas = actividades.filter((act) => {
+  if (!act.fecha_termino || act.estado === 'Finalizado') return false;
+  const limite = new Date(act.fecha_termino);
+  return limite < hoy;
+}).length;
+const actividadesUrgentes = actividades.filter((act) => act.prioridad === 'Urgente').length;
+const cumplimiento = totalActividades ? Math.round((actividadesFinalizadas / totalActividades) * 100) : 0;
+
+const proximasActividades = [...actividades]
+  .filter((act) => act.fecha_inicio)
+  .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio))
+  .slice(0, 5);
+
+const backlogPorArea = Object.entries(
+  actividades.reduce((acc, act) => {
+    const areaClave = act.area || 'Sin área';
+    acc[areaClave] = (acc[areaClave] || 0) + 1;
+    return acc;
+  }, {})
+)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 4);
+
+const cargaTecnicos = Object.entries(
+  actividades.reduce((acc, act) => {
+    if (act.estado === 'Finalizado') return acc;
+    const tecnico = act.encargado_principal?.nombre_encargado || 'Sin asignar';
+    acc[tecnico] = (acc[tecnico] || 0) + 1;
+    return acc;
+  }, {})
+)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5);
+
+const actividadesSemana = actividades.filter((act) => {
+  if (!act.fecha_inicio) return false;
+  const inicio = new Date(act.fecha_inicio);
+  const diferencia = (inicio - hoy) / (1000 * 60 * 60 * 24);
+  return diferencia >= 0 && diferencia <= 7;
+}).length;
   
     
     const getEstadoColor = (estado) => {
@@ -215,47 +261,120 @@ const Home = () => {
     
         
     return (
-        <div className="container-fluid">
-            <h3>Programación de Actividades</h3>
-            {/* Tarjetas */}
-            <div className="row mb-3">
-              <div className="col-lg-4 col-6">
-                <div className="small-box bg-info">
-                  <div className="inner">
-                    <h3>{totalCentrosOperativos}</h3>
-                    <p>Total Centros Operativos</p>
-                  </div>
+        <div className="container-fluid home-dashboard">
+            <div className="home-header">
+                <div>
+                    <h2>Panel operativo</h2>
+                    <p>Monitorea los centros, actividades y cargas de trabajo del equipo en un solo vistazo.</p>
                 </div>
-              </div>
-              <div className="col-lg-4 col-6">
-                <div className="small-box bg-success">
-                  <div className="inner">
-                  <h3>2</h3>
-                  <p>Total Centros facturando</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-lg-4 col-6">
-                <div className="small-box bg-warning">
-                  <div className="inner">                    
-                    
-                    <h3>{actividadesDelMesActual.length}</h3>
-                    <p>Actividades Mes Actual</p>
-                    
-                  </div>
-                </div>
-              </div>
-              
+                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                    <i className="fas fa-plus me-2" />
+                    Nueva actividad
+                </button>
             </div>
-    
-          
-    
-            {/* Dividir la vista */}
-            <div className="row">
-                {/* Sección del Listado */}
-                <div className="col-md-6">
+
+            <div className="home-metrics-grid">
+                <div className="metric-card accent">
+                    <span>Centros operativos</span>
+                    <h3>{totalCentrosOperativos}</h3>
+                    <small>Registrados en OrcaGest</small>
+                </div>
+                <div className="metric-card">
+                    <span>Actividades activas</span>
+                    <h3>{actividadesActivas}</h3>
+                    <small>Total registradas: {totalActividades}</small>
+                </div>
+                <div className="metric-card">
+                    <span>Cumplimiento</span>
+                    <h3>{cumplimiento}%</h3>
+                    <small>{actividadesFinalizadas} finalizadas</small>
+                </div>
+                <div className="metric-card critical">
+                    <span>Alertas</span>
+                    <h3>{actividadesAtrasadas + actividadesUrgentes}</h3>
+                    <small>Atrasadas: {actividadesAtrasadas} - Urgentes: {actividadesUrgentes}</small>
+                </div>
+                <div className="metric-card">
+                    <span>Agenda semanal</span>
+                    <h3>{actividadesSemana}</h3>
+                    <small>Eventos proximos 7 dias</small>
+                </div>
+                <div className="metric-card">
+                    <span>Mes en curso</span>
+                    <h3>{actividadesDelMesActual.length}</h3>
+                    <small>Actividades programadas</small>
+                </div>
+            </div>
+
+            <div className="home-insights-grid">
+                <div className="insight-card">
+                    <h5>Proximos hitos</h5>
+                    {proximasActividades.length ? (
+                        <ul className="insight-list">
+                            {proximasActividades.map((actividad) => (
+                                <li className="insight-item" key={actividad.id_actividad}>
+                                    <div>
+                                        <strong>{actividad.nombre_actividad}</strong>
+                                        <div className="insight-meta">
+                                            {formatearFecha(actividad.fecha_inicio)} - {actividad.centro?.cliente || 'Sin cliente'}
+                                        </div>
+                                    </div>
+                                    <span className="insight-pill">{actividad.estado || 'Sin estado'}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-muted mb-0">Sin actividades programadas proximamente.</p>
+                    )}
+                </div>
+
+                <div className="insight-card">
+                    <h5>Backlog por area</h5>
+                    {backlogPorArea.length ? (
+                        <ul className="insight-list">
+                            {backlogPorArea.map(([area, cantidad]) => (
+                                <li className="insight-item" key={area}>
+                                    <div>
+                                        <strong>{area}</strong>
+                                        <div className="insight-meta">Actividades registradas</div>
+                                    </div>
+                                    <span className="insight-pill">{cantidad}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-muted mb-0">No hay actividades clasificadas por area.</p>
+                    )}
+                </div>
+
+                <div className="insight-card">
+                    <h5>Carga de tecnicos</h5>
+                    {cargaTecnicos.length ? (
+                        <ul className="insight-list">
+                            {cargaTecnicos.map(([tecnico, carga]) => (
+                                <li className="insight-item" key={tecnico}>
+                                    <div>
+                                        <strong>{tecnico}</strong>
+                                        <div className="insight-meta">Asignaciones activas</div>
+                                    </div>
+                                    <span className="insight-pill">{carga}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-muted mb-0">No hay tecnicos con actividades activas.</p>
+                    )}
+                </div>
+            </div>
+
+            <div className="row home-content-grid">
+                <div className="col-xl-7">
                     <div className="card w-100">
                         <div className="card-body">
+                            <div className="home-section-heading">
+                                <h5>Actividades registradas</h5>
+                                <span className="insight-meta">{totalActividades} totales</span>
+                            </div>
                             <DataTable
                                 columns={columns}
                                 data={actividades}
@@ -270,34 +389,33 @@ const Home = () => {
                         </div>
                     </div>
                 </div>
-    
-                {/* Sección del Calendario */}
-                <div className="col-md-6">
+
+                <div className="col-xl-5">
                     <div className="card w-100">
                         <div className="card-body">
-                            <h5>Calendario</h5>
+                            <div className="home-section-heading">
+                                <h5>Calendario operacional</h5>
+                                <span className="insight-meta">Prioridad por color</span>
+                            </div>
                             <FullCalendar
-                                    plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
-                                    initialView="dayGridMonth"
-                                    headerToolbar={{
-                                        left: 'prev,next today',
-                                        center: 'title',
-                                        right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                                    }}
-                                    views={{
-                                        dayGridMonth: { buttonText: 'Mes' },
-                                        timeGridWeek: { buttonText: 'Semana' },
-                                        timeGridDay: { buttonText: 'Día' },
-                                    }}
-                                    events={actividades
-                                        .filter((actividad) => actividad.fecha_inicio && actividad.fecha_termino)
-                                        .map((actividad) => {
-                                        // Convertir las fechas adecuadamente
+                                plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+                                initialView="dayGridMonth"
+                                headerToolbar={{
+                                    left: 'prev,next today',
+                                    center: 'title',
+                                    right: 'dayGridMonth,timeGridWeek,timeGridDay',
+                                }}
+                                views={{
+                                    dayGridMonth: { buttonText: 'Mes' },
+                                    timeGridWeek: { buttonText: 'Semana' },
+                                    timeGridDay: { buttonText: 'Día' },
+                                }}
+                                events={actividades
+                                    .filter((actividad) => actividad.fecha_inicio && actividad.fecha_termino)
+                                    .map((actividad) => {
                                         const fechaInicio = new Date(actividad.fecha_inicio);
                                         const fechaTermino = new Date(actividad.fecha_termino);
-
-                                        // Ajustar horas para evitar el desfase (opcional)
-                                        fechaInicio.setUTCHours(12, 0, 0); // Ajustar a mediodía
+                                        fechaInicio.setUTCHours(12, 0, 0);
                                         fechaTermino.setUTCHours(12, 0, 0);
 
                                         return {
@@ -307,24 +425,12 @@ const Home = () => {
                                             end: fechaTermino.toISOString(),
                                             color: getColorByActividad(actividad.prioridad),
                                         };
-                                        })}
-                                    editable={true}
-                                    selectable={true}
-                                    eventContent={(eventInfo) => {
-                                        return (
-                                        <div>
-                                            <b>{eventInfo.event.title}</b> {/* Muestra solo el título */}
-                                        </div>
-                                        );
-                                    }}
-                                    />
-                                
+                                    })}
+                            />
                         </div>
                     </div>
                 </div>
-            </div>
-    
-            {/* Modal para crear/editar actividad */}
+            </div>            {/* Modal para crear/editar actividad */}
             {showModal && (
                 <div className="modal fade show" tabIndex="-1" style={{ display: 'block' }}>
                     <div className="modal-dialog modal-dialog-scrollable">

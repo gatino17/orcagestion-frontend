@@ -1,0 +1,441 @@
+.registros-page {
+  padding: 1.5rem 0 3rem;
+}
+
+.registros-hero {
+  border: none;
+  border-radius: 26px;
+  padding: 1.75rem 2rem;
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.15), rgba(37, 99, 235, 0.2));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.registros-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.registros-hero-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(59, 130, 246, 0.9));
+  box-shadow: 0 16px 40px rgba(14, 165, 233, 0.35);
+}
+
+.registros-hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  margin: 0;
+  color: #0369a1;
+}
+
+.registros-hero-subtitle {
+  margin: 0.25rem 0 0;
+  color: #0f172a;
+  opacity: 0.8;
+}
+
+.registros-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.registros-metric-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.registros-filters,
+.registros-table-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  margin-bottom: 1.5rem;
+}
+
+.registros-summary {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  margin-bottom: 1.5rem;
+  background: #fff;
+}
+
+.registros-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.registros-summary-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  padding: 1rem;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.summary-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.registros-summary-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.registros-summary-card ul li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+  font-weight: 600;
+}
+
+.registros-summary-card ul li i {
+  color: #0ea5e9;
+  font-size: 0.9rem;
+}
+
+.registros-centros-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+
+.registros-centros-list li {
+  flex-direction: column;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0.35rem 0;
+  margin: 0;
+}
+
+.centro-list-header {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.registros-centros-list li:last-child {
+  border-bottom: none;
+}
+
+.registros-empty {
+  padding: 1rem;
+  text-align: center;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.registros-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.registros-filter-grid label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.filter-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.registros-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.registros-section-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.section-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.82), rgba(37, 99, 235, 0.85));
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.section-icon--servicios {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.92), rgba(251, 146, 60, 0.9));
+}
+
+.metric-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(37, 99, 235, 0.9));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.registro-doc-section {
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 160px;
+}
+
+.registro-doc-section--clickable {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.registro-doc-section--clickable:hover {
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+}
+
+.registro-doc-section__header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #0f172a;
+}
+
+.registro-doc-section__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+.registro-doc-section__content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+}
+
+@media (min-width: 1200px) {
+  .registro-doc-section__content {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.registro-doc-section__content small {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.registro-doc-section__content p {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.registro-doc-link {
+  font-weight: 600;
+  color: #0ea5e9;
+}
+
+.registro-doc-link:hover {
+  text-decoration: underline;
+  color: #0284c7;
+}
+
+.registro-doc-link--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  text-decoration: none;
+}
+
+.registro-doc-link--icon:hover {
+  background: rgba(14, 165, 233, 0.2);
+  color: #0ea5e9;
+}
+
+.registro-doc-missing {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.registro-doc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  font-weight: 700;
+}
+
+.registro-doc-section--levantamiento .registro-doc-section__icon {
+  background: rgba(14, 165, 233, 0.18);
+  color: #0ea5e9;
+}
+
+.registro-doc-section--instalacion .registro-doc-section__icon {
+  background: rgba(16, 185, 129, 0.2);
+  color: #0f766e;
+}
+
+.registro-doc-section--traslado .registro-doc-section__icon {
+  background: rgba(249, 115, 22, 0.18);
+  color: #c2410c;
+}
+
+.registro-doc-section--cese .registro-doc-section__icon {
+  background: rgba(148, 163, 184, 0.25);
+  color: #475569;
+}
+
+.registro-doc-section--retiro .registro-doc-section__icon {
+  background: rgba(248, 113, 113, 0.18);
+  color: #dc2626;
+}
+
+.registro-doc-section--inventario .registro-doc-section__icon {
+  background: rgba(99, 102, 241, 0.18);
+  color: #4c1d95;
+}
+
+.registro-doc-section--mantencion .registro-doc-section__icon {
+  background: rgba(34, 197, 94, 0.2);
+  color: #15803d;
+}
+
+.registro-doc-section--mantencion .registro-doc-badge {
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.registro-centro-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.registro-centro-cell strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.registro-area-ubicacion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.88rem;
+}
+
+.registro-area-ubicacion__line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.registro-area-ubicacion__line i {
+  color: #64748b;
+}
+
+.registro-area-ubicacion__line--muted {
+  color: #475569;
+  font-weight: 500;
+}
+
+.estado-badge {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  background: rgba(100, 116, 139, 0.15);
+  color: #475569;
+  text-transform: capitalize;
+}
+
+.estado-badge--activo {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+}
+
+.estado-badge--retiro {
+  background: rgba(248, 113, 113, 0.2);
+  color: #b91c1c;
+}
+
+.estado-badge--cese {
+  background: rgba(251, 191, 36, 0.2);
+  color: #92400e;
+}
+
+.estado-badge--traslado {
+  background: rgba(253, 224, 71, 0.25);
+  color: #854d0e;
+}
+
+@media (max-width: 768px) {
+  .registros-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .registros-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

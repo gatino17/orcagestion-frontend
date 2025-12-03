@@ -1,0 +1,177 @@
+.tecnicos-page {
+  padding: 1.5rem 0 3rem;
+}
+
+.tecnicos-hero {
+  border: none;
+  border-radius: 26px;
+  padding: 1.75rem 2rem;
+  background: linear-gradient(120deg, rgba(14, 165, 233, 0.15), rgba(37, 99, 235, 0.2));
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.tecnicos-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tecnicos-hero-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(59, 130, 246, 0.9));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  box-shadow: 0 16px 40px rgba(14, 165, 233, 0.35);
+}
+
+.tecnicos-hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  margin: 0;
+  color: #0369a1;
+}
+
+.tecnicos-hero-subtitle {
+  margin: 0.25rem 0 0;
+  color: #0f172a;
+  opacity: 0.8;
+}
+
+.tecnicos-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.tecnicos-metric-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.metric-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(37, 99, 235, 0.9));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.tecnicos-section {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.tecnicos-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.tecnicos-section-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.section-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.82), rgba(37, 99, 235, 0.85));
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.tecnicos-table {
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.tecnicos-table thead {
+  background: linear-gradient(120deg, #0ea5e9, #2563eb);
+  color: #fff;
+}
+
+.tecnicos-table th,
+.tecnicos-table td {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  vertical-align: middle;
+}
+
+.tecnicos-table tbody tr:nth-child(odd) {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.tecnicos-table tbody tr:hover {
+  background: rgba(14, 165, 233, 0.18);
+}
+
+.especialidad-pill {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.licencia-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.licencia-si {
+  background: linear-gradient(135deg, #14b8a6, #0f766e);
+}
+
+.licencia-no {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+@media (max-width: 768px) {
+  .tecnicos-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tecnicos-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
