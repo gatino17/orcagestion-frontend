@@ -108,11 +108,13 @@ body.sidenav-expanded .app-footer {
 @media (max-width: 992px) {
   .content-wrapper {
     margin-left: 0 !important;
+    width: 100% !important;
     padding: 1.25rem;
     padding-top: 6rem;
   }
 
   .app-footer {
     margin-left: 0 !important;
+    width: 100% !important;
   }
 }
