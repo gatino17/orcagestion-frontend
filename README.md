@@ -37,13 +37,13 @@ Build the production image:
 docker build -t orcagestion:latest .
 ```
 
-Run it (published on port 8081 -> container port 80):
+Run it (published on port 3000 -> container port 80):
 
 ```bash
-docker run --rm -p 8081:80 orcagestion:latest
+docker run --rm -p 3000:80 orcagestion:latest
 ```
 
-Or with Docker Compose (builds and runs on 8081):
+Or with Docker Compose (builds and runs on 3000):
 
 ```bash
 docker compose up --build -d
