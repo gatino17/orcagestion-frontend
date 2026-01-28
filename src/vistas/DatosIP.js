@@ -153,6 +153,9 @@ const DatosIP = () => {
                 estado: ""
             }))
     ];
+    const equiposConDatos = equiposCompletos.filter(
+        (equipo) => (equipo.ip || "").trim() || (equipo.codigo || "").trim()
+    );
     const estadoColors = {
         activo: "#16a34a",
         cese: "#f97316",
@@ -677,7 +680,7 @@ const DatosIP = () => {
                         <div className="section-actions">
                             {centro && (
                                 <span className="equipos-count badge bg-light text-dark">
-                                    <i className="fas fa-layer-group" /> {equiposCompletos.length} equipos
+                                    <i className="fas fa-layer-group" /> {equiposConDatos.length} equipos
                                 </span>
                             )}
                             <button
