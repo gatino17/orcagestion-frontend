@@ -441,7 +441,7 @@ const Soporte = () => {
         }));
     }, [soportesFiltrados]);
 
-    const pendientesCriticos = useMemo(() => {
+    const pendientesAbiertos = useMemo(() => {
         return soportesFiltrados
             .filter((soporte) => {
                 const estado = (soporte.estado || "pendiente").toLowerCase();
@@ -451,9 +451,14 @@ const Soporte = () => {
                 ...soporte,
                 diasAbiertos: calcularDiasAbiertos(soporte)
             }))
-            .sort((a, b) => b.diasAbiertos - a.diasAbiertos)
-            .slice(0, 4);
+            .sort((a, b) => b.diasAbiertos - a.diasAbiertos);
     }, [soportesFiltrados]);
+
+    const totalPendientesAbiertos = pendientesAbiertos.length;
+    const pendientesCriticos = useMemo(
+        () => pendientesAbiertos.slice(0, 4),
+        [pendientesAbiertos]
+    );
 
     const columns = [
         {
@@ -476,6 +481,16 @@ const Soporte = () => {
                 new Date(rowA.fecha_soporte || 0).getTime() - new Date(rowB.fecha_soporte || 0).getTime(),
             cell: (row) => formatearFecha(row.fecha_soporte),
             width: "100px"
+        },
+        {
+            name: "D\u00edas transcurridos",
+            selector: (row) => calcularDiasAbiertos(row),
+            sortable: true,
+            width: "150px",
+            cell: (row) =>
+                row.fecha_cierre
+                    ? `${calcularDiasAbiertos(row)} d\u00edas`
+                    : "En proceso"
         },
         {
             name: "Estado",
@@ -515,7 +530,8 @@ const Soporte = () => {
                 </div>
             ),
             ignoreRowClick: true,
-            allowOverflow: true
+            // react-data-table maneja el overflow; evitar pasar props no soportadas a DOM
+            allowOverflow: false
         }
     ];
 
@@ -724,7 +740,7 @@ const Soporte = () => {
                                     <small className="text-secondary">Casos mas antiguos sin cierre</small>
                                 </div>
                                 <span className="badge badge-pill badge-danger">
-                                    {pendientesCriticos.length}
+                                    {totalPendientesAbiertos}
                                 </span>
                             </div>
                             {pendientesCriticos.length ? (
