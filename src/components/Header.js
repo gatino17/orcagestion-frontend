@@ -6,10 +6,10 @@ import "./Layout.css";
 function Header({ onLogout }) {
   const [estadoConexion, setEstadoConexion] = useState("checking");
   const navigate = useNavigate();
-
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "/api";
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/status")
+      .get(`${API_BASE_URL}/status/`)
       .then((response) => {
         if (response.data.status === "ok") {
           setEstadoConexion("connected");

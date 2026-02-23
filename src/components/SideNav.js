@@ -33,6 +33,13 @@ const navItems = [
     roles: ["admin", "soporte", "operaciones"],
   },
   {
+    section: "OPERACIONES",
+    label: "Armado técnico",
+    to: "/armados",
+    icon: "fas fa-tools",
+    roles: ["admin", "operaciones", "tecnico"],
+  },
+  {
     section: "PLANIFICACION",
     label: "Calendario",
     to: "/calendario",

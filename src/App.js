@@ -23,6 +23,7 @@ import Usuarios from "./vistas/Usuarios";
 import Centros from "./vistas/Centros";
 import Tecnicos from "./vistas/Tecnicos";
 import RegistrosDocumentos from './vistas/RegistrosDocumentos';
+import ArmadoTecnico from "./vistas/ArmadoTecnico";
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
@@ -168,6 +169,14 @@ function App() {
                             element={
                               <PrivateRoute allowedRoles={['admin', 'operaciones']}>
                                     <RegistrosDocumentos />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/armados"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'tecnico']}>
+                                    <ArmadoTecnico />
                                 </PrivateRoute>
                             }
                         />

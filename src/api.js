@@ -1,7 +1,15 @@
 // src/api.js
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:5000/api';
+// Resuelve la base de API según el entorno:
+// - Si hay REACT_APP_API_BASE_URL, úsala.
+// - Si el hostname es localhost (desarrollo), usa http://localhost:5000/api.
+// - Si no, usa ruta relativa /api (producción detrás de Apache/Nginx).
+const BASE_URL =
+    process.env.REACT_APP_API_BASE_URL ||
+    (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'http://localhost:5000/api'
+        : '/api');
 
 export const loginUsuario = async (credenciales) => {
     try {
@@ -1383,6 +1391,117 @@ export const eliminarSoporte = async (id) => {
         const response = await axios.delete(`${BASE_URL}/soporte/${id}`);
         return response.data;
     } catch (error) {
+        throw error;
+    }
+};
+
+// === Armados técnicos ===
+export const obtenerArmados = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener armados:", error);
+        throw error;
+    }
+};
+
+export const crearArmado = async (armadoData) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/armados/`, armadoData);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear armado:", error);
+        throw error;
+    }
+};
+
+export const actualizarArmado = async (id, armadoData) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/armados/${id}`, armadoData);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar armado:", error);
+        throw error;
+    }
+};
+
+export const eliminarArmado = async (id) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/armados/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar armado:", error);
+        throw error;
+    }
+};
+
+export const obtenerParticipacionesArmado = async (armadoId) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/${armadoId}/participaciones`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener participaciones:", error);
+        throw error;
+    }
+};
+
+export const obtenerMaterialesArmado = async (armadoId) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/${armadoId}/materiales`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener materiales:", error);
+        throw error;
+    }
+};
+
+export const guardarMaterialesArmado = async (armadoId, materiales) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/armados/${armadoId}/materiales`, materiales);
+        return response.data;
+    } catch (error) {
+        console.error("Error al guardar materiales:", error);
+        throw error;
+    }
+};
+
+export const obtenerMovimientosArmado = async (armadoId) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/${armadoId}/movimientos`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener movimientos:", error);
+        throw error;
+    }
+};
+
+export const obtenerMovimientosRecientes = async (limit = 20, page = 1) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/movimientos`, { params: { limit, page } });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener movimientos recientes:", error);
+        throw error;
+    }
+};
+
+export const crearParticipacionArmado = async (armadoId, data) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/armados/${armadoId}/participaciones`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear participación:", error);
+        throw error;
+    }
+};
+
+export const actualizarParticipacionArmado = async (participacionId, data) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/armados/participaciones/${participacionId}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar participación:", error);
         throw error;
     }
 };

@@ -325,7 +325,7 @@ function RegistrosDocumentos() {
         grow: 1.2,
         wrap: true,
         minWidth: '160px',
-        allowOverflow: true,
+        allowOverflow: false, // evitar pasar prop a DOM
     });
 
     const getEstadoBadgeClass = (estado) => {
