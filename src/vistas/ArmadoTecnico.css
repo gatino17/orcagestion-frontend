@@ -88,3 +88,14 @@
 .material-qty input {
     max-width: 80px;
 }
+
+.d-md-table-cell {
+    display: table-cell !important;
+}
+
+@media (max-width: 767.98px) {
+    .table thead th,
+    .table tbody td {
+        vertical-align: middle;
+    }
+}

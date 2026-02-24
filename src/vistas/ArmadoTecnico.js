@@ -852,20 +852,20 @@ const ArmadoTecnico = () => {
                                                     )}
                                                 </div>
                                                     <div className="table-responsive">
-                                                    <table className="table table-bordered">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Equipo</th>
-                                                                <th>Caja</th>
-                                                                <th>IP</th>
-                                                                <th>Observacion</th>
-                                                                <th>Codigo</th>
-                                                                <th>N Serie</th>
-                                                                <th>Estado</th>
-                                                                <th>Acciones</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
+                                                <table className="table table-bordered">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Equipo</th>
+                                                            <th>Caja</th>
+                                                            {!esMovil && <th>IP</th>}
+                                                            <th>Observación</th>
+                                                            {!esMovil && <th>Código</th>}
+                                                            <th>N Serie</th>
+                                                            {!esMovil && <th>Estado</th>}
+                                                            <th>Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
                                                             {equiposOrdenados.map((eq) => {
                                                                 const rowKey = eq.id_equipo || `tmp-${eq.__idx}`;
                                                                 const enEdicion = editingId === rowKey;
@@ -907,17 +907,19 @@ const ArmadoTecnico = () => {
                                                                                 </div>
                                                                             )}
                                                                         </td>
-                                                                        <td>
-                                                                            {enEdicion ? (
-                                                                                <input
-                                                                                    className="form-control"
-                                                                                    value={eq.ip || ""}
-                                                                                    onChange={(e) => handleEquipoChange(eq.__idx, "ip", e.target.value)}
-                                                                                />
-                                                                            ) : (
-                                                                                eq.ip || "—"
-                                                                            )}
-                                                                        </td>
+                                                                        {!esMovil && (
+                                                                            <td>
+                                                                                {enEdicion ? (
+                                                                                    <input
+                                                                                        className="form-control"
+                                                                                        value={eq.ip || ""}
+                                                                                        onChange={(e) => handleEquipoChange(eq.__idx, "ip", e.target.value)}
+                                                                                    />
+                                                                                ) : (
+                                                                                    eq.ip || "—"
+                                                                                )}
+                                                                            </td>
+                                                                        )}
                                                                         <td>
                                                                             {enEdicion ? (
                                                                                 <input
@@ -929,19 +931,21 @@ const ArmadoTecnico = () => {
                                                                                 eq.observacion || "—"
                                                                             )}
                                                                         </td>
+                                                                        {!esMovil && (
+                                                                            <td>
+                                                                                {enEdicion ? (
+                                                                                    <input
+                                                                                        className="form-control"
+                                                                                        value={eq.codigo || ""}
+                                                                                        onChange={(e) => handleEquipoChange(eq.__idx, "codigo", e.target.value)}
+                                                                                    />
+                                                                                ) : (
+                                                                                    eq.codigo || "—"
+                                                                                )}
+                                                                            </td>
+                                                                        )}
                                                                         <td>
                                                                             {enEdicion ? (
-                                                                                <input
-                                                                                    className="form-control"
-                                                                                    value={eq.codigo || ""}
-                                                                                    onChange={(e) => handleEquipoChange(eq.__idx, "codigo", e.target.value)}
-                                                                                />
-                                                                            ) : (
-                                                                                eq.codigo || "—"
-                                                                            )}
-                                                                                </td>
-                                                                                <td>
-                                                                                    {enEdicion ? (
                                                                                 <div className="d-flex">
                                                                                     <input
                                                                                         className="form-control"
@@ -966,20 +970,22 @@ const ArmadoTecnico = () => {
                                                                                     )}
                                                                                 </div>
                                                                             ) : (
-                                                                                eq.numero_serie || "—"
-                                                                            )}
-                                                                            </td>
-                                                                        <td>
-                                                                            {enEdicion ? (
-                                                                                <input
-                                                                                    className="form-control"
-                                                                                    value={eq.estado || ""}
-                                                                                    onChange={(e) => handleEquipoChange(eq.__idx, "estado", e.target.value)}
-                                                                                />
-                                                                            ) : (
-                                                                                eq.estado || "—"
-                                                                            )}
+                                                                                        eq.numero_serie || "—"
+                                                                                    )}
                                                                         </td>
+                                                                        {!esMovil && (
+                                                                            <td>
+                                                                                {enEdicion ? (
+                                                                                    <input
+                                                                                        className="form-control"
+                                                                                        value={eq.estado || ""}
+                                                                                        onChange={(e) => handleEquipoChange(eq.__idx, "estado", e.target.value)}
+                                                                                    />
+                                                                                ) : (
+                                                                                    eq.estado || "—"
+                                                                                )}
+                                                                            </td>
+                                                                        )}
                                                                         <td className="text-nowrap">
                                                                             {enEdicion ? (
                                                                                 <>
