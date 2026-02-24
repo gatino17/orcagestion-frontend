@@ -2,6 +2,7 @@
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import {
     cargarArmados,
     agregarArmado,
@@ -242,6 +243,23 @@ const ArmadoTecnico = () => {
         );
     };
 
+    // Hints para forzar lectura de 1D (códigos de barras) y try harder
+    const zxingHints = useMemo(() => {
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.CODE_128,
+            BarcodeFormat.CODE_39,
+            BarcodeFormat.EAN_13,
+            BarcodeFormat.EAN_8,
+            BarcodeFormat.UPC_A,
+            BarcodeFormat.UPC_E,
+            BarcodeFormat.ITF,
+            BarcodeFormat.QR_CODE
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        return hints;
+    }, []);
+
     const stopLiveScan = useCallback(() => {
         if (controlsRef.current) {
             controlsRef.current.stop();
@@ -281,7 +299,7 @@ const ArmadoTecnico = () => {
             const reader = new FileReader();
             reader.onload = async () => {
                 try {
-                    readerRef.current = readerRef.current || new BrowserMultiFormatReader();
+                    readerRef.current = readerRef.current || new BrowserMultiFormatReader(zxingHints);
                     const result = await readerRef.current.decodeFromImageUrl(reader.result);
                     const numeros = soloNumeros(result?.getText() || "");
                     if (numeros) {
@@ -308,7 +326,7 @@ const ArmadoTecnico = () => {
             return;
         }
         try {
-            readerRef.current = readerRef.current || new BrowserMultiFormatReader();
+            readerRef.current = readerRef.current || new BrowserMultiFormatReader(zxingHints);
             setScanMsg("Apunta la cámara al código (solo números)");
             setScanError("");
             setScanTarget(idx);
