@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import {
     cargarArmados,
     agregarArmado,
@@ -169,8 +170,8 @@ const ArmadoTecnico = () => {
     const [scanOpen, setScanOpen] = useState(false);
     const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
     const videoRef = React.useRef(null);
-    const streamRef = React.useRef(null);
-    const scanTimerRef = React.useRef(null);
+    const controlsRef = React.useRef(null);
+    const readerRef = React.useRef(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -239,54 +240,46 @@ const ArmadoTecnico = () => {
     };
 
     const stopLiveScan = useCallback(() => {
-        if (scanTimerRef.current) {
-            clearInterval(scanTimerRef.current);
-            scanTimerRef.current = null;
+        if (controlsRef.current) {
+            controlsRef.current.stop();
+            controlsRef.current = null;
         }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((t) => t.stop());
-            streamRef.current = null;
+        if (readerRef.current?.reset) {
+            readerRef.current.reset();
         }
         setScanOpen(false);
         setScanTarget(null);
     }, []);
 
     const startLiveScan = async (idx) => {
-        if (!navigator.mediaDevices?.getUserMedia || !("BarcodeDetector" in window)) {
+        if (!navigator.mediaDevices?.getUserMedia) {
             handleScanManual(idx);
             return;
         }
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            streamRef.current = stream;
+            readerRef.current = readerRef.current || new BrowserMultiFormatReader();
+            setScanMsg("Apunta la cámara al código (solo números)");
             setScanTarget(idx);
             setScanOpen(true);
-            setScanMsg("Apunta la cámara al código (solo números)");
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                await videoRef.current.play();
-            }
-            const detector = new window.BarcodeDetector({
-                formats: ["code_128", "code_39", "ean_13", "qr_code", "pdf417"]
-            });
-            scanTimerRef.current = setInterval(async () => {
-                try {
-                    const codes = await detector.detect(videoRef.current);
-                    const raw = codes?.[0]?.rawValue || "";
-                    const numeros = soloNumeros(raw);
-                    if (numeros) {
-                        const codigo5 = numeros.slice(0, 5);
-                        setEquipos((prev) =>
-                            prev.map((eq, i) =>
-                                i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
-                            )
-                        );
-                        stopLiveScan();
+            controlsRef.current?.stop();
+            controlsRef.current = await readerRef.current.decodeFromVideoDevice(
+                undefined,
+                videoRef.current,
+                (result, err) => {
+                    if (result) {
+                        const numeros = soloNumeros(result.getText() || "");
+                        if (numeros) {
+                            const codigo5 = numeros.slice(0, 5);
+                            setEquipos((prev) =>
+                                prev.map((eq, i) =>
+                                    i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
+                                )
+                            );
+                            stopLiveScan();
+                        }
                     }
-                } catch (err) {
-                    console.warn("Detección fallida", err);
                 }
-            }, 500);
+            );
         } catch (err) {
             console.error("No se pudo abrir cámara:", err);
             handleScanManual(idx);
