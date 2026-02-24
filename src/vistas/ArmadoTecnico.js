@@ -898,7 +898,7 @@ const ArmadoTecnico = () => {
                                                     <thead>
                                                         <tr>
                                                             <th>Equipo</th>
-                                                            <th style={{ minWidth: "80px" }}>Caja</th>
+                                                            <th style={{ minWidth: esMovil ? "60px" : "80px" }}>Caja</th>
                                                             {!esMovil && <th>IP</th>}
                                                             {!esMovil && <th>Observación</th>}
                                                             {!esMovil && <th>Código</th>}
