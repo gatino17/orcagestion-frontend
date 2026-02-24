@@ -800,21 +800,37 @@ const ArmadoTecnico = () => {
                                             <>
                                                 <div className="row mb-3">
                                                     <div className="col-md-6">
-                                                    <h6>Historial de técnicos</h6>
+                                                        <h6 className="d-flex align-items-center mb-2">
+                                                            <i className="fas fa-user-friends mr-2 text-primary" />
+                                                            Historial de técnicos
+                                                        </h6>
                                                         {participaciones.length ? (
-                                                            <ul className="list-unstyled mb-0">
-                                                                {participaciones.map((p) => (
-                                                                    <li key={p.id_participacion} className="mb-2">
-                                                                        <strong>{p.tecnico_nombre || `Tec. ${p.tecnico_id}`}</strong>{" "}
-                                                                        <small className="text-muted">
-                                                                            {formatearFecha(p.fecha_inicio)} - {formatearFecha(p.fecha_fin) || "en curso"}
-                                                                        </small>
-                                                                        {p.nota && <div className="text-muted">{p.nota}</div>}
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
+                                                            <div className="hist-tech-list">
+                                                                {participaciones.map((p) => {
+                                                                    const color = colorTecnico(p.tecnico_nombre || p.tecnico_id);
+                                                                    return (
+                                                                        <div key={p.id_participacion} className="hist-tech-item">
+                                                                            <div
+                                                                                className="hist-tech-avatar"
+                                                                                style={{ backgroundColor: `${color}22`, borderColor: color }}
+                                                                            >
+                                                                                <i className="fas fa-user" style={{ color }} />
+                                                                            </div>
+                                                                            <div className="flex-grow-1">
+                                                                                <div className="d-flex justify-content-between">
+                                                                                    <strong>{p.tecnico_nombre || `Tec. ${p.tecnico_id}`}</strong>
+                                                                                    <small className="text-muted">
+                                                                                        {formatearFecha(p.fecha_inicio)} - {formatearFecha(p.fecha_fin) || "en curso"}
+                                                                                    </small>
+                                                                                </div>
+                                                                                {p.nota && <div className="text-muted small">{p.nota}</div>}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         ) : (
-                                                            <p className="text-muted mb-0">Sin transferencias aÃºn.</p>
+                                                            <p className="text-muted mb-0">Sin transferencias aún.</p>
                                                         )}
                                                     </div>
                                                     {rol === "admin" && (
