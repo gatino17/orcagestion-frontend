@@ -314,8 +314,18 @@ const ArmadoTecnico = () => {
             setScanTarget(idx);
             setScanOpen(true);
             controlsRef.current?.stop();
+            // elegir cámara trasera si está disponible
+            let deviceId = undefined;
+            try {
+                const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+                const back = devices.find((d) => /back|rear|environment/i.test(d.label));
+                deviceId = back?.deviceId || devices?.[0]?.deviceId;
+            } catch (err) {
+                console.warn("No se pudo listar cámaras, usar por defecto", err);
+            }
+
             controlsRef.current = await readerRef.current.decodeFromVideoDevice(
-                undefined,
+                deviceId,
                 videoRef.current,
                 (result, err) => {
                     if (result) {
@@ -330,7 +340,10 @@ const ArmadoTecnico = () => {
                             stopLiveScan();
                         }
                     } else if (err) {
-                        setScanError("No se pudo leer el código, intenta ajustar el enfoque.");
+                        // se ignoran NotFound habituales; solo mostramos si es otro error
+                        if (err.name && err.name !== "NotFoundException") {
+                            setScanError("No se pudo leer el código, intenta acercar o mejorar la luz.");
+                        }
                     }
                 }
             );
