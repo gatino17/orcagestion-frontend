@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
+﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -170,10 +170,11 @@ const ArmadoTecnico = () => {
     const [scanOpen, setScanOpen] = useState(false);
     const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
     const [scanError, setScanError] = useState("");
-    const videoRef = React.useRef(null);
-    const controlsRef = React.useRef(null);
-    const readerRef = React.useRef(null);
-    const scanTimeoutRef = React.useRef(null);
+    const videoRef = useRef(null);
+    const controlsRef = useRef(null);
+    const readerRef = useRef(null);
+    const scanTimeoutRef = useRef(null);
+    const uploadRef = useRef(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -259,9 +260,51 @@ const ArmadoTecnico = () => {
         setScanMsg("Apunta la cámara al código (solo números)");
     }, []);
 
+    const fallbackUpload = (idx) => {
+        setScanTarget(idx);
+        uploadRef.current?.click();
+    };
+
+    const procesarLectura = (numeros, idx) => {
+        if (!numeros) return;
+        const codigo5 = numeros.slice(0, 5);
+        setEquipos((prev) =>
+            prev.map((eq, i) => (i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
+        );
+    };
+
+    const handleUploadChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file || scanTarget === null) return;
+        try {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    readerRef.current = readerRef.current || new BrowserMultiFormatReader();
+                    const result = await readerRef.current.decodeFromImageUrl(reader.result);
+                    const numeros = soloNumeros(result?.getText() || "");
+                    if (numeros) {
+                        procesarLectura(numeros, scanTarget);
+                        stopLiveScan();
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("No se pudo leer desde imagen", err);
+                }
+                setScanError("No se pudo leer la imagen. Ingresa manualmente.");
+                handleScanManual(scanTarget);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error("Error al leer imagen:", err);
+            handleScanManual(scanTarget);
+        }
+    };
+
     const startLiveScan = async (idx) => {
-        if (!navigator.mediaDevices?.getUserMedia) {
-            handleScanManual(idx);
+        if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+            fallbackUpload(idx);
             return;
         }
         try {
@@ -844,6 +887,14 @@ const ArmadoTecnico = () => {
                                     <p>Cargando planilla...</p>
                                 ) : (
                                     <>
+                                        <input
+                                            type="file"
+                                            ref={uploadRef}
+                                            accept="image/*"
+                                            capture="environment"
+                                            style={{ display: "none" }}
+                                            onChange={handleUploadChange}
+                                        />
                                         <div className="d-flex mb-3">
                                             <div className="btn-group btn-group-sm" role="group">
                                                 <button
