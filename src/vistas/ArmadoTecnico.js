@@ -165,7 +165,6 @@ const ArmadoTecnico = () => {
     const [movsLimit, setMovsLimit] = useState(10);
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
-    const [scanTarget, setScanTarget] = useState(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -222,53 +221,16 @@ const ArmadoTecnico = () => {
 
     const soloNumeros = useCallback((txt = "") => txt.replace(/\D+/g, ""), []);
 
-    const handleScanArchivo = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file || scanTarget === null) return;
-        const procesa = (raw = "") => {
-            const numeros = soloNumeros(raw);
-            const codigo5 = numeros.slice(0, 5);
-            setEquipos((prev) =>
-                prev.map((eq, i) =>
-                    i === scanTarget ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
-                )
-            );
-            setScanTarget(null);
-        };
-        if ("BarcodeDetector" in window) {
-            try {
-                const dataUrl = await fileToDataUrl(file);
-                const img = new Image();
-                img.src = dataUrl;
-                await img.decode();
-                const detector = new window.BarcodeDetector({
-                    formats: ["code_128", "code_39", "ean_13", "qr_code", "pdf417"]
-                });
-                const codes = await detector.detect(img);
-                const raw = codes?.[0]?.rawValue || "";
-                if (raw) {
-                    procesa(raw);
-                    return;
-                }
-            } catch (err) {
-                console.warn("BarcodeDetector no disponible o sin detección", err);
-            }
-        }
-        // fallback: pedir texto manual
-        const manual = window.prompt("Escanea o ingresa el código del equipo (solo números)", "");
-        if (manual !== null) {
-            procesa(manual);
-        }
+    const handleScanManual = (idx) => {
+        const raw = window.prompt("Ingresa o escanea el código (solo números)", "");
+        if (raw === null) return;
+        const numeros = soloNumeros(raw);
+        if (!numeros) return;
+        const codigo5 = numeros.slice(0, 5);
+        setEquipos((prev) =>
+            prev.map((eq, i) => (i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
+        );
     };
-
-    const fileToDataUrl = (file) =>
-        new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
 
     const equiposOrdenados = useMemo(
         () =>
@@ -764,14 +726,6 @@ const ArmadoTecnico = () => {
                                     <p>Cargando planilla...</p>
                                 ) : (
                                     <>
-                                        <input
-                                            type="file"
-                                            id="scan-file-input"
-                                            accept="image/*"
-                                            capture="environment"
-                                            style={{ display: "none" }}
-                                            onChange={handleScanArchivo}
-                                        />
                                         <div className="d-flex mb-3">
                                             <div className="btn-group btn-group-sm" role="group">
                                                 <button
@@ -868,13 +822,13 @@ const ArmadoTecnico = () => {
                                                     )}
                                                 </div>
                                                     <div className="table-responsive">
-                                                <table className="table table-bordered">
+                                                <table className="table table-bordered arm-equip-table">
                                                     <thead>
                                                         <tr>
                                                             <th>Equipo</th>
                                                             <th>Caja</th>
                                                             {!esMovil && <th>IP</th>}
-                                                            <th>Observación</th>
+                                                            {!esMovil && <th>Observación</th>}
                                                             {!esMovil && <th>Código</th>}
                                                             <th>N Serie</th>
                                                             {!esMovil && <th>Estado</th>}
@@ -936,17 +890,19 @@ const ArmadoTecnico = () => {
                                                                                 )}
                                                                             </td>
                                                                         )}
-                                                                        <td>
-                                                                            {enEdicion ? (
-                                                                                <input
-                                                                                    className="form-control"
-                                                                                    value={eq.observacion || ""}
-                                                                                    onChange={(e) => handleEquipoChange(eq.__idx, "observacion", e.target.value)}
-                                                                                />
-                                                                            ) : (
-                                                                                eq.observacion || "—"
-                                                                            )}
-                                                                        </td>
+                                                                        {!esMovil && (
+                                                                            <td>
+                                                                                {enEdicion ? (
+                                                                                    <input
+                                                                                        className="form-control"
+                                                                                        value={eq.observacion || ""}
+                                                                                        onChange={(e) => handleEquipoChange(eq.__idx, "observacion", e.target.value)}
+                                                                                    />
+                                                                                ) : (
+                                                                                    eq.observacion || "—"
+                                                                                )}
+                                                                            </td>
+                                                                        )}
                                                                         {!esMovil && (
                                                                             <td>
                                                                                 {enEdicion ? (
@@ -975,11 +931,7 @@ const ArmadoTecnico = () => {
                                                                                             type="button"
                                                                                             className="btn btn-sm btn-outline-secondary ml-1"
                                                                                             title="Escanear código"
-                                                                                            onClick={() => {
-                                                                                                setScanTarget(eq.__idx);
-                                                                                                const input = document.getElementById("scan-file-input");
-                                                                                                if (input) input.click();
-                                                                                            }}
+                                                                                            onClick={() => handleScanManual(eq.__idx)}
                                                                                         >
                                                                                             <i className="fas fa-camera" />
                                                                                         </button>
@@ -1380,4 +1332,6 @@ const ArmadoTecnico = () => {
 };
 
 export default ArmadoTecnico;
+
+
 

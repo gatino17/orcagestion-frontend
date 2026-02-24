@@ -125,3 +125,21 @@
         vertical-align: middle;
     }
 }
+
+/* Tabla equipos compacta en móvil */
+.arm-equip-table th,
+.arm-equip-table td {
+    vertical-align: middle;
+}
+
+@media (max-width: 767.98px) {
+    .arm-equip-table th,
+    .arm-equip-table td {
+        font-size: 12px;
+        white-space: nowrap;
+        padding: 6px 8px;
+    }
+    .arm-equip-table .badge {
+        font-size: 11px;
+    }
+}
