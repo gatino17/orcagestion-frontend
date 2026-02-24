@@ -680,44 +680,46 @@ const ArmadoTecnico = () => {
                     <p className="text-muted mb-1">Armado técnico</p>
                     <h3 className="mb-0">Asignaciones de armado</h3>
                 </div>
-                <div className="d-flex gap-2 summary-wrap">
-                    <div className="summary-pill bg-light">
-                        <small>Total</small>
-                        <strong>{resumen.total}</strong>
+                {rol === "admin" && (
+                    <div className="d-flex gap-2 summary-wrap">
+                        <div className="summary-pill bg-light">
+                            <small>Total</small>
+                            <strong>{resumen.total}</strong>
+                        </div>
+                        <div className="summary-pill bg-warning text-dark">
+                            <small>Pendientes</small>
+                            <strong>{resumen.pendientes}</strong>
+                        </div>
+                        <div className="summary-pill bg-info text-white">
+                            <small>En proceso</small>
+                            <strong>{resumen.enProceso}</strong>
+                        </div>
+                        <div className="summary-pill bg-success text-white">
+                            <small>Finalizados</small>
+                            <strong>{resumen.finalizados}</strong>
+                        </div>
                     </div>
-                    <div className="summary-pill bg-warning text-dark">
-                        <small>Pendientes</small>
-                        <strong>{resumen.pendientes}</strong>
-                    </div>
-                    <div className="summary-pill bg-info text-white">
-                        <small>En proceso</small>
-                        <strong>{resumen.enProceso}</strong>
-                    </div>
-                    <div className="summary-pill bg-success text-white">
-                        <small>Finalizados</small>
-                        <strong>{resumen.finalizados}</strong>
-                    </div>
-                </div>
+                )}
             </div>
 
-            <div className="card mb-3">
-                <div className="card-body d-flex flex-wrap align-items-end gap-3">
-                    <div>
-                        <small className="text-muted text-uppercase d-block mb-1">Estado</small>
-                        <select
-                            className="form-control"
-                            value={filtroEstado}
-                            onChange={(e) => setFiltroEstado(e.target.value)}
-                        >
-                            {estadosOptions.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+            {rol === "admin" && (
+                <div className="card mb-3">
+                    <div className="card-body d-flex flex-wrap align-items-end gap-3">
+                        <div>
+                            <small className="text-muted text-uppercase d-block mb-1">Estado</small>
+                            <select
+                                className="form-control"
+                                value={filtroEstado}
+                                onChange={(e) => setFiltroEstado(e.target.value)}
+                            >
+                                {estadosOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                    {rol === "admin" && (
                         <div>
                             <small className="text-muted text-uppercase d-block mb-1">Técnico</small>
                             <select
@@ -733,20 +735,29 @@ const ArmadoTecnico = () => {
                                 ))}
                             </select>
                         </div>
-                    )}
 
-                    {rol === "admin" && (
                         <button className="btn btn-primary ml-auto" onClick={handleAbrirModal}>
                             <i className="fas fa-plus mr-2" />
                             Asignar armado
                         </button>
-                    )}
-                    <button className="btn btn-outline-primary ml-auto" onClick={fetchArmados}>
-                        <i className="fas fa-sync mr-2" />
-                        Actualizar
-                    </button>
+                        <button className="btn btn-outline-primary ml-auto" onClick={fetchArmados}>
+                            <i className="fas fa-sync mr-2" />
+                            Actualizar
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {rol !== "admin" && (
+                <div className="card mb-3">
+                    <div className="card-body d-flex justify-content-end">
+                        <button className="btn btn-outline-primary" onClick={fetchArmados}>
+                            <i className="fas fa-sync mr-2" />
+                            Actualizar
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="card">
                 <div className="card-body filters-row">
