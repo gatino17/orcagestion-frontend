@@ -169,9 +169,11 @@ const ArmadoTecnico = () => {
     const [scanTarget, setScanTarget] = useState(null);
     const [scanOpen, setScanOpen] = useState(false);
     const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
+    const [scanError, setScanError] = useState("");
     const videoRef = React.useRef(null);
     const controlsRef = React.useRef(null);
     const readerRef = React.useRef(null);
+    const scanTimeoutRef = React.useRef(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -247,8 +249,14 @@ const ArmadoTecnico = () => {
         if (readerRef.current?.reset) {
             readerRef.current.reset();
         }
+        if (scanTimeoutRef.current) {
+            clearTimeout(scanTimeoutRef.current);
+            scanTimeoutRef.current = null;
+        }
         setScanOpen(false);
         setScanTarget(null);
+        setScanError("");
+        setScanMsg("Apunta la cámara al código (solo números)");
     }, []);
 
     const startLiveScan = async (idx) => {
@@ -259,6 +267,7 @@ const ArmadoTecnico = () => {
         try {
             readerRef.current = readerRef.current || new BrowserMultiFormatReader();
             setScanMsg("Apunta la cámara al código (solo números)");
+            setScanError("");
             setScanTarget(idx);
             setScanOpen(true);
             controlsRef.current?.stop();
@@ -277,11 +286,18 @@ const ArmadoTecnico = () => {
                             );
                             stopLiveScan();
                         }
+                    } else if (err) {
+                        setScanError("No se pudo leer el código, intenta ajustar el enfoque.");
                     }
                 }
             );
+            // si en 10s no se detecta nada, mostrar mensaje
+            scanTimeoutRef.current = setTimeout(() => {
+                setScanError("No se detectó el código. Acerca la cámara o ingresa manualmente.");
+            }, 10000);
         } catch (err) {
             console.error("No se pudo abrir cámara:", err);
+            setScanError("No se pudo acceder a la cámara. Revisa permisos o ingresa manualmente.");
             handleScanManual(idx);
         }
     };
