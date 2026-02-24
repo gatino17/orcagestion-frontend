@@ -148,3 +148,42 @@
     border-radius: 6px;
     background: #000;
 }
+
+.responsive-header {
+    gap: 12px;
+}
+
+.summary-wrap {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filters-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.filters-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.filters-controls .btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+    .filters-controls > div {
+        width: 100%;
+    }
+    .filters-controls .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .summary-pill {
+        min-width: 100px;
+    }
+}

@@ -675,12 +675,12 @@ const ArmadoTecnico = () => {
 
     return (
         <div className="container-fluid armado-page">
-            <div className="d-flex align-items-center justify-content-between flex-wrap mb-3">
+            <div className="d-flex align-items-center justify-content-between flex-wrap mb-3 responsive-header">
                 <div>
                     <p className="text-muted mb-1">Armado técnico</p>
                     <h3 className="mb-0">Asignaciones de armado</h3>
                 </div>
-                <div className="d-flex gap-2">
+                <div className="d-flex gap-2 summary-wrap">
                     <div className="summary-pill bg-light">
                         <small>Total</small>
                         <strong>{resumen.total}</strong>
@@ -749,19 +749,67 @@ const ArmadoTecnico = () => {
             </div>
 
             <div className="card">
-                <div className="card-body">
+                <div className="card-body filters-row">
                     {error && <div className="alert alert-danger mb-3">{error}</div>}
-                    <DataTable
-                        columns={columnas}
-                        data={armados}
-                        progressPending={loading}
-                        pagination
-                        highlightOnHover
-                        pointerOnHover
-                        dense
-                        persistTableHead
-                        noDataComponent="No hay armados para mostrar"
-                    />
+                    <div className="filters-controls">
+                        <div>
+                            <small className="text-muted text-uppercase d-block mb-1">Estado</small>
+                            <select
+                                className="form-control"
+                                value={filtroEstado}
+                                onChange={(e) => setFiltroEstado(e.target.value)}
+                            >
+                                {estadosOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {rol === "admin" && (
+                            <div>
+                                <small className="text-muted text-uppercase d-block mb-1">Técnico</small>
+                                <select
+                                    className="form-control"
+                                    value={filtroTecnico}
+                                    onChange={(e) => setFiltroTecnico(e.target.value)}
+                                >
+                                    <option value="">Todos</option>
+                                    {tecnicos.map((tec) => (
+                                        <option key={tec.id} value={tec.id}>
+                                            {tec.name || tec.nombre || `ID ${tec.id}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {rol === "admin" && (
+                            <button className="btn btn-primary ml-auto" onClick={handleAbrirModal}>
+                                <i className="fas fa-plus mr-2" />
+                                Asignar armado
+                            </button>
+                        )}
+                        <button className="btn btn-outline-primary ml-auto" onClick={fetchArmados}>
+                            <i className="fas fa-sync mr-2" />
+                            Actualizar
+                        </button>
+                    </div>
+
+                    <div className="table-responsive mt-3">
+                        <DataTable
+                            columns={columnas}
+                            data={armados}
+                            progressPending={loading}
+                            pagination
+                            highlightOnHover
+                            pointerOnHover
+                            dense
+                            persistTableHead
+                            noDataComponent="No hay armados para mostrar"
+                        />
+                    </div>
                 </div>
             </div>
 
