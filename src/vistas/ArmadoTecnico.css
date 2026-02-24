@@ -143,3 +143,8 @@
         font-size: 11px;
     }
 }
+
+.live-scan-video {
+    border-radius: 6px;
+    background: #000;
+}

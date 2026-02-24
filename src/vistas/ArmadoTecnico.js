@@ -166,6 +166,11 @@ const ArmadoTecnico = () => {
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
     const [scanTarget, setScanTarget] = useState(null);
+    const [scanOpen, setScanOpen] = useState(false);
+    const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
+    const videoRef = React.useRef(null);
+    const streamRef = React.useRef(null);
+    const scanTimerRef = React.useRef(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -222,54 +227,6 @@ const ArmadoTecnico = () => {
 
     const soloNumeros = useCallback((txt = "") => txt.replace(/\D+/g, ""), []);
 
-    const handleScanArchivo = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file || scanTarget === null) return;
-
-        const procesa = (raw = "") => {
-            const numeros = soloNumeros(raw);
-            if (!numeros) return;
-            const codigo5 = numeros.slice(0, 5);
-            setEquipos((prev) =>
-                prev.map((eq, i) => (i === scanTarget ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
-            );
-            setScanTarget(null);
-        };
-
-        try {
-            if ("BarcodeDetector" in window) {
-                const dataUrl = await fileToDataUrl(file);
-                const img = new Image();
-                img.src = dataUrl;
-                await img.decode();
-                const detector = new window.BarcodeDetector({
-                    formats: ["code_128", "code_39", "ean_13", "qr_code", "pdf417"]
-                });
-                const codes = await detector.detect(img);
-                const raw = codes?.[0]?.rawValue || "";
-                if (raw) {
-                    procesa(raw);
-                    return;
-                }
-            }
-        } catch (err) {
-            console.warn("No se pudo detectar con cámara:", err);
-        }
-
-        // Fallback manual
-        handleScanManual(scanTarget);
-        setScanTarget(null);
-    };
-
-    const fileToDataUrl = (file) =>
-        new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-
     const handleScanManual = (idx) => {
         const raw = window.prompt("Ingresa o escanea el código (solo números)", "");
         if (raw === null) return;
@@ -280,6 +237,63 @@ const ArmadoTecnico = () => {
             prev.map((eq, i) => (i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
         );
     };
+
+    const stopLiveScan = useCallback(() => {
+        if (scanTimerRef.current) {
+            clearInterval(scanTimerRef.current);
+            scanTimerRef.current = null;
+        }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+        }
+        setScanOpen(false);
+        setScanTarget(null);
+    }, []);
+
+    const startLiveScan = async (idx) => {
+        if (!navigator.mediaDevices?.getUserMedia || !("BarcodeDetector" in window)) {
+            handleScanManual(idx);
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            streamRef.current = stream;
+            setScanTarget(idx);
+            setScanOpen(true);
+            setScanMsg("Apunta la cámara al código (solo números)");
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+            const detector = new window.BarcodeDetector({
+                formats: ["code_128", "code_39", "ean_13", "qr_code", "pdf417"]
+            });
+            scanTimerRef.current = setInterval(async () => {
+                try {
+                    const codes = await detector.detect(videoRef.current);
+                    const raw = codes?.[0]?.rawValue || "";
+                    const numeros = soloNumeros(raw);
+                    if (numeros) {
+                        const codigo5 = numeros.slice(0, 5);
+                        setEquipos((prev) =>
+                            prev.map((eq, i) =>
+                                i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
+                            )
+                        );
+                        stopLiveScan();
+                    }
+                } catch (err) {
+                    console.warn("Detección fallida", err);
+                }
+            }, 500);
+        } catch (err) {
+            console.error("No se pudo abrir cámara:", err);
+            handleScanManual(idx);
+        }
+    };
+
+    useEffect(() => () => stopLiveScan(), [stopLiveScan]);
 
     const equiposOrdenados = useMemo(
         () =>
@@ -775,14 +789,6 @@ const ArmadoTecnico = () => {
                                     <p>Cargando planilla...</p>
                                 ) : (
                                     <>
-                                        <input
-                                            type="file"
-                                            id="scan-file-input"
-                                            accept="image/*"
-                                            capture="environment"
-                                            style={{ display: "none" }}
-                                            onChange={handleScanArchivo}
-                                        />
                                         <div className="d-flex mb-3">
                                             <div className="btn-group btn-group-sm" role="group">
                                                 <button
@@ -883,7 +889,7 @@ const ArmadoTecnico = () => {
                                                     <thead>
                                                         <tr>
                                                             <th>Equipo</th>
-                                                            <th style={{ minWidth: "90px" }}>Caja</th>
+                                                            <th style={{ minWidth: "80px" }}>Caja</th>
                                                             {!esMovil && <th>IP</th>}
                                                             {!esMovil && <th>Observación</th>}
                                                             {!esMovil && <th>Código</th>}
@@ -974,33 +980,29 @@ const ArmadoTecnico = () => {
                                                                             </td>
                                                                         )}
                                                                         <td>
-                                                                            {enEdicion ? (
-                                                                                <div className="d-flex">
-                                                                                    <input
-                                                                                        className="form-control"
-                                                                                        value={eq.numero_serie || ""}
-                                                                                        onChange={(e) =>
-                                                                                            handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
-                                                                                        }
-                                                                                    />
-                                                                                    {esMovil && (
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            className="btn btn-sm btn-outline-secondary ml-1"
-                                                                                            title="Escanear código"
-                                                                                            onClick={() => {
-                                                                                                setScanTarget(eq.__idx);
-                                                                                                const input = document.getElementById("scan-file-input");
-                                                                                                if (input) input.click();
-                                                                                            }}
-                                                                                        >
-                                                                                            <i className="fas fa-camera" />
-                                                                                        </button>
-                                                                                    )}
-                                                                                </div>
-                                                                            ) : (
-                                                                                        eq.numero_serie || "—"
-                                                                                    )}
+                                                                    {enEdicion ? (
+                                                                        <div className="d-flex">
+                                                                            <input
+                                                                                className="form-control"
+                                                                                value={eq.numero_serie || ""}
+                                                                                onChange={(e) =>
+                                                                                    handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
+                                                                                }
+                                                                            />
+                                                                            {esMovil && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn btn-sm btn-outline-secondary ml-1"
+                                                                                    title="Escanear código"
+                                                                                    onClick={() => startLiveScan(eq.__idx)}
+                                                                                >
+                                                                                    <i className="fas fa-camera" />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        eq.numero_serie || "—"
+                                                                    )}
                                                                         </td>
                                                                         {!esMovil && (
                                                                             <td>
@@ -1382,6 +1384,30 @@ const ArmadoTecnico = () => {
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleGuardarAsignacion}>
                                     Guardar asignaciÃ³n
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {scanOpen && (
+                <div className="modal show d-block" tabIndex="-1" role="dialog" style={{ background: "#00000055" }}>
+                    <div className="modal-dialog modal-sm" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h6 className="modal-title">Escanear N° Serie</h6>
+                                <button type="button" className="close" onClick={stopLiveScan}>
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <video ref={videoRef} className="w-100 live-scan-video" autoPlay muted playsInline />
+                                <p className="text-muted small mt-2 mb-0">{scanMsg}</p>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary btn-sm" onClick={stopLiveScan}>
+                                    Cancelar
                                 </button>
                             </div>
                         </div>
