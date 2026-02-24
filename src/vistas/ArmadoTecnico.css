@@ -4,18 +4,30 @@
     padding: 8px 12px;
     text-align: center;
     line-height: 1.1;
+    color: #0f172a;
 }
 
 .armado-page .summary-pill small {
     display: block;
     text-transform: uppercase;
     font-size: 11px;
-    opacity: 0.75;
+    opacity: 0.8;
     margin-bottom: 2px;
+    letter-spacing: 0.3px;
 }
 
 .armado-page .summary-pill strong {
     font-size: 18px;
+    font-weight: 700;
+}
+
+.armado-page .summary-pill.bg-success,
+.armado-page .summary-pill.bg-info {
+    color: #fff;
+}
+
+.armado-page .summary-pill.bg-warning {
+    color: #111;
 }
 
 .armado-page .card .form-control {
@@ -176,6 +188,17 @@
 }
 
 @media (max-width: 767.98px) {
+    .summary-pill {
+        min-width: 90px;
+        padding: 6px 8px;
+    }
+    .summary-pill small {
+        font-size: 12px;
+    }
+    .summary-pill strong {
+        font-size: 20px;
+    }
+
     .filters-controls > div {
         width: 100%;
     }
