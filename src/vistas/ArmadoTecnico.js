@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import { BrowserMultiFormatReader } from "@zxing/browser";
@@ -161,7 +161,6 @@ const ArmadoTecnico = () => {
     const [materiales, setMateriales] = useState([]);
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
     const [cajas, setCajas] = useState(["Caja 1"]);
-    const [userNombre, setUserNombre] = useState("");
     const [movimientos, setMovimientos] = useState([]);
     const [movimientosRecientes, setMovimientosRecientes] = useState([]);
     const [movsLimit, setMovsLimit] = useState(10);
@@ -170,7 +169,6 @@ const ArmadoTecnico = () => {
     const [scanTarget, setScanTarget] = useState(null);
     const [scanOpen, setScanOpen] = useState(false);
     const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
-    const [scanError, setScanError] = useState("");
     const videoRef = useRef(null);
     const controlsRef = useRef(null);
     const readerRef = useRef(null);
@@ -413,7 +411,6 @@ const ArmadoTecnico = () => {
             const decoded = jwtDecode(token);
             setRol(decoded.rol || "");
             setUserId(decoded.id || decoded.user_id || decoded.sub || null);
-            setUserNombre(decoded.name || "");
         } catch (err) {
             console.error("Error al decodificar token:", err);
         }
