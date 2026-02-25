@@ -272,6 +272,13 @@ const ArmadoTecnico = () => {
             clearTimeout(scanTimeoutRef.current);
             scanTimeoutRef.current = null;
         }
+        if (videoRef.current) {
+            try {
+                videoRef.current.srcObject = null;
+            } catch (e) {
+                // ignore
+            }
+        }
         setScanOpen(false);
         setScanTarget(null);
         setScanError("");
@@ -335,32 +342,33 @@ const ArmadoTecnico = () => {
             const constraints = {
                 audio: false,
                 video: {
-                    facingMode: { ideal: "environment" },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    facingMode: { ideal: "environment" }
                 }
             };
 
-            controlsRef.current = await readerRef.current.decodeFromConstraints(
-                constraints,
-                videoRef.current,
-                (result, err) => {
-                    if (result) {
-                        const numeros = soloNumeros(result.getText() || "");
-                        if (numeros) {
-                            const codigo5 = numeros.slice(0, 5);
-                            setEquipos((prev) =>
-                                prev.map((eq, i) =>
-                                    i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
-                                )
-                            );
-                            stopLiveScan();
-                        }
-                    } else if (err && err.name !== "NotFoundException") {
-                        setScanError("No se pudo leer el código, intenta acercar o mejorar la luz.");
+            const onResult = (result, err) => {
+                if (result) {
+                    const numeros = soloNumeros(result.getText() || "");
+                    if (numeros) {
+                        const codigo5 = numeros.slice(0, 5);
+                        setEquipos((prev) =>
+                            prev.map((eq, i) =>
+                                i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
+                            )
+                        );
+                        stopLiveScan();
                     }
+                } else if (err && err.name !== "NotFoundException") {
+                    setScanError("No se pudo leer el código, intenta acercar o mejorar la luz.");
                 }
-            );
+            };
+
+            try {
+                controlsRef.current = await readerRef.current.decodeFromConstraints(constraints, videoRef.current, onResult);
+            } catch (err) {
+                console.warn("Constraints failed, usando decodeFromVideoDevice", err);
+                controlsRef.current = await readerRef.current.decodeFromVideoDevice(undefined, videoRef.current, onResult);
+            }
             // si en 10s no se detecta nada, mostrar mensaje
             scanTimeoutRef.current = setTimeout(() => {
                 setScanError("No se detectó el código. Acerca la cámara o ingresa manualmente.");
