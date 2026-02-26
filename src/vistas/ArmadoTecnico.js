@@ -169,6 +169,7 @@ const ArmadoTecnico = () => {
     const [scanTarget, setScanTarget] = useState(null);
     const [scanOpen, setScanOpen] = useState(false);
     const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
+    const [scanError, setScanError] = useState("");
     const videoRef = useRef(null);
     const controlsRef = useRef(null);
     const readerRef = useRef(null);
@@ -1541,7 +1542,8 @@ const ArmadoTecnico = () => {
                             </div>
                             <div className="modal-body">
                                 <video ref={videoRef} className="w-100 live-scan-video" autoPlay muted playsInline />
-                                <p className="text-muted small mt-2 mb-0">{scanMsg}</p>
+                                <p className="text-muted small mt-2 mb-1">{scanMsg}</p>
+                                {scanError && <p className="text-danger small mb-0">{scanError}</p>}
                             </div>
                             <div className="modal-footer">
                                 <button className="btn btn-secondary btn-sm" onClick={stopLiveScan}>
