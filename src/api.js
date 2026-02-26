@@ -5,11 +5,16 @@ import axios from 'axios';
 // - Si hay REACT_APP_API_BASE_URL, úsala.
 // - Si el hostname es localhost (desarrollo), usa http://localhost:5000/api.
 // - Si no, usa ruta relativa /api (producción detrás de Apache/Nginx).
-const BASE_URL =
+let BASE_URL =
     process.env.REACT_APP_API_BASE_URL ||
     (typeof window !== 'undefined' && window.location.hostname === 'localhost'
         ? 'http://localhost:5000/api'
         : '/api');
+
+// Si estamos en HTTPS, evita endpoints http inseguros (previene mixed content aunque la var de entorno esté mal)
+if (typeof window !== "undefined" && window.location.protocol === "https:" && BASE_URL.startsWith("http://")) {
+    BASE_URL = "/api";
+}
 
 export const loginUsuario = async (credenciales) => {
     try {

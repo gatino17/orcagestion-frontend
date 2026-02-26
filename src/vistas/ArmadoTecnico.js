@@ -1543,7 +1543,7 @@ const ArmadoTecnico = () => {
                             <div className="modal-body">
                                 <video ref={videoRef} className="w-100 live-scan-video" autoPlay muted playsInline />
                                 <p className="text-muted small mt-2 mb-1">{scanMsg}</p>
-                                {scanError && <p className="text-danger small mb-0">{scanError}</p>}
+                                {scanError && <p className="live-scan-error small mb-0">{scanError}</p>}
                             </div>
                             <div className="modal-footer">
                                 <button className="btn btn-secondary btn-sm" onClick={stopLiveScan}>
