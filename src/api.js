@@ -1,19 +1,31 @@
 // src/api.js
 import axios from 'axios';
 
-// Resuelve la base de API según el entorno:
-// - Si hay REACT_APP_API_BASE_URL, úsala.
-// - Si el hostname es localhost (desarrollo), usa http://localhost:5000/api.
-// - Si no, usa ruta relativa /api (producción detrás de Apache/Nginx).
-let BASE_URL =
-    process.env.REACT_APP_API_BASE_URL ||
-    (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-        ? 'http://localhost:5000/api'
-        : '/api');
+// Resuelve la base de API sin provocar mixed-content:
+// - Preferimos REACT_APP_API_BASE_URL si existe.
+// - En localhost usamos http://localhost:5000/api (dev).
+// - En producción usamos el mismo origen + /api (detrás de proxy).
+// - Si la página está en https y BASE_URL apunta a http, lo corregimos a https.
+const isBrowser = typeof window !== "undefined";
+const envBase = process.env.REACT_APP_API_BASE_URL;
 
-// Si estamos en HTTPS, evita endpoints http inseguros (previene mixed content aunque la var de entorno esté mal)
-if (typeof window !== "undefined" && window.location.protocol === "https:" && BASE_URL.startsWith("http://")) {
-    BASE_URL = "/api";
+let BASE_URL = "/api"; // default para build estático
+
+if (isBrowser && window.location.hostname === "localhost") {
+    BASE_URL = "http://localhost:5000/api";
+}
+
+if (envBase) {
+    BASE_URL = envBase;
+}
+
+if (isBrowser) {
+    if (!envBase && window.location.hostname !== "localhost") {
+        BASE_URL = `${window.location.protocol}//${window.location.host}/api`;
+    }
+    if (window.location.protocol === "https:" && BASE_URL.startsWith("http://")) {
+        BASE_URL = BASE_URL.replace("http://", "https://");
+    }
 }
 
 export const loginUsuario = async (credenciales) => {
