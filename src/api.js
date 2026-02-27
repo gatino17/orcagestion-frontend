@@ -1523,6 +1523,16 @@ export const actualizarParticipacionArmado = async (participacionId, data) => {
     }
 };
 
+export const eliminarParticipacionArmado = async (participacionId) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/armados/participaciones/${participacionId}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar participación:", error);
+        throw error;
+    }
+};
+
 
 
 // Obtener todos los clientes

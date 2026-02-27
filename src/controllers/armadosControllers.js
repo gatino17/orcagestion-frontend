@@ -6,6 +6,7 @@ import {
     obtenerParticipacionesArmado,
     crearParticipacionArmado,
     actualizarParticipacionArmado,
+    eliminarParticipacionArmado,
     obtenerMaterialesArmado,
     guardarMaterialesArmado,
     obtenerMovimientosArmado,
@@ -72,6 +73,16 @@ export const actualizarParticipacion = async (participacionId, payload, callback
         callback?.();
     } catch (error) {
         console.error("Error al actualizar participación:", error);
+    }
+};
+
+export const borrarParticipacion = async (participacionId, callback) => {
+    try {
+        await eliminarParticipacionArmado(participacionId);
+        callback?.();
+    } catch (error) {
+        console.error("Error al eliminar participación:", error);
+        throw error;
     }
 };
 

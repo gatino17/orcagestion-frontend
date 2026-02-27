@@ -1,17 +1,17 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import {
     cargarArmados,
     agregarArmado,
+    modificarArmado,
     cargarParticipaciones,
     transferirArmado,
     cargarMateriales,
     guardarMateriales,
     cargarMovimientos,
-    cargarMovimientosRecientes
+    cargarMovimientosRecientes,
+    borrarParticipacion
 } from "../controllers/armadosControllers";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
@@ -166,15 +166,6 @@ const ArmadoTecnico = () => {
     const [movsLimit, setMovsLimit] = useState(10);
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
-    const [scanTarget, setScanTarget] = useState(null);
-    const [scanOpen, setScanOpen] = useState(false);
-    const [scanMsg, setScanMsg] = useState("Apunta la cámara al código (solo números)");
-    const [scanError, setScanError] = useState("");
-    const videoRef = useRef(null);
-    const controlsRef = useRef(null);
-    const readerRef = useRef(null);
-    const scanTimeoutRef = useRef(null);
-    const uploadRef = useRef(null);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -229,157 +220,7 @@ const ArmadoTecnico = () => {
         return idxContains >= 0 ? idxContains : ORDEN_EQUIPOS.length + 100; // enviar al final
     }, []);
 
-    const soloNumeros = useCallback((txt = "") => txt.replace(/\D+/g, ""), []);
-
-    const handleScanManual = (idx) => {
-        const raw = window.prompt("Ingresa o escanea el código (solo números)", "");
-        if (raw === null) return;
-        const numeros = soloNumeros(raw);
-        if (!numeros) return;
-        const codigo5 = numeros.slice(0, 5);
-        setEquipos((prev) =>
-            prev.map((eq, i) => (i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
-        );
-    };
-
-    // Hints para forzar lectura de 1D (códigos de barras) y try harder
-    const zxingHints = useMemo(() => {
-        const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-            BarcodeFormat.CODE_128,
-            BarcodeFormat.CODE_39,
-            BarcodeFormat.EAN_13,
-            BarcodeFormat.EAN_8,
-            BarcodeFormat.UPC_A,
-            BarcodeFormat.UPC_E,
-            BarcodeFormat.ITF,
-            BarcodeFormat.QR_CODE
-        ]);
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        return hints;
-    }, []);
-
-    const stopLiveScan = useCallback(() => {
-        if (controlsRef.current) {
-            controlsRef.current.stop();
-            controlsRef.current = null;
-        }
-        if (readerRef.current?.reset) {
-            readerRef.current.reset();
-        }
-        if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-        }
-        if (videoRef.current) {
-            try {
-                videoRef.current.srcObject = null;
-            } catch (e) {
-                // ignore
-            }
-        }
-        setScanOpen(false);
-        setScanTarget(null);
-        setScanError("");
-        setScanMsg("Apunta la cámara al código (solo números)");
-    }, []);
-
-    const fallbackUpload = (idx) => {
-        setScanTarget(idx);
-        uploadRef.current?.click();
-    };
-
-    const procesarLectura = (numeros, idx) => {
-        if (!numeros) return;
-        const codigo5 = numeros.slice(0, 5);
-        setEquipos((prev) =>
-            prev.map((eq, i) => (i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq))
-        );
-    };
-
-    const handleUploadChange = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file || scanTarget === null) return;
-        try {
-            const reader = new FileReader();
-            reader.onload = async () => {
-                try {
-                    readerRef.current = readerRef.current || new BrowserMultiFormatReader(zxingHints);
-                    const result = await readerRef.current.decodeFromImageUrl(reader.result);
-                    const numeros = soloNumeros(result?.getText() || "");
-                    if (numeros) {
-                        procesarLectura(numeros, scanTarget);
-                        stopLiveScan();
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("No se pudo leer desde imagen", err);
-                }
-                setScanError("No se pudo leer la imagen. Ingresa manualmente.");
-                handleScanManual(scanTarget);
-            };
-            reader.readAsDataURL(file);
-        } catch (err) {
-            console.error("Error al leer imagen:", err);
-            handleScanManual(scanTarget);
-        }
-    };
-
-    const startLiveScan = async (idx) => {
-        if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
-            fallbackUpload(idx);
-            return;
-        }
-        try {
-            readerRef.current = readerRef.current || new BrowserMultiFormatReader(zxingHints);
-            setScanMsg("Apunta la cámara al código (solo números)");
-            setScanError("");
-            setScanTarget(idx);
-            setScanOpen(true);
-            controlsRef.current?.stop();
-            const constraints = {
-                audio: false,
-                video: {
-                    facingMode: { ideal: "environment" }
-                }
-            };
-
-            const onResult = (result, err) => {
-                if (result) {
-                    const numeros = soloNumeros(result.getText() || "");
-                    if (numeros) {
-                        const codigo5 = numeros.slice(0, 5);
-                        setEquipos((prev) =>
-                            prev.map((eq, i) =>
-                                i === idx ? { ...eq, numero_serie: numeros, codigo: codigo5 || eq.codigo } : eq
-                            )
-                        );
-                        stopLiveScan();
-                    }
-                } else if (err && err.name !== "NotFoundException") {
-                    setScanError("No se pudo leer el código, intenta acercar o mejorar la luz.");
-                }
-            };
-
-            try {
-                controlsRef.current = await readerRef.current.decodeFromConstraints(constraints, videoRef.current, onResult);
-            } catch (err) {
-                console.warn("Constraints failed, usando decodeFromVideoDevice", err);
-                controlsRef.current = await readerRef.current.decodeFromVideoDevice(undefined, videoRef.current, onResult);
-            }
-            // si en 10s no se detecta nada, mostrar mensaje
-            scanTimeoutRef.current = setTimeout(() => {
-                setScanError("No se detectó el código. Acerca la cámara o ingresa manualmente.");
-            }, 10000);
-        } catch (err) {
-            console.error("No se pudo abrir cámara:", err);
-            setScanError("No se pudo acceder a la cámara. Revisa permisos o ingresa manualmente.");
-            handleScanManual(idx);
-        }
-    };
-
-    useEffect(() => () => stopLiveScan(), [stopLiveScan]);
+    // Escáner desactivado: N° serie se ingresa manualmente
 
     const equiposOrdenados = useMemo(
         () =>
@@ -535,40 +376,89 @@ const ArmadoTecnico = () => {
             name: "Estado",
             selector: (row) => row.estado || "pendiente",
             sortable: true,
-            width: "140px",
-            cell: (row) => renderEstado(row.estado)
+            grow: 0.5,
+            wrap: true,
+            style: { paddingRight: "4px" },
+            cell: (row) => {
+                const normalizado = (row.estado || "pendiente").toLowerCase();
+                const colorMap = {
+                    pendiente: { bg: "#f59e0b", text: "#fff" },
+                    en_proceso: { bg: "#0ea5e9", text: "#fff" },
+                    finalizado: { bg: "#22c55e", text: "#fff" }
+                };
+                const { bg, text } = colorMap[normalizado] || colorMap.pendiente;
+
+                return rol === "admin" ? (
+                    <div style={{ width: "80px", maxWidth: "100%", overflow: "hidden" }}>
+                        <select
+                            className="form-control form-control-sm"
+                            value={normalizado}
+                            onChange={(e) => handleEstadoRapido(row, e.target.value)}
+                            style={{
+                                backgroundColor: bg,
+                                color: text,
+                                fontWeight: 700,
+                                border: "none",
+                                padding: "0 2px",
+                                lineHeight: "1.05",
+                                height: "22px",
+                                width: "100%",
+                                maxWidth: "100%",
+                                fontSize: "0.72rem",
+                                whiteSpace: "nowrap",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none"
+                            }}
+                            size={1}
+                        >
+                            <option value="pendiente">Pendiente</option>
+                            <option value="en_proceso">En proceso</option>
+                            <option value="finalizado">Finalizado</option>
+                        </select>
+                    </div>
+                ) : (
+                    renderEstado(row.estado)
+                );
+            }
         },
         {
             name: "Asignado",
             selector: (row) => row.fecha_asignacion || row.created_at,
             sortable: true,
-            width: "120px",
+            grow: 0.6,
+            wrap: true,
             cell: (row) => formatearFecha(row.fecha_asignacion || row.created_at)
         },
         {
             name: "Inicio armado",
             selector: (row) => row.fecha_inicio,
             sortable: true,
-            width: "130px",
+            grow: 0.6,
+            wrap: true,
             cell: (row) => formatearFecha(row.fecha_inicio)
         },
         {
             name: "Cierre",
             selector: (row) => row.fecha_cierre,
             sortable: true,
-            width: "120px",
+            grow: 0.5,
+            wrap: true,
             cell: (row) => formatearFecha(row.fecha_cierre)
         },
         {
             name: "Total cajas",
             selector: (row) => row.total_cajas || 0,
             sortable: true,
-            width: "120px",
+            grow: 0.5,
+            wrap: true,
             cell: (row) => row.total_cajas ?? 0
         },
         {
             name: "Planilla",
-            width: "120px",
+            grow: 0.4,
+            minWidth: "100px",
+            wrap: true,
             cell: (row) => (
                 <button className="btn btn-sm btn-outline-primary" onClick={() => handleAbrirPlanilla(row)}>
                     <i className="fas fa-list-alt mr-1" />
@@ -655,8 +545,28 @@ const ArmadoTecnico = () => {
 
     const handleEquipoChange = (index, field, value) => {
         setEquipos((prev) =>
-            prev.map((eq, i) => (i === index ? { ...eq, [field]: value } : eq))
+            prev.map((eq, i) => {
+                if (i !== index) return eq;
+                if (field === "numero_serie") {
+                    const digitos = (value || "").replace(/\D+/g, "");
+                    return { ...eq, numero_serie: value, codigo: digitos.slice(0, 5) };
+                }
+                return { ...eq, [field]: value };
+            })
         );
+    };
+
+    const handleEstadoRapido = async (row, nuevoEstado) => {
+        if (rol !== "admin") return;
+        const id = row.id_armado || row.id;
+        if (!id) return;
+        try {
+            await modificarArmado(id, { estado: nuevoEstado });
+            await fetchArmados();
+        } catch (err) {
+            console.error("No se pudo actualizar estado:", err);
+            alert("No se pudo actualizar el estado.");
+        }
     };
 
     const handleGuardarEquipo = async (equipo) => {
@@ -775,59 +685,12 @@ const ArmadoTecnico = () => {
                     </div>
                 </div>
             </div>
-
-            {rol === "admin" && (
-                <div className="card mb-3">
-                    <div className="card-body d-flex flex-wrap align-items-end gap-3">
-                        <div>
-                            <small className="text-muted text-uppercase d-block mb-1">Estado</small>
-                            <select
-                                className="form-control"
-                                value={filtroEstado}
-                                onChange={(e) => setFiltroEstado(e.target.value)}
-                            >
-                                {estadosOptions.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <small className="text-muted text-uppercase d-block mb-1">Técnico</small>
-                            <select
-                                className="form-control"
-                                value={filtroTecnico}
-                                onChange={(e) => setFiltroTecnico(e.target.value)}
-                            >
-                                <option value="">Todos</option>
-                                {tecnicos.map((tec) => (
-                                    <option key={tec.id} value={tec.id}>
-                                        {tec.name || tec.nombre || `ID ${tec.id}`}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <button className="btn btn-primary ml-auto" onClick={handleAbrirModal}>
-                            <i className="fas fa-plus mr-2" />
-                            Asignar armado
-                        </button>
-                        <button className="btn btn-outline-primary ml-auto" onClick={fetchArmados}>
-                            <i className="fas fa-sync mr-2" />
-                            Actualizar
-                        </button>
-                    </div>
-                </div>
-            )}
-
             <div className="card">
                 <div className="card-body filters-row">
                     {error && <div className="alert alert-danger mb-3">{error}</div>}
                     <div className="filters-controls">
                         <div>
-                            <small className="text-muted text-uppercase d-block mb-1">Estado</small>
+                            <small className="text-muted text-uppercase d-block mb-1">Estado (filtro)</small>
                             <select
                                 className="form-control"
                                 value={filtroEstado}
@@ -843,7 +706,7 @@ const ArmadoTecnico = () => {
 
                         {rol === "admin" && (
                             <div>
-                                <small className="text-muted text-uppercase d-block mb-1">Técnico</small>
+                                <small className="text-muted text-uppercase d-block mb-1">Técnico (filtro)</small>
                                 <select
                                     className="form-control"
                                     value={filtroTecnico}
@@ -920,14 +783,6 @@ const ArmadoTecnico = () => {
                                     <p>Cargando planilla...</p>
                                 ) : (
                                     <>
-                                        <input
-                                            type="file"
-                                            ref={uploadRef}
-                                            accept="image/*"
-                                            capture="environment"
-                                            style={{ display: "none" }}
-                                            onChange={handleUploadChange}
-                                        />
                                         <div className="d-flex mb-3">
                                             <div className="btn-group btn-group-sm" role="group">
                                                 <button
@@ -962,29 +817,56 @@ const ArmadoTecnico = () => {
                                                         </h6>
                                                         {participaciones.length ? (
                                                             <div className="hist-tech-list">
-                                                                {participaciones.map((p) => {
-                                                                    const color = colorTecnico(p.tecnico_nombre || p.tecnico_id);
-                                                                    return (
-                                                                        <div key={p.id_participacion} className="hist-tech-item">
-                                                                            <div
-                                                                                className="hist-tech-avatar"
-                                                                                style={{ backgroundColor: `${color}22`, borderColor: color }}
-                                                                            >
-                                                                                <i className="fas fa-user" style={{ color }} />
-                                                                            </div>
-                                                                            <div className="flex-grow-1">
-                                                                                <div className="d-flex justify-content-between">
-                                                                                    <strong>{p.tecnico_nombre || `Tec. ${p.tecnico_id}`}</strong>
-                                                                                    <small className="text-muted">
-                                                                                        {formatearFecha(p.fecha_inicio)} - {formatearFecha(p.fecha_fin) || "en curso"}
-                                                                                    </small>
-                                                                                </div>
-                                                                                {p.nota && <div className="text-muted small">{p.nota}</div>}
-                                                                            </div>
+                                                        {participaciones.map((p) => {
+                                                            const color = colorTecnico(p.tecnico_nombre || p.tecnico_id);
+                                                            return (
+                                                                <div key={p.id_participacion} className="hist-tech-item">
+                                                                    <div
+                                                                        className="hist-tech-avatar"
+                                                                        style={{ backgroundColor: `${color}22`, borderColor: color }}
+                                                                    >
+                                                                        <i className="fas fa-user" style={{ color }} />
+                                                                    </div>
+                                                                    <div className="flex-grow-1">
+                                                                        <div className="d-flex justify-content-between">
+                                                                            <strong>{p.tecnico_nombre || `Tec. ${p.tecnico_id}`}</strong>
+                                                                            <small className="text-muted">
+                                                                                {formatearFecha(p.fecha_inicio)} - {formatearFecha(p.fecha_fin) || "en curso"}
+                                                                            </small>
                                                                         </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                                        {p.nota && <div className="text-muted small">{p.nota}</div>}
+                                                                    </div>
+                                                                    {rol === "admin" && (
+                                                                        <button
+                                                                            className="btn btn-sm btn-outline-danger"
+                                                                            title="Eliminar del historial"
+                                                                            onClick={async () => {
+                                                                                if (!window.confirm("¿Eliminar esta participación del historial?")) return;
+                                                                                try {
+                                                                                    await borrarParticipacion(p.id_participacion);
+                                                                                    // quitar del estado local sin recargar toda la planilla
+                                                                                    setParticipaciones((prev) =>
+                                                                                        prev.filter(
+                                                                                            (item) => item.id_participacion !== p.id_participacion
+                                                                                        )
+                                                                                    );
+                                                                                } catch (err) {
+                                                                                    console.error("No se pudo eliminar participación:", err);
+                                                                                    const msg =
+                                                                                        err?.response?.data?.message ||
+                                                                                        err?.response?.data?.detail ||
+                                                                                        "No se pudo eliminar la participación.";
+                                                                                    alert(msg);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <i className="fas fa-trash" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                         ) : (
                                                             <p className="text-muted mb-0">Sin transferencias aún.</p>
                                                         )}
@@ -1120,25 +1002,13 @@ const ArmadoTecnico = () => {
                                                                         )}
                                                                         <td>
                                                                     {enEdicion ? (
-                                                                        <div className="d-flex">
-                                                                            <input
-                                                                                className="form-control"
-                                                                                value={eq.numero_serie || ""}
-                                                                                onChange={(e) =>
-                                                                                    handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
-                                                                                }
-                                                                            />
-                                                                            {esMovil && (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className="btn btn-sm btn-outline-secondary ml-1"
-                                                                                    title="Escanear código"
-                                                                                    onClick={() => startLiveScan(eq.__idx)}
-                                                                                >
-                                                                                    <i className="fas fa-camera" />
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
+                                                                        <input
+                                                                            className="form-control"
+                                                                            value={eq.numero_serie || ""}
+                                                                            onChange={(e) =>
+                                                                                handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
+                                                                            }
+                                                                        />
                                                                     ) : (
                                                                         eq.numero_serie || "—"
                                                                     )}
@@ -1530,30 +1400,6 @@ const ArmadoTecnico = () => {
                 </div>
             )}
 
-            {scanOpen && (
-                <div className="modal show d-block" tabIndex="-1" role="dialog" style={{ background: "#00000055" }}>
-                    <div className="modal-dialog modal-sm" role="document">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h6 className="modal-title">Escanear N° Serie</h6>
-                                <button type="button" className="close" onClick={stopLiveScan}>
-                                    <span>&times;</span>
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                <video ref={videoRef} className="w-100 live-scan-video" autoPlay muted playsInline />
-                                <p className="text-muted small mt-2 mb-1">{scanMsg}</p>
-                                {scanError && <p className="live-scan-error small mb-0">{scanError}</p>}
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn btn-secondary btn-sm" onClick={stopLiveScan}>
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
