@@ -1493,9 +1493,9 @@ export const obtenerMovimientosArmado = async (armadoId) => {
     }
 };
 
-export const obtenerMovimientosRecientes = async (limit = 20, page = 1) => {
+export const obtenerMovimientosRecientes = async (limit = 20, page = 1, filtros = {}) => {
     try {
-        const response = await axios.get(`${BASE_URL}/armados/movimientos`, { params: { limit, page } });
+        const response = await axios.get(`${BASE_URL}/armados/movimientos`, { params: { limit, page, ...filtros } });
         return response.data;
     } catch (error) {
         console.error("Error al obtener movimientos recientes:", error);

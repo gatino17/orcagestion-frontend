@@ -45,13 +45,111 @@ const SINONIMOS_EQUIPOS = {
     "ip pc": "pc nvr"
 };
 
+const GRUPOS_EQUIPOS = [
+    {
+        titulo: "Oficina",
+        items: ["IP PC", "Monitor", "Mouse", "Teclado"]
+    },
+    {
+        titulo: "Tablero Respaldo",
+        items: [
+            "Panel VRM",
+            "PC Mass",
+            "Tablero Respaldo (1200x600x300)",
+            "Mesa (soporte) Respaldo",
+            "UPS online",
+            "Inversor Victron",
+            "Cargador Victron",
+            "Baterias SBS",
+            "Fuente de Poder 12V",
+            "Tablero Derivación (400x300x200)"
+        ]
+    },
+    {
+        titulo: "Red / Rack",
+        items: [
+            "Switch 1",
+            "Switch 2",
+            "Switch 3",
+            "Switch Rack",
+            "Zapatilla Rack",
+            "Rack",
+            "Router (puerta de enlace)",
+            "Poe Power",
+            "Ubiquiti POE",
+            "Ubiquiti Antena",
+            "Cable RJ radar",
+            "Soporte Radar",
+            "Netio",
+            "Designe 3501G"
+        ]
+    },
+    {
+        titulo: "Cámaras / Sensores",
+        items: [
+            "Camara de acceso",
+            "Camara bodega/ Ensilaje/ Modulo",
+            "Camara Interior",
+            "Camara Laser",
+            "Camara Laser Radar",
+            "Camara Termal",
+            "Camara Silo 1",
+            "Camara Silo 2",
+            "Axis",
+            "Panel Radar",
+            "Tablero Cámara (500x700x250)",
+            "Cable RJ radar"
+        ]
+    },
+    {
+        titulo: "Alarma / Señalética",
+        items: [
+            "Tablero de Alarma",
+            "Bocina Interior",
+            "Bocina Exterior",
+            "Baliza Interior",
+            "Baliza Exterior",
+            "Foco Led"
+        ]
+    }
+];
+
 const EQUIPOS_PREDEF = [
     "IP PC",
     "Mascara",
     "Router (puerta de enlace)",
     "Netio",
+    "Monitor",
+    "Rack",
+    "Zapatilla Rack",
+    "Parlantes",
+    "Sensor Magnetico",
     "Mouse",
     "Teclado",
+    "Camara de acceso",
+    "Camara bodega/ Ensilaje/ Modulo",
+    "Tablero de Alarma",
+    "Bocina Interior",
+    "Bocina Exterior",
+    "Baliza Interior",
+    "Baliza Exterior",
+    "Foco Led",
+    "Fuente de Poder 12V",
+    "Tablero Respaldo (1200x600x300)",
+    "Mesa (soporte) Respaldo",
+    "Inversor Victron",
+    "Baterias SBS",
+    "UPS online",
+    "Cargador Victron",
+    "Tablero Derivación (400x300x200)",
+    "Cable RJ radar",
+    "Soporte Radar",
+    "Cámara Termal",
+    "Ubiquiti Antena",
+    "Ubiquiti POE",
+    "Tablero Cámara (500x700x250)",
+    "Poe Power",
+    "Designe 3501G",
     "Camara Laser Radar",
     "Camara Interior",
     "Camara Silo 1",
@@ -187,6 +285,7 @@ const ArmadoTecnico = () => {
     const [movsLimit, setMovsLimit] = useState(10);
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
+    const [movArmadoFiltro, setMovArmadoFiltro] = useState("");
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -268,6 +367,31 @@ const ArmadoTecnico = () => {
                 .sort((a, b) => prioridadEquipo(a.nombre) - prioridadEquipo(b.nombre)),
         [equipos, prioridadEquipo]
     );
+
+    // Arma una lista combinada con filas de título + filas de ítems para mostrar secciones
+    const equiposConTitulos = useMemo(() => {
+        const lista = [];
+        const usado = new Set();
+        const pushGrupo = (titulo, items) => {
+            const presentes = equiposOrdenados.filter(
+                (eq) => items.some((n) => n.toLowerCase() === String(eq.nombre || "").toLowerCase())
+            );
+            if (presentes.length === 0) return;
+            lista.push({ tipo: "titulo", titulo });
+            presentes.forEach((eq) => {
+                lista.push({ tipo: "item", data: eq });
+                usado.add(eq.__idx);
+            });
+        };
+        GRUPOS_EQUIPOS.forEach((g) => pushGrupo(g.titulo, g.items));
+        // Extras no agrupados
+        const extras = equiposOrdenados.filter((eq) => !usado.has(eq.__idx));
+        if (extras.length) {
+            lista.push({ tipo: "titulo", titulo: "Otros" });
+            extras.forEach((eq) => lista.push({ tipo: "item", data: eq }));
+        }
+        return lista;
+    }, [equiposOrdenados]);
     const esMovil = useMemo(
         () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || ""),
         []
@@ -300,21 +424,23 @@ const ArmadoTecnico = () => {
 
     // Historial global de movimientos recientes (se recarga cada 60s)
     useEffect(() => {
+        const filtros = movArmadoFiltro ? { armado_id: movArmadoFiltro } : {};
         cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
             setMovsTotal(meta.total || 0);
             setMovsPage(meta.page || 1);
             setMovsLimit(meta.limit || movsLimit);
-        });
+        }, filtros);
         const interval = setInterval(
-            () => cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
-                setMovsTotal(meta.total || 0);
-                setMovsPage(meta.page || 1);
-                setMovsLimit(meta.limit || movsLimit);
-            }),
+            () =>
+                cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
+                    setMovsTotal(meta.total || 0);
+                    setMovsPage(meta.page || 1);
+                    setMovsLimit(meta.limit || movsLimit);
+                }, filtros),
             60000
         );
         return () => clearInterval(interval);
-    }, [movsLimit, movsPage]);
+    }, [movsLimit, movsPage, movArmadoFiltro]);
 
     useEffect(() => {
         if (rol !== "admin") return;
@@ -986,7 +1112,18 @@ const ArmadoTecnico = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                            {equiposOrdenados.map((eq) => {
+                                                            {equiposConTitulos.map((item, idx) => {
+                                                                const colSpan = esMovil ? 4 : 8;
+                                                                if (item.tipo === "titulo") {
+                                                                    return (
+                                                                        <tr key={`ttl-${idx}`} className="table-active">
+                                                                            <td colSpan={colSpan}>
+                                                                                <strong>{item.titulo}</strong>
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                }
+                                                                const eq = item.data;
                                                                 const rowKey = eq.id_equipo || `tmp-${eq.__idx}`;
                                                                 const enEdicion = editingId === rowKey;
                                                                 return (
@@ -1355,7 +1492,23 @@ const ArmadoTecnico = () => {
                     <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <h6 className="mb-0">Historial global de movimientos</h6>
-                            <div className="d-flex align-items-center">
+                            <div className="d-flex align-items-center" style={{ gap: "8px" }}>
+                                <select
+                                    className="form-control form-control-sm"
+                                    style={{ width: 160 }}
+                                    value={movArmadoFiltro}
+                                    onChange={(e) => {
+                                        setMovArmadoFiltro(e.target.value);
+                                        setMovsPage(1);
+                                    }}
+                                >
+                                    <option value="">Todos los centros</option>
+                                    {armados.map((a) => (
+                                        <option key={a.id_armado} value={a.id_armado}>
+                                            {a.centro?.nombre || a.centro_nombre || `Armado #${a.id_armado}`}
+                                        </option>
+                                    ))}
+                                </select>
                                 <small className="text-muted mr-2">Mostrar</small>
                                 <select
                                     className="form-control form-control-sm"

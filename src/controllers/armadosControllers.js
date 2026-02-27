@@ -113,9 +113,9 @@ export const cargarMovimientos = async (armadoId, setMovimientos) => {
     }
 };
 
-export const cargarMovimientosRecientes = async (setMovimientos, limit = 20, page = 1, setMeta = null) => {
+export const cargarMovimientosRecientes = async (setMovimientos, limit = 20, page = 1, setMeta = null, filtros = {}) => {
     try {
-        const data = await obtenerMovimientosRecientes(limit, page);
+        const data = await obtenerMovimientosRecientes(limit, page, filtros);
         if (Array.isArray(data)) {
             // compat: si backend viejo devuelve lista
             setMovimientos(data);
