@@ -45,6 +45,26 @@ const SINONIMOS_EQUIPOS = {
     "ip pc": "pc nvr"
 };
 
+const EQUIPOS_PREDEF = [
+    "IP PC",
+    "Mascara",
+    "Router (puerta de enlace)",
+    "Netio",
+    "Mouse",
+    "Teclado",
+    "Camara Laser Radar",
+    "Camara Interior",
+    "Camara Silo 1",
+    "Camara Silo 2",
+    "Axis",
+    "Panel VRM",
+    "Switch 1",
+    "Switch 2",
+    "Switch 3",
+    "Panel Radar",
+    "PC Mass",
+    "Camara Laser"
+];
 const MATERIALES_PREDEF = [
     "Cable Eléctrico 3 x 1,5mm",
     "Cable Eléctrico 3 x 0,75mm",
@@ -136,6 +156,7 @@ const MATERIALES_PREDEF = [
 const ArmadoTecnico = () => {
     const [rol, setRol] = useState("");
     const [userId, setUserId] = useState(null);
+    const [userNombre, setUserNombre] = useState("");
     const [armados, setArmados] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -203,11 +224,29 @@ const ArmadoTecnico = () => {
         return [...base, ...extrasNormalizados];
     }, []);
 
-    const normalizarEquipos = useCallback((lista = []) => {
-        return (lista || []).map((eq) => ({
-            ...eq,
-            caja: eq.caja || "Caja 1"
-        }));
+    const mergeEquiposPredef = useCallback((lista = []) => {
+        const mapa = new Map(
+            (lista || []).map((e) => [String(e.nombre || "").toLowerCase(), e])
+        );
+        const base = EQUIPOS_PREDEF.map((nombre) => {
+            const found = mapa.get(nombre.toLowerCase());
+            return {
+                nombre,
+                ip: found?.ip || "",
+                observacion: found?.observacion || "",
+                codigo: found?.codigo || "",
+                numero_serie: found?.numero_serie || "",
+                estado: found?.estado || "",
+                caja: found?.caja || "Caja 1",
+                id_equipo: found?.id_equipo,
+                centro_id: found?.centro_id
+            };
+        });
+        const extras = (lista || []).filter(
+            (e) => !EQUIPOS_PREDEF.some((p) => p.toLowerCase() === String(e.nombre || "").toLowerCase())
+        );
+        const extrasNorm = extras.map((e) => ({ ...e, caja: e.caja || "Caja 1" }));
+        return [...base, ...extrasNorm];
     }, []);
 
     const prioridadEquipo = useCallback((nombre = "") => {
@@ -253,6 +292,7 @@ const ArmadoTecnico = () => {
             const decoded = jwtDecode(token);
             setRol(decoded.rol || "");
             setUserId(decoded.id || decoded.user_id || decoded.sub || null);
+            setUserNombre(decoded.name || decoded.nombre || decoded.username || decoded.email || "usuario");
         } catch (err) {
             console.error("Error al decodificar token:", err);
         }
@@ -491,7 +531,7 @@ const ArmadoTecnico = () => {
             const nombreCentro = armado?.centro?.nombre || armado?.centro_nombre;
             if (!nombreCentro) throw new Error("Centro sin nombre");
             const detalles = await cargarDetallesCentro(nombreCentro);
-            const equiposNorm = normalizarEquipos(detalles?.equipos || []);
+            const equiposNorm = mergeEquiposPredef(detalles?.equipos || []);
             setEquipos(equiposNorm);
             await cargarParticipaciones(armado.id_armado, setParticipaciones);
             await cargarMateriales(armado.id_armado, async (lista) => {
@@ -529,7 +569,7 @@ const ArmadoTecnico = () => {
             const nombreCentro = armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre;
             if (!nombreCentro) return;
             const detalles = await cargarDetallesCentro(nombreCentro);
-            const equiposNorm = normalizarEquipos(detalles?.equipos || []);
+            const equiposNorm = mergeEquiposPredef(detalles?.equipos || []);
             setEquipos(equiposNorm);
             const cajasEquipos = equiposNorm.map((e) => (e.caja || "Caja 1").trim());
             const cajasMateriales = materiales.map((m) => (m.caja || "Caja 1").trim());
@@ -551,7 +591,13 @@ const ArmadoTecnico = () => {
                     const digitos = (value || "").replace(/\D+/g, "");
                     return { ...eq, numero_serie: value, codigo: digitos.slice(0, 5) };
                 }
-                return { ...eq, [field]: value };
+                // si se cambia algo relevante, asigna técnico actual para colorear
+                const updated = { ...eq, [field]: value };
+                if (["numero_serie", "codigo", "ip", "observacion", "caja"].includes(field)) {
+                    updated.caja_tecnico_id = userId;
+                    updated.caja_tecnico_nombre = userNombre || eq.caja_tecnico_nombre || `ID ${userId || ""}`;
+                }
+                return updated;
             })
         );
     };
@@ -575,8 +621,16 @@ const ArmadoTecnico = () => {
             return;
         }
         try {
-            if (equipo.id_equipo) {
-                await modificarEquipo(equipo.id_equipo, {
+            // Si ya existe un equipo con mismo nombre guardado, actualizamos para evitar duplicados
+            const existente = equipos.find(
+                (e) =>
+                    e.id_equipo &&
+                    String(e.nombre || "").toLowerCase().trim() === String(equipo.nombre || "").toLowerCase().trim()
+            );
+
+            if (equipo.id_equipo || existente) {
+                await modificarEquipo(equipo.id_equipo || existente.id_equipo, {
+                    ...existente,
                     ...equipo,
                     caja_tecnico_id: userId,
                     armado_id: armadoActivo?.id_armado
@@ -589,12 +643,24 @@ const ArmadoTecnico = () => {
                     armado_id: armadoActivo?.id_armado
                 });
             }
+            // marcar en estado local quién lo guardó para mostrar badge coloreado
+            setEquipos((prev) =>
+                prev.map((eq) =>
+                    (eq.id_equipo && eq.id_equipo === (equipo.id_equipo || existente?.id_equipo)) || eq.__idx === equipo.__idx
+                        ? { ...eq, caja_tecnico_id: userId, caja_tecnico_nombre: userNombre }
+                        : eq
+                )
+            );
             await recargarPlanilla();
             await fetchArmados();
             setEditingId(null);
         } catch (err) {
             console.error("Error al guardar equipo:", err);
-            alert("No se pudo guardar el equipo.");
+            const msg =
+                err?.response?.data?.message ||
+                err?.response?.data?.detail ||
+                (err?.response?.status === 409 ? "Ya existe un equipo con ese nombre." : "No se pudo guardar el equipo.");
+            alert(msg);
         }
     };
 
@@ -941,23 +1007,37 @@ const ArmadoTecnico = () => {
                                                                                 </select>
                                                                             ) : (
                                                                                 <div>
-                                                                                    <span
-                                                                                        className="badge badge-light"
-                                                                                        style={{
-                                                                                            border: `1px solid ${colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id)}`,
-                                                                                            color: colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id)
-                                                                                        }}
-                                                                                    >
-                                                                                        {eq.caja || "Caja 1"}
-                                                                                    </span>
-                                                                                    {eq.caja_tecnico_nombre && (
-                                                                                        <small
-                                                                                            className="d-block"
-                                                                                            style={{ color: colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id) }}
-                                                                                        >
-                                                                                            por {eq.caja_tecnico_nombre}
-                                                                                        </small>
-                                                                                    )}
+                                                                                    {(() => {
+                                                                                        const hasTec =
+                                                                                            eq.caja_tecnico_nombre ||
+                                                                                            eq.caja_tecnico_id ||
+                                                                                            eq.numero_serie ||
+                                                                                            eq.codigo ||
+                                                                                            eq.ip ||
+                                                                                            eq.observacion;
+                                                                                        const displayName =
+                                                                                            eq.caja_tecnico_nombre ||
+                                                                                            (eq.caja_tecnico_id ? `ID ${eq.caja_tecnico_id}` : userNombre);
+                                                                                        const color = hasTec
+                                                                                            ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || userNombre || userId)
+                                                                                            : "#6b7280";
+                                                                                        const border = hasTec ? color : "#cbd5e1";
+                                                                                        return (
+                                                                                            <>
+                                                                                                <span
+                                                                                                    className="badge badge-light"
+                                                                                                    style={{ border: `1px solid ${border}`, color }}
+                                                                                                >
+                                                                                                    {eq.caja || "Caja 1"}
+                                                                                                </span>
+                                                                                                {hasTec && displayName && (
+                                                                                                    <small className="d-block" style={{ color }}>
+                                                                                                        por {displayName}
+                                                                                                    </small>
+                                                                                                )}
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             )}
                                                                         </td>
@@ -1121,23 +1201,35 @@ const ArmadoTecnico = () => {
                                                             <div className="material-head">
                                                                 <div className="material-name">{mat.nombre}</div>
                                                                 <div className="material-badge">
-                                                                    <span
-                                                                        className="badge badge-light d-inline-block"
-                                                                        style={{
-                                                                            border: `1px solid ${colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id)}`,
-                                                                            color: colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id)
-                                                                        }}
-                                                                    >
-                                                                        {mat.caja || "Caja 1"}
-                                                                    </span>
-                                                                    {mat.caja_tecnico_nombre && (
-                                                                        <small
-                                                                            className="d-block"
-                                                                            style={{ color: colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id) }}
-                                                                        >
-                                                                            por {mat.caja_tecnico_nombre}
-                                                                        </small>
-                                                                    )}
+                                                                    {(() => {
+                                                                        const hasTec =
+                                                                            mat.caja_tecnico_nombre ||
+                                                                            mat.caja_tecnico_id ||
+                                                                            mat.cantidad ||
+                                                                            mat.caja;
+                                                                        const displayName =
+                                                                            mat.caja_tecnico_nombre ||
+                                                                            (mat.caja_tecnico_id ? `ID ${mat.caja_tecnico_id}` : userNombre);
+                                                                        const color = hasTec
+                                                                            ? colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id || userNombre || userId)
+                                                                            : "#6b7280";
+                                                                        const border = hasTec ? color : "#cbd5e1";
+                                                                        return (
+                                                                            <>
+                                                                                <span
+                                                                                    className="badge badge-light d-inline-block"
+                                                                                    style={{ border: `1px solid ${border}`, color }}
+                                                                                >
+                                                                                    {mat.caja || "Caja 1"}
+                                                                                </span>
+                                                                                {hasTec && displayName && (
+                                                                                    <small className="d-block" style={{ color }}>
+                                                                                        por {displayName}
+                                                                                    </small>
+                                                                                )}
+                                                                            </>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                             <div className="material-assign">
@@ -1146,13 +1238,20 @@ const ArmadoTecnico = () => {
                                                                     <select
                                                                         className="form-control form-control-sm"
                                                                         value={mat.caja || "Caja 1"}
-                                                                        onChange={(e) =>
-                                                                            setMateriales((prev) =>
-                                                                                prev.map((m, i) =>
-                                                                                    i === idx ? { ...m, caja: e.target.value } : m
-                                                                                )
-                                                                            )
-                                                                        }
+                            onChange={(e) =>
+                                setMateriales((prev) =>
+                                    prev.map((m, i) =>
+                                        i === idx
+                                            ? {
+                                                  ...m,
+                                                  caja: e.target.value,
+                                                  caja_tecnico_id: userId,
+                                                  caja_tecnico_nombre: userNombre || m.caja_tecnico_nombre || `ID ${userId || ""}`
+                                              }
+                                            : m
+                                    )
+                                )
+                            }
                                                                     >
                                                                         {cajas.map((caja) => (
                                                                             <option key={caja} value={caja}>
@@ -1171,8 +1270,15 @@ const ArmadoTecnico = () => {
                                                                         onChange={(e) =>
                                                                             setMateriales((prev) =>
                                                                                 prev.map((m, i) =>
-                                                                                    i === idx ? { ...m, cantidad: e.target.value } : m
-                                                                                )
+                                                                                    i === idx
+                                                                                        ? {
+                                                                                              ...m,
+                                                                                              cantidad: e.target.value,
+                                                                                              caja_tecnico_id: userId,
+                                                                                              caja_tecnico_nombre: userNombre || m.caja_tecnico_nombre || `ID ${userId || ""}`
+                                                                                          }
+                                                                                        : m
+                                                                                    )
                                                                             )
                                                                         }
                                                                         placeholder="0"
