@@ -138,6 +138,43 @@ const GRUPOS_EQUIPOS = [
             "Mesa (soporte) Respaldo",
             "Tablero Derivación (400x300x200)"
         ]
+    },
+    {
+        titulo: "Mastil",
+        items: [
+            "Brazo Ubiquiti",
+            "Mástil",
+            "Riel U",
+            "Perno Pasado",
+            "Omega 1"
+        ]
+    },
+    {
+        titulo: "Tablero Camara",
+        items: [
+            "Tablero Cámara (500x700x250)",
+            "Poe Power",
+            "Ubiquiti POE",
+            "Ubiquiti Antena",
+            "Cable RJ radar",
+            "Soporte Radar",
+            "Cámara Termal",
+            "Camara Laser",
+            "Camara Laser Radar",
+            "Axis",
+            "Panel Radar",
+            "Camara Silo 1",
+            "Camara Silo 2",
+            "Camara Interior",
+            "Camara de acceso",
+            "Camara bodega/ Ensilaje/ Modulo",
+            "Switch 1",
+            "Switch 2",
+            "Switch 3",
+            "Switch Rack",
+            "Netio",
+            "Designe 3501G"
+        ]
     }
 ];
 
