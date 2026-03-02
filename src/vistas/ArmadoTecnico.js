@@ -27,28 +27,48 @@ const estadosOptions = [
 ];
 
 const ORDEN_EQUIPOS = [
-    "pc nvr",
+    "pc",
     "monitor",
     "mouse",
     "teclado",
+    "router",
+    "switch",
     "switch cisco + adaptador",
     "router mikrotik + trafo",
+    "switch rack",
+    "rack 9u - tuercas - tornillos",
+    "bandeja rack - tornillos",
+    "zapatilla rack (pdu)",
     "rack 9u + tuercas + tornillos",
     "zapatilla rack",
-    "switch rack",
     "parlantes",
     "sensor magnetico",
     "sensor magnético"
 ];
 
 const SINONIMOS_EQUIPOS = {
-    "ip pc": "pc nvr"
+    "ip pc": "pc",
+    "ip pc nvr": "pc",
+    "puerta de enlace": "router",
+    "router (puerta de enlace)": "router"
 };
 
 const GRUPOS_EQUIPOS = [
     {
         titulo: "Oficina",
-        items: ["IP PC", "Monitor", "Mouse", "Teclado"]
+        items: [
+            "PC",
+            "Monitor",
+            "Mouse",
+            "Teclado",
+            "Router",
+            "Switch",
+            "Parlantes",
+            "Sensor Magnetico",
+            "Rack 9U - tuercas - tornillos",
+            "Bandeja Rack - tornillos",
+            "Zapatilla Rack (PDU)"
+        ]
     },
     {
         titulo: "Tablero Respaldo",
@@ -115,12 +135,16 @@ const GRUPOS_EQUIPOS = [
 ];
 
 const EQUIPOS_PREDEF = [
-    "IP PC",
+    "PC",
     "Mascara",
-    "Router (puerta de enlace)",
+    "Router",
+    "Switch",
     "Netio",
     "Monitor",
     "Rack",
+    "Rack 9U - tuercas - tornillos",
+    "Bandeja Rack - tornillos",
+    "Zapatilla Rack (PDU)",
     "Zapatilla Rack",
     "Parlantes",
     "Sensor Magnetico",
@@ -323,12 +347,19 @@ const ArmadoTecnico = () => {
         return [...base, ...extrasNormalizados];
     }, []);
 
+    const normalizarNombreEquipo = useCallback((nombre = "") => {
+        let n = nombre.toLowerCase().trim();
+        if (SINONIMOS_EQUIPOS[n]) n = SINONIMOS_EQUIPOS[n];
+        return n;
+    }, []);
+
     const mergeEquiposPredef = useCallback((lista = []) => {
         const mapa = new Map(
-            (lista || []).map((e) => [String(e.nombre || "").toLowerCase(), e])
+            (lista || []).map((e) => [normalizarNombreEquipo(e.nombre || ""), e])
         );
         const base = EQUIPOS_PREDEF.map((nombre) => {
-            const found = mapa.get(nombre.toLowerCase());
+            const key = normalizarNombreEquipo(nombre);
+            const found = mapa.get(key);
             return {
                 nombre,
                 ip: found?.ip || "",
@@ -342,11 +373,15 @@ const ArmadoTecnico = () => {
             };
         });
         const extras = (lista || []).filter(
-            (e) => !EQUIPOS_PREDEF.some((p) => p.toLowerCase() === String(e.nombre || "").toLowerCase())
+            (e) => !EQUIPOS_PREDEF.some((p) => normalizarNombreEquipo(p) === normalizarNombreEquipo(e.nombre || ""))
         );
-        const extrasNorm = extras.map((e) => ({ ...e, caja: e.caja || "Caja 1" }));
+        const extrasNorm = extras.map((e) => ({
+            ...e,
+            caja: e.caja || "Caja 1",
+            nombre: e.nombre
+        }));
         return [...base, ...extrasNorm];
-    }, []);
+    }, [normalizarNombreEquipo]);
 
     const prioridadEquipo = useCallback((nombre = "") => {
         let n = nombre.toLowerCase().trim();
