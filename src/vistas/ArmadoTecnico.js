@@ -123,8 +123,6 @@ const GRUPOS_EQUIPOS = [
             "Tablero 1200x800x300",
             "Inversor cargador Victron",
             "Panel Victron",
-            "Panel VRM",
-            "PC Mass",
             "Bateria 1",
             "Bateria 2",
             "Bateria 3",
@@ -132,17 +130,11 @@ const GRUPOS_EQUIPOS = [
             "Bateria 5",
             "Bateria 6",
             "UPS online",
-            "Inversor Victron",
-            "Cargador Victron",
-            "Baterias SBS",
             "Sensor magnetico respaldo",
             "Sensor magnetico cargador",
             "Cargador 1",
             "Cargador 2",
-            "Tablero Cargador 750x500x250",
-            "Tablero Respaldo (1200x600x300)",
-            "Mesa (soporte) Respaldo",
-            "Tablero Derivación (400x300x200)"
+            "Tablero Cargador 750x500x250"
         ]
     },
     {
