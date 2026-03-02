@@ -55,6 +55,11 @@ const ORDEN_EQUIPOS = [
     "foco led 2 150w",
     "fuente poder 12v",
     "axis p8221",
+    "mastil",
+    "brazo ubiquiti",
+    "riel u",
+    "perno pasado",
+    "omega 1",
     "tablero 1200x800x300",
     "inversor cargador victron",
     "panel victron",
@@ -75,7 +80,8 @@ const SINONIMOS_EQUIPOS = {
     "ip pc": "pc",
     "ip pc nvr": "pc",
     "puerta de enlace": "router",
-    "router (puerta de enlace)": "router"
+    "router (puerta de enlace)": "router",
+    "mástil": "mastil"
 };
 
 const GRUPOS_EQUIPOS = [
@@ -216,6 +222,11 @@ const EQUIPOS_PREDEF = [
     "Cargador 1",
     "Cargador 2",
     "Tablero Cargador 750x500x250",
+    "Mastil",
+    "Brazo Ubiquiti",
+    "Riel U",
+    "Perno Pasado",
+    "Omega 1",
     "Camara de acceso",
     "Camara bodega/ Ensilaje/ Modulo",
     "Tablero de Alarma",
