@@ -138,53 +138,6 @@ const GRUPOS_EQUIPOS = [
             "Mesa (soporte) Respaldo",
             "Tablero Derivación (400x300x200)"
         ]
-    },
-    {
-        titulo: "Red / Rack",
-        items: [
-            "Switch 1",
-            "Switch 2",
-            "Switch 3",
-            "Switch Rack",
-            "Zapatilla Rack",
-            "Rack",
-            "Router (puerta de enlace)",
-            "Poe Power",
-            "Ubiquiti POE",
-            "Ubiquiti Antena",
-            "Cable RJ radar",
-            "Soporte Radar",
-            "Netio",
-            "Designe 3501G"
-        ]
-    },
-    {
-        titulo: "Cámaras / Sensores",
-        items: [
-            "Camara de acceso",
-            "Camara bodega/ Ensilaje/ Modulo",
-            "Camara Interior",
-            "Camara Laser",
-            "Camara Laser Radar",
-            "Camara Termal",
-            "Camara Silo 1",
-            "Camara Silo 2",
-            "Axis",
-            "Panel Radar",
-            "Tablero Cámara (500x700x250)",
-            "Cable RJ radar"
-        ]
-    },
-    {
-        titulo: "Alarma / Señalética",
-        items: [
-            "Tablero de Alarma",
-            "Bocina Interior",
-            "Bocina Exterior",
-            "Baliza Interior",
-            "Baliza Exterior",
-            "Foco Led"
-        ]
     }
 ];
 
