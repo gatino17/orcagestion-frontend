@@ -43,7 +43,18 @@ const ORDEN_EQUIPOS = [
     "zapatilla rack",
     "parlantes",
     "sensor magnetico",
-    "sensor magnético"
+    "sensor magnÃ©tico",
+    "tablero 500x400x200",
+    "baliza interior",
+    "bocina interior",
+    "baliza exterior 1",
+    "baliza exterior 2",
+    "bocina exterior 1",
+    "bocina exterior 2",
+    "foco led 1 150w",
+    "foco led 2 150w",
+    "fuente poder 12v",
+    "axis p8221"
 ];
 
 const SINONIMOS_EQUIPOS = {
@@ -68,6 +79,22 @@ const GRUPOS_EQUIPOS = [
             "Rack 9U - tuercas - tornillos",
             "Bandeja Rack - tornillos",
             "Zapatilla Rack (PDU)"
+        ]
+    },
+    {
+        titulo: "Tablero Alarma",
+        items: [
+            "Tablero 500x400x200",
+            "Baliza interior",
+            "Bocina interior",
+            "Baliza exterior 1",
+            "Baliza exterior 2",
+            "Bocina exterior 1",
+            "Bocina exterior 2",
+            "Foco led 1 150W",
+            "Foco led 2 150W",
+            "Fuente poder 12V",
+            "Axis P8221"
         ]
     },
     {
@@ -150,6 +177,17 @@ const EQUIPOS_PREDEF = [
     "Sensor Magnetico",
     "Mouse",
     "Teclado",
+    "Tablero 500x400x200",
+    "Baliza interior",
+    "Bocina interior",
+    "Baliza exterior 1",
+    "Baliza exterior 2",
+    "Bocina exterior 1",
+    "Bocina exterior 2",
+    "Foco led 1 150W",
+    "Foco led 2 150W",
+    "Fuente poder 12V",
+    "Axis P8221",
     "Camara de acceso",
     "Camara bodega/ Ensilaje/ Modulo",
     "Tablero de Alarma",
