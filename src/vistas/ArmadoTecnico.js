@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import {
@@ -403,6 +403,10 @@ const ArmadoTecnico = () => {
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
     const [movArmadoFiltro, setMovArmadoFiltro] = useState("");
+    const [movSerieFiltro, setMovSerieFiltro] = useState("");
+    const [movimientosNuevos, setMovimientosNuevos] = useState({});
+    const [parpadeoOn, setParpadeoOn] = useState(false);
+    const lastSeenMovIdRef = useRef(0);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -551,13 +555,15 @@ const ArmadoTecnico = () => {
     }, []);
 
     const recargarMovimientosRecientes = useCallback(() => {
-        const filtros = movArmadoFiltro ? { armado_id: movArmadoFiltro } : {};
+        const filtros = {};
+        if (movArmadoFiltro) filtros.armado_id = movArmadoFiltro;
+        if ((movSerieFiltro || "").trim()) filtros.numero_serie = movSerieFiltro.trim();
         cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
             setMovsTotal(meta.total || 0);
             setMovsPage(meta.page || 1);
             setMovsLimit(meta.limit || movsLimit);
         }, filtros);
-    }, [movArmadoFiltro, movsLimit, movsPage]);
+    }, [movArmadoFiltro, movSerieFiltro, movsLimit, movsPage]);
 
     // Historial global de movimientos recientes (auto refresh + foco de ventana)
     useEffect(() => {
@@ -575,6 +581,51 @@ const ArmadoTecnico = () => {
             document.removeEventListener("visibilitychange", onVisible);
         };
     }, [recargarMovimientosRecientes]);
+
+    // Detectar nuevos registros para resaltarlos temporalmente en la parte superior.
+    useEffect(() => {
+        if (movsPage !== 1) return;
+        const idsActuales = (movimientosRecientes || [])
+            .map((m) => Number(m.id_movimiento || 0))
+            .filter((n) => Number.isFinite(n) && n > 0);
+        if (!idsActuales.length) return;
+
+        const maxActual = Math.max(...idsActuales);
+        if (!lastSeenMovIdRef.current) {
+            lastSeenMovIdRef.current = maxActual;
+            return;
+        }
+        const nuevos = idsActuales.filter((id) => id > lastSeenMovIdRef.current);
+        if (nuevos.length) {
+            nuevos.forEach((id) => {
+                const key = String(id);
+                setMovimientosNuevos((prev) => ({ ...prev, [key]: true }));
+                setTimeout(() => {
+                    setMovimientosNuevos((prev) => {
+                        const next = { ...prev };
+                        delete next[key];
+                        return next;
+                    });
+                }, 9000);
+            });
+        }
+        lastSeenMovIdRef.current = Math.max(lastSeenMovIdRef.current, maxActual);
+    }, [movimientosRecientes, movsPage]);
+
+    useEffect(() => {
+        if (!Object.keys(movimientosNuevos).length) return;
+        const interval = setInterval(() => setParpadeoOn((v) => !v), 450);
+        return () => clearInterval(interval);
+    }, [movimientosNuevos]);
+
+    const movimientosRecientesOrdenados = useMemo(() => {
+        return [...(movimientosRecientes || [])].sort((a, b) => {
+            const fa = new Date(a.fecha || 0).getTime();
+            const fb = new Date(b.fecha || 0).getTime();
+            if (fb !== fa) return fb - fa;
+            return Number(b.id_movimiento || 0) - Number(a.id_movimiento || 0);
+        });
+    }, [movimientosRecientes]);
 
     useEffect(() => {
         if (rol !== "admin") return;
@@ -638,6 +689,18 @@ const ArmadoTecnico = () => {
         const mes = String(fecha.getMonth() + 1).padStart(2, "0");
         const anio = fecha.getFullYear();
         return `${dia}/${mes}/${anio}`;
+    };
+
+    const formatearFechaHora = (valor) => {
+        if (!valor) return "-";
+        const fecha = new Date(valor);
+        if (Number.isNaN(fecha.getTime())) return "-";
+        const dia = String(fecha.getDate()).padStart(2, "0");
+        const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+        const anio = fecha.getFullYear();
+        const horas = String(fecha.getHours()).padStart(2, "0");
+        const minutos = String(fecha.getMinutes()).padStart(2, "0");
+        return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
     };
 
     const columnas = [
@@ -913,6 +976,7 @@ const ArmadoTecnico = () => {
             );
             await recargarPlanilla();
             await fetchArmados();
+            recargarMovimientosRecientes();
             setEditingId(null);
         } catch (err) {
             console.error("Error al guardar equipo:", err);
@@ -1456,6 +1520,7 @@ const ArmadoTecnico = () => {
                                                                         });
                                                                     });
                                                                     await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
+                                                                    recargarMovimientosRecientes();
                                                                 }
                                                             );
                                                         }}
@@ -1588,6 +1653,7 @@ const ArmadoTecnico = () => {
                                         <th>Fecha</th>
                                         <th>Tipo</th>
                                         <th>Ítem</th>
+                                        <th>N° Serie</th>
                                         <th>Caja</th>
                                         <th>Cant.</th>
                                         <th>Técnico</th>
@@ -1599,6 +1665,7 @@ const ArmadoTecnico = () => {
                                             <td>{formatearFecha(mov.fecha)}</td>
                                             <td className="text-capitalize">{mov.tipo}</td>
                                             <td>{mov.nombre_item}</td>
+                                            <td>{mov.numero_serie || "-"}</td>
                                             <td>{mov.caja}</td>
                                             <td>{mov.cantidad}</td>
                                             <td style={{ color: colorTecnico(mov.tecnico_nombre || mov.tecnico_id) }}>
@@ -1643,6 +1710,16 @@ const ArmadoTecnico = () => {
                                         </option>
                                     ))}
                                 </select>
+                                <input
+                                    className="form-control form-control-sm"
+                                    style={{ width: 180 }}
+                                    placeholder="Buscar N° serie..."
+                                    value={movSerieFiltro}
+                                    onChange={(e) => {
+                                        setMovSerieFiltro(e.target.value);
+                                        setMovsPage(1);
+                                    }}
+                                />
                                 <small className="text-muted mr-2">Mostrar</small>
                                 <select
                                     className="form-control form-control-sm"
@@ -1663,6 +1740,7 @@ const ArmadoTecnico = () => {
                                         <th>Fecha</th>
                                         <th>Tipo</th>
                                         <th>Ítem</th>
+                                        <th>N° Serie</th>
                                         <th>Caja</th>
                                         <th>Cant.</th>
                                         <th>Armado</th>
@@ -1670,11 +1748,19 @@ const ArmadoTecnico = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {movimientosRecientes.slice(0, movsLimit).map((mov) => (
-                                        <tr key={`g-${mov.id_movimiento}`}>
-                                            <td>{formatearFecha(mov.fecha)}</td>
+                                    {movimientosRecientesOrdenados.slice(0, movsLimit).map((mov) => (
+                                        <tr
+                                            key={`g-${mov.id_movimiento}`}
+                                            style={
+                                                movimientosNuevos[String(mov.id_movimiento)]
+                                                    ? { backgroundColor: parpadeoOn ? "#fff3cd" : "#ffe8a1" }
+                                                    : undefined
+                                            }
+                                        >
+                                            <td>{formatearFechaHora(mov.fecha)}</td>
                                             <td className="text-capitalize">{mov.tipo}</td>
                                             <td>{mov.nombre_item}</td>
+                                            <td>{mov.numero_serie || "-"}</td>
                                             <td>{mov.caja}</td>
                                             <td>{mov.cantidad}</td>
                                             <td>{mov.centro_nombre || `Armado #${mov.armado_id}`}</td>
@@ -1685,7 +1771,7 @@ const ArmadoTecnico = () => {
                                     ))}
                                     {movimientosRecientes.length === 0 && (
                                         <tr>
-                                            <td colSpan="7" className="text-center text-muted">
+                                            <td colSpan="8" className="text-center text-muted">
                                                 Sin movimientos registrados todavía.
                                             </td>
                                         </tr>
