@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
+import { io } from "socket.io-client";
 import {
     cargarArmados,
     agregarArmado,
@@ -445,6 +446,13 @@ const ArmadoTecnico = () => {
         return [...base, ...extrasNormalizados];
     }, []);
 
+    const socketBaseUrl = useMemo(() => {
+        const env = process.env.REACT_APP_API_BASE_URL;
+        if (env && /^https?:\/\//i.test(env)) return env.replace(/\/api\/?$/i, "");
+        if (window.location.hostname === "localhost") return "http://localhost:5000";
+        return `${window.location.protocol}//${window.location.host}`;
+    }, []);
+
     const materialKey = useCallback((m = {}) => String(m.nombre || "").trim().toLowerCase(), []);
     const materialHash = useCallback((m = {}) => {
         const cantidad = Number(m.cantidad) || 0;
@@ -607,10 +615,10 @@ const ArmadoTecnico = () => {
         }, filtros);
     }, [movArmadoFiltro, movSerieFiltro, movsLimit, movsPage]);
 
-    // Historial global de movimientos recientes (auto refresh + foco de ventana)
+    // Historial global: fallback polling (si websocket no conecta)
     useEffect(() => {
         recargarMovimientosRecientes();
-        const interval = setInterval(recargarMovimientosRecientes, 5000);
+        const interval = setInterval(recargarMovimientosRecientes, 30000);
         const onFocus = () => recargarMovimientosRecientes();
         const onVisible = () => {
             if (document.visibilityState === "visible") recargarMovimientosRecientes();
@@ -716,9 +724,34 @@ const ArmadoTecnico = () => {
     useEffect(() => {
         const interval = setInterval(() => {
             fetchArmados({ silent: true });
-        }, 5000);
+        }, 30000);
         return () => clearInterval(interval);
     }, [fetchArmados]);
+
+    // Realtime por Socket.IO (opcion principal para escalar).
+    useEffect(() => {
+        if (!rol) return undefined;
+        const socket = io(socketBaseUrl, {
+            transports: ["websocket", "polling"],
+            reconnection: true
+        });
+        const onArmadoUpdated = (evt = {}) => {
+            fetchArmados({ silent: true });
+            recargarMovimientosRecientes();
+            if (planillaOpen && armadoActivo && Number(evt.armado_id) === Number(armadoActivo.id_armado)) {
+                cargarMovimientos(armadoActivo.id_armado, setMovimientos);
+                cargarMateriales(armadoActivo.id_armado, (lista) => {
+                    const merged = mergeMateriales(lista);
+                    setMateriales(merged);
+                });
+            }
+        };
+        socket.on("armado_updated", onArmadoUpdated);
+        return () => {
+            socket.off("armado_updated", onArmadoUpdated);
+            socket.disconnect();
+        };
+    }, [rol, socketBaseUrl, fetchArmados, recargarMovimientosRecientes, planillaOpen, armadoActivo, mergeMateriales]);
 
     const renderEstado = (estado) => {
         const normalizado = (estado || "pendiente").toLowerCase();
