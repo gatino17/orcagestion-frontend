@@ -541,6 +541,32 @@ const ArmadoTecnico = () => {
         });
     }, [movimientos]);
 
+    const tecnicoRecientePorEquipo = useMemo(() => {
+        const mapa = new Map();
+        (movimientos || [])
+            .filter((m) => m.tipo === "equipo")
+            .forEach((m) => {
+                const key = String(m.item_id || "");
+                if (!key || mapa.has(key)) return;
+                const nombre = m.tecnico_nombre || (m.tecnico_id ? `ID ${m.tecnico_id}` : "");
+                if (nombre) mapa.set(key, nombre);
+            });
+        return mapa;
+    }, [movimientos]);
+
+    const tecnicoRecientePorMaterial = useMemo(() => {
+        const mapa = new Map();
+        (movimientos || [])
+            .filter((m) => m.tipo === "material")
+            .forEach((m) => {
+                const key = String(m.nombre_item || "").toLowerCase().trim();
+                if (!key || mapa.has(key)) return;
+                const nombre = m.tecnico_nombre || (m.tecnico_id ? `ID ${m.tecnico_id}` : "");
+                if (nombre) mapa.set(key, nombre);
+            });
+        return mapa;
+    }, [movimientos]);
+
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) return;
@@ -1343,6 +1369,7 @@ const ArmadoTecnico = () => {
                                                                             ) : (
                                                                                 <div>
                                                                                     {(() => {
+                                                                                        const tecnicoMov = tecnicoRecientePorEquipo.get(String(eq.id_equipo || ""));
                                                                                         const hasTec =
                                                                                             eq.caja_tecnico_nombre ||
                                                                                             eq.caja_tecnico_id ||
@@ -1352,9 +1379,9 @@ const ArmadoTecnico = () => {
                                                                                             eq.observacion;
                                                                                         const displayName =
                                                                                             eq.caja_tecnico_nombre ||
-                                                                                            (eq.caja_tecnico_id ? `ID ${eq.caja_tecnico_id}` : userNombre);
+                                                                                            (eq.caja_tecnico_id ? `ID ${eq.caja_tecnico_id}` : tecnicoMov || "");
                                                                                         const color = hasTec
-                                                                                            ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || userNombre || userId)
+                                                                                            ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || tecnicoMov || userId)
                                                                                             : "#6b7280";
                                                                                         const border = hasTec ? color : "#cbd5e1";
                                                                                         return (
@@ -1538,6 +1565,9 @@ const ArmadoTecnico = () => {
                                                                 <div className="material-name">{mat.nombre}</div>
                                                                 <div className="material-badge">
                                                                     {(() => {
+                                                                        const tecnicoMov = tecnicoRecientePorMaterial.get(
+                                                                            String(mat.nombre || "").toLowerCase().trim()
+                                                                        );
                                                                         const hasTec =
                                                                             mat.caja_tecnico_nombre ||
                                                                             mat.caja_tecnico_id ||
@@ -1545,9 +1575,9 @@ const ArmadoTecnico = () => {
                                                                             mat.caja;
                                                                         const displayName =
                                                                             mat.caja_tecnico_nombre ||
-                                                                            (mat.caja_tecnico_id ? `ID ${mat.caja_tecnico_id}` : userNombre);
+                                                                            (mat.caja_tecnico_id ? `ID ${mat.caja_tecnico_id}` : tecnicoMov || "");
                                                                         const color = hasTec
-                                                                            ? colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id || userNombre || userId)
+                                                                            ? colorTecnico(mat.caja_tecnico_nombre || mat.caja_tecnico_id || tecnicoMov || userId)
                                                                             : "#6b7280";
                                                                         const border = hasTec ? color : "#cbd5e1";
                                                                         return (
