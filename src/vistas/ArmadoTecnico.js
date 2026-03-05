@@ -395,6 +395,7 @@ const ArmadoTecnico = () => {
     const [transferTecSel, setTransferTecSel] = useState("");
     const [transferNota, setTransferNota] = useState("");
     const [materiales, setMateriales] = useState([]);
+    const [materialesSnapshot, setMaterialesSnapshot] = useState({});
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
     const [cajas, setCajas] = useState(["Caja 1"]);
     const [movimientos, setMovimientos] = useState([]);
@@ -443,6 +444,21 @@ const ArmadoTecnico = () => {
         }));
         return [...base, ...extrasNormalizados];
     }, []);
+
+    const materialKey = useCallback((m = {}) => String(m.nombre || "").trim().toLowerCase(), []);
+    const materialHash = useCallback((m = {}) => {
+        const cantidad = Number(m.cantidad) || 0;
+        const caja = String(m.caja || "Caja 1").trim();
+        return `${cantidad}|${caja}`;
+    }, []);
+    const crearSnapshotMateriales = useCallback((lista = []) => {
+        const snap = {};
+        (lista || []).forEach((m) => {
+            const key = materialKey(m);
+            if (key) snap[key] = materialHash(m);
+        });
+        return snap;
+    }, [materialHash, materialKey]);
 
     const normalizarNombreEquipo = useCallback((nombre = "") => {
         let n = nombre.toLowerCase().trim();
@@ -876,6 +892,7 @@ const ArmadoTecnico = () => {
         setTransferTecSel("");
         setTransferNota("");
         setMateriales(MATERIALES_PREDEF.map((m) => ({ nombre: m, cantidad: "" })));
+        setMaterialesSnapshot({});
         try {
             const nombreCentro = armado?.centro?.nombre || armado?.centro_nombre;
             if (!nombreCentro) throw new Error("Centro sin nombre");
@@ -889,6 +906,7 @@ const ArmadoTecnico = () => {
                 const cajasEquipos = equiposNorm.map((e) => (e.caja || "Caja 1").trim());
                 const cajasDetectadas = Array.from(new Set([...cajasMateriales, ...cajasEquipos]));
                 setMateriales(merged);
+                setMaterialesSnapshot(crearSnapshotMateriales(merged));
                 setCajas((prev) => {
                     const union = Array.from(new Set([...(prev || []), ...cajasDetectadas]));
                     return union.length ? union : ["Caja 1"];
@@ -1526,7 +1544,13 @@ const ArmadoTecnico = () => {
                                                         className="btn btn-sm btn-success"
                                                         onClick={async () => {
                                                             if (!armadoActivo?.id_armado) return;
-                                                            const payload = materiales.map((m) => ({
+                                                            const cambios = materiales.filter((m) => {
+                                                                const key = materialKey(m);
+                                                                if (!key) return false;
+                                                                return materialesSnapshot[key] !== materialHash(m);
+                                                            });
+                                                            if (!cambios.length) return;
+                                                            const payload = cambios.map((m) => ({
                                                                 nombre: m.nombre,
                                                                 cantidad: Number(m.cantidad) || 0,
                                                                 caja: m.caja || "Caja 1"
@@ -1539,6 +1563,7 @@ const ArmadoTecnico = () => {
                                                                     await cargarMateriales(armadoActivo.id_armado, (lista) => {
                                                                         const merged = mergeMateriales(lista);
                                                                         setMateriales(merged);
+                                                                        setMaterialesSnapshot(crearSnapshotMateriales(merged));
                                                                         const cajasMateriales = merged.map((m) => (m.caja || "Caja 1").trim());
                                                                         const cajasEquipos = (equipos || []).map((e) => (e.caja || "Caja 1").trim());
                                                                         setCajas((prev = []) => {
