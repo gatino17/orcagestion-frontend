@@ -550,25 +550,31 @@ const ArmadoTecnico = () => {
         }
     }, []);
 
-    // Historial global de movimientos recientes (se recarga cada 60s)
-    useEffect(() => {
+    const recargarMovimientosRecientes = useCallback(() => {
         const filtros = movArmadoFiltro ? { armado_id: movArmadoFiltro } : {};
         cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
             setMovsTotal(meta.total || 0);
             setMovsPage(meta.page || 1);
             setMovsLimit(meta.limit || movsLimit);
         }, filtros);
-        const interval = setInterval(
-            () =>
-                cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
-                    setMovsTotal(meta.total || 0);
-                    setMovsPage(meta.page || 1);
-                    setMovsLimit(meta.limit || movsLimit);
-                }, filtros),
-            60000
-        );
-        return () => clearInterval(interval);
-    }, [movsLimit, movsPage, movArmadoFiltro]);
+    }, [movArmadoFiltro, movsLimit, movsPage]);
+
+    // Historial global de movimientos recientes (auto refresh + foco de ventana)
+    useEffect(() => {
+        recargarMovimientosRecientes();
+        const interval = setInterval(recargarMovimientosRecientes, 5000);
+        const onFocus = () => recargarMovimientosRecientes();
+        const onVisible = () => {
+            if (document.visibilityState === "visible") recargarMovimientosRecientes();
+        };
+        window.addEventListener("focus", onFocus);
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("focus", onFocus);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, [recargarMovimientosRecientes]);
 
     useEffect(() => {
         if (rol !== "admin") return;
