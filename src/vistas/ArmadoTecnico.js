@@ -688,9 +688,9 @@ const ArmadoTecnico = () => {
         await obtenerCentrosPorCliente(idCliente, setCentros, () => {});
     };
 
-    const fetchArmados = useCallback(async () => {
+    const fetchArmados = useCallback(async ({ silent = false } = {}) => {
         if (!rol) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         setError("");
         const params = {};
         if (filtroEstado) params.estado = filtroEstado;
@@ -704,12 +704,20 @@ const ArmadoTecnico = () => {
         } catch (err) {
             setError("No se pudieron cargar los armados.");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [rol, userId, filtroEstado, filtroTecnico]);
 
     useEffect(() => {
         fetchArmados();
+    }, [fetchArmados]);
+
+    // Refresco automatico de asignaciones para reflejar cambios remotos (ej. mobile).
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchArmados({ silent: true });
+        }, 5000);
+        return () => clearInterval(interval);
     }, [fetchArmados]);
 
     const renderEstado = (estado) => {
