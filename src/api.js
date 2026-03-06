@@ -1523,9 +1523,14 @@ export const actualizarParticipacionArmado = async (participacionId, data) => {
     }
 };
 
-export const eliminarParticipacionArmado = async (participacionId) => {
+export const eliminarParticipacionArmado = async (participacionId, options = {}) => {
     try {
-        const response = await axios.delete(`${BASE_URL}/armados/participaciones/${participacionId}`);
+        const params = {};
+        if (options.force) params.force = 1;
+        const response = await axios.delete(
+            `${BASE_URL}/armados/participaciones/${participacionId}`,
+            { params }
+        );
         return response.data;
     } catch (error) {
         console.error("Error al eliminar participación:", error);

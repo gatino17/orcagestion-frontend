@@ -14,6 +14,7 @@ import {
     cargarMovimientosRecientes,
     borrarParticipacion
 } from "../controllers/armadosControllers";
+import { obtenerDetallesCentro, obtenerMaterialesArmado } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
@@ -26,6 +27,14 @@ const estadosOptions = [
     { value: "en_proceso", label: "En proceso" },
     { value: "finalizado", label: "Finalizado" }
 ];
+
+const escapeHtml = (value) =>
+    String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 
 const ORDEN_EQUIPOS = [
     "pc",
@@ -893,6 +902,22 @@ const ArmadoTecnico = () => {
             cell: (row) => formatearFecha(row.fecha_cierre)
         },
         {
+            name: "Excel",
+            grow: 0.45,
+            minWidth: "95px",
+            wrap: true,
+            cell: (row) => {
+                const esFinalizado = (row.estado || "").toLowerCase() === "finalizado";
+                if (!esFinalizado) return <span className="text-muted">—</span>;
+                return (
+                    <button className="btn btn-sm btn-outline-success" onClick={() => descargarExcelArmado(row)}>
+                        <i className="fas fa-file-excel mr-1" />
+                        Excel
+                    </button>
+                );
+            }
+        },
+        {
             name: "Total cajas",
             selector: (row) => row.total_cajas || 0,
             sortable: true,
@@ -1015,11 +1040,103 @@ const ArmadoTecnico = () => {
         const id = row.id_armado || row.id;
         if (!id) return;
         try {
-            await modificarArmado(id, { estado: nuevoEstado });
+            const hoy = new Date().toISOString().slice(0, 10);
+            const payload = { estado: nuevoEstado };
+            if (nuevoEstado === "finalizado") {
+                payload.fecha_cierre = hoy;
+            }
+            await modificarArmado(id, payload);
             await fetchArmados();
         } catch (err) {
             console.error("No se pudo actualizar estado:", err);
             alert("No se pudo actualizar el estado.");
+        }
+    };
+
+    const descargarExcelArmado = async (row) => {
+        try {
+            const idArmado = row.id_armado || row.id;
+            const nombreCentro = row?.centro?.nombre || row?.centro_nombre || "-";
+            const cliente = row?.centro?.cliente || row?.cliente || "-";
+            const tecnico = row?.tecnico?.nombre || row?.tecnico_nombre || "-";
+
+            const [detalles, materiales] = await Promise.all([
+                obtenerDetallesCentro(nombreCentro),
+                obtenerMaterialesArmado(idArmado)
+            ]);
+            const equipos = Array.isArray(detalles?.equipos) ? detalles.equipos : [];
+            const mats = Array.isArray(materiales) ? materiales : [];
+
+            const filasEquipos = equipos
+                .map(
+                    (e) =>
+                        `<tr><td>${escapeHtml(e.nombre || "-")}</td><td>${escapeHtml(e.caja || "-")}</td><td>${escapeHtml(
+                            e.numero_serie || "-"
+                        )}</td><td>${escapeHtml(e.codigo || "-")}</td></tr>`
+                )
+                .join("");
+
+            const filasMateriales = mats
+                .map(
+                    (m) =>
+                        `<tr><td>${escapeHtml(m.nombre || "-")}</td><td>${escapeHtml(
+                            m.cantidad ?? 0
+                        )}</td><td>${escapeHtml(m.caja || "-")}</td></tr>`
+                )
+                .join("");
+
+            const html = `
+                <html>
+                <head>
+                    <meta charset="UTF-8" />
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        h2 { margin: 0 0 8px 0; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; }
+                        th, td { border: 1px solid #cbd5e1; padding: 6px; font-size: 12px; }
+                        th { background: #e2e8f0; text-align: left; }
+                    </style>
+                </head>
+                <body>
+                    <h2>Planilla Armado #${escapeHtml(idArmado)}</h2>
+                    <table>
+                        <tr><th>Centro</th><td>${escapeHtml(nombreCentro)}</td></tr>
+                        <tr><th>Cliente</th><td>${escapeHtml(cliente)}</td></tr>
+                        <tr><th>Técnico</th><td>${escapeHtml(tecnico)}</td></tr>
+                        <tr><th>Estado</th><td>${escapeHtml(row.estado || "-")}</td></tr>
+                        <tr><th>Asignado</th><td>${escapeHtml(formatearFecha(row.fecha_asignacion || row.created_at))}</td></tr>
+                        <tr><th>Inicio armado</th><td>${escapeHtml(formatearFecha(row.fecha_inicio))}</td></tr>
+                        <tr><th>Cierre</th><td>${escapeHtml(formatearFecha(row.fecha_cierre))}</td></tr>
+                        <tr><th>Total cajas</th><td>${escapeHtml(row.total_cajas ?? 0)}</td></tr>
+                    </table>
+
+                    <h3>Equipos</h3>
+                    <table>
+                        <thead><tr><th>Equipo</th><th>Caja</th><th>N° Serie</th><th>Código</th></tr></thead>
+                        <tbody>${filasEquipos || "<tr><td colspan='4'>Sin equipos</td></tr>"}</tbody>
+                    </table>
+
+                    <h3>Materiales</h3>
+                    <table>
+                        <thead><tr><th>Material</th><th>Cantidad</th><th>Caja</th></tr></thead>
+                        <tbody>${filasMateriales || "<tr><td colspan='3'>Sin materiales</td></tr>"}</tbody>
+                    </table>
+                </body>
+                </html>
+            `;
+
+            const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `armado_${idArmado}_${new Date().toISOString().slice(0, 10)}.xls`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("No se pudo generar el Excel:", error);
+            alert("No se pudo generar el Excel del armado.");
         }
     };
 
@@ -1318,13 +1435,19 @@ const ArmadoTecnico = () => {
                                                                             onClick={async () => {
                                                                                 if (!window.confirm("¿Eliminar esta participación del historial?")) return;
                                                                                 try {
-                                                                                    await borrarParticipacion(p.id_participacion);
-                                                                                    // quitar del estado local sin recargar toda la planilla
-                                                                                    setParticipaciones((prev) =>
-                                                                                        prev.filter(
-                                                                                            (item) => item.id_participacion !== p.id_participacion
-                                                                                        )
+                                                                                    await borrarParticipacion(
+                                                                                        p.id_participacion,
+                                                                                        { force: rol === "admin" }
                                                                                     );
+                                                                                    const restantes = participaciones.filter(
+                                                                                        (item) => item.id_participacion !== p.id_participacion
+                                                                                    );
+                                                                                    setParticipaciones(restantes);
+                                                                                    if (!restantes.length) {
+                                                                                        setPlanillaOpen(false);
+                                                                                        setArmadoActivo(null);
+                                                                                        await fetchArmados({ silent: true });
+                                                                                    }
                                                                                 } catch (err) {
                                                                                     console.error("No se pudo eliminar participación:", err);
                                                                                     const msg =

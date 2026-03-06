@@ -76,9 +76,9 @@ export const actualizarParticipacion = async (participacionId, payload, callback
     }
 };
 
-export const borrarParticipacion = async (participacionId, callback) => {
+export const borrarParticipacion = async (participacionId, options, callback) => {
     try {
-        await eliminarParticipacionArmado(participacionId);
+        await eliminarParticipacionArmado(participacionId, options);
         callback?.();
     } catch (error) {
         console.error("Error al eliminar participación:", error);
