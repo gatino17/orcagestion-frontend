@@ -44,6 +44,7 @@ const ORDEN_EQUIPOS = [
     "router",
     "switch",
     "switch cisco + adaptador",
+    "switch poe",
     "router mikrotik + trafo",
     "switch rack",
     "rack 9u - tuercas - tornillos",
@@ -63,6 +64,8 @@ const ORDEN_EQUIPOS = [
     "bocina exterior 2",
     "foco led 1 150w",
     "foco led 2 150w",
+    "foco led 1 50w",
+    "foco led 2 50w",
     "fuente poder 12v",
     "axis p8221",
     "mastil",
@@ -71,6 +74,8 @@ const ORDEN_EQUIPOS = [
     "perno pasado",
     "omega 1",
     "tablero 1200x800x300",
+    "tablero 1000x600x300",
+    "tablero 750x500x250",
     "inversor cargador victron",
     "panel victron",
     "bateria 1",
@@ -83,7 +88,15 @@ const ORDEN_EQUIPOS = [
     "sensor magnetico cargador",
     "cargador 1",
     "cargador 2",
-    "tablero cargador 750x500x250"
+    "tablero cargador 750x500x250",
+    "camara ptz termal",
+    "camara ptz laser",
+    "camara ptz laser 2",
+    "camara modulo",
+    "camara ensinerador",
+    "ensilaje interior",
+    "ensilaje exterior",
+    "camara popa"
 ];
 
 const SINONIMOS_EQUIPOS = {
@@ -91,7 +104,9 @@ const SINONIMOS_EQUIPOS = {
     "ip pc nvr": "pc",
     "puerta de enlace": "router",
     "router (puerta de enlace)": "router",
-    "mástil": "mastil"
+    "mástil": "mastil",
+    "switch cisco + adaptador": "switch (cisco)",
+    "switch cisco": "switch (cisco)"
 };
 
 const GRUPOS_EQUIPOS = [
@@ -104,6 +119,8 @@ const GRUPOS_EQUIPOS = [
             "Teclado",
             "Router",
             "Switch",
+            "Switch (Cisco)",
+            "Camara Interior",
             "Parlantes",
             "Sensor Magnetico",
             "Rack 9U - tuercas - tornillos",
@@ -123,6 +140,8 @@ const GRUPOS_EQUIPOS = [
             "Bocina Exterior 2",
             "Foco led 1 150W",
             "Foco led 2 150W",
+            "Foco led 1 50W",
+            "Foco led 2 50W",
             "Fuente poder 12V",
             "Axis P8221"
         ]
@@ -131,6 +150,7 @@ const GRUPOS_EQUIPOS = [
         titulo: "Tablero Respaldo",
         items: [
             "Tablero 1200x800x300",
+            "Tablero 1000x600x300",
             "Inversor cargador Victron",
             "Panel Victron",
             "Bateria 1",
@@ -140,6 +160,7 @@ const GRUPOS_EQUIPOS = [
             "Bateria 5",
             "Bateria 6",
             "UPS online",
+            "Switch POE",
             "Sensor magnetico respaldo",
             "Sensor magnetico cargador",
             "Cargador 1",
@@ -157,9 +178,16 @@ const GRUPOS_EQUIPOS = [
             "Cable rj radar 2",
             "Soporte radar 1",
             "Soporte radar 2",
-            "Camara Radar",
+            "Camara PTZ termal",
+            "Camara PTZ Laser",
+            "Camara PTZ Laser 2",
+            "Camara Modulo",
             "Camara Silo 1",
             "Camara Silo 2",
+            "Camara Ensinerador",
+            "Ensilaje interior",
+            "Ensilaje exterior",
+            "Camara Popa",
             "Camara acceso 1",
             "Camara acceso 2",
             "Camara acceso 3",
@@ -181,11 +209,10 @@ const GRUPOS_EQUIPOS = [
             "Camara Laser Radar",
             "Axis",
             "Panel Radar",
-            "Camara Silo 1",
-            "Camara Silo 2",
             "Camara Interior",
             "Camara de acceso",
             "Camara bodega/ Ensilaje/ Modulo",
+            "Tablero 750x500x250",
             "Switch 1",
             "Switch 2",
             "Switch 3",
@@ -201,6 +228,8 @@ const EQUIPOS_PREDEF = [
     "Mascara",
     "Router",
     "Switch",
+    "Switch (Cisco)",
+    "Switch POE",
     "Netio",
     "Monitor",
     "Rack",
@@ -213,6 +242,8 @@ const EQUIPOS_PREDEF = [
     "Mouse",
     "Teclado",
     "Tablero 1200x800x300",
+    "Tablero 1000x600x300",
+    "Tablero 750x500x250",
     "Inversor cargador Victron",
     "Panel Victron",
     "Bateria 1",
@@ -243,6 +274,8 @@ const EQUIPOS_PREDEF = [
     "Bocina Exterior 2",
     "Foco led 1 150W",
     "Foco led 2 150W",
+    "Foco led 1 50W",
+    "Foco led 2 50W",
     "Fuente poder 12V",
     "Axis P8221",
     "Tablero Derivacion (400x300x200)",
@@ -252,9 +285,16 @@ const EQUIPOS_PREDEF = [
     "Cable rj radar 2",
     "Soporte radar 1",
     "Soporte radar 2",
-    "Camara Radar",
+    "Camara PTZ termal",
+    "Camara PTZ Laser",
+    "Camara PTZ Laser 2",
+    "Camara Modulo",
     "Camara Silo 1",
     "Camara Silo 2",
+    "Camara Ensinerador",
+    "Ensilaje interior",
+    "Ensilaje exterior",
+    "Camara Popa",
     "Camara acceso 1",
     "Camara acceso 2",
     "Camara acceso 3",
@@ -279,8 +319,6 @@ const EQUIPOS_PREDEF = [
     "Designe 3501G",
     "Camara Laser Radar",
     "Camara Interior",
-    "Camara Silo 1",
-    "Camara Silo 2",
     "Axis",
     "Panel VRM",
     "Switch 1",
@@ -478,7 +516,11 @@ const ArmadoTecnico = () => {
     }, [materialHash, materialKey]);
 
     const normalizarNombreEquipo = useCallback((nombre = "") => {
-        let n = nombre.toLowerCase().trim();
+        let n = String(nombre || "")
+            .toLowerCase()
+            .trim()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
         if (SINONIMOS_EQUIPOS[n]) n = SINONIMOS_EQUIPOS[n];
         return n;
     }, []);
@@ -538,8 +580,11 @@ const ArmadoTecnico = () => {
         const lista = [];
         const usado = new Set();
         const pushGrupo = (titulo, items) => {
+            const itemsNorm = items.map((n) => normalizarNombreEquipo(n));
             const presentes = equiposOrdenados.filter(
-                (eq) => items.some((n) => n.toLowerCase() === String(eq.nombre || "").toLowerCase())
+                (eq) =>
+                    !usado.has(eq.__idx) &&
+                    itemsNorm.includes(normalizarNombreEquipo(eq.nombre || ""))
             );
             if (presentes.length === 0) return;
             lista.push({ tipo: "titulo", titulo });
@@ -556,7 +601,7 @@ const ArmadoTecnico = () => {
             extras.forEach((eq) => lista.push({ tipo: "item", data: eq }));
         }
         return lista;
-    }, [equiposOrdenados]);
+    }, [equiposOrdenados, normalizarNombreEquipo]);
     const esMovil = useMemo(
         () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || ""),
         []
@@ -2103,6 +2148,8 @@ const ArmadoTecnico = () => {
 };
 
 export default ArmadoTecnico;
+
+
 
 
 
