@@ -15,8 +15,8 @@ function Usuarios() {
         setAccionModal(accion);
         setUsuarioSeleccionado(
             accion === 'crear'
-                ? { name: '', email: '', rol: '', password: '' }
-                : { ...usuario }
+                ? { name: '', email: '', rol: '', password: '', cambiarPassword: false }
+                : { ...usuario, password: '', cambiarPassword: false }
         );
         window.$('#modalUsuario').modal('show');
     };
@@ -26,7 +26,8 @@ function Usuarios() {
             !usuarioSeleccionado?.name ||
             !usuarioSeleccionado?.email ||
             !usuarioSeleccionado?.rol ||
-            (accionModal === 'crear' && !usuarioSeleccionado?.password)
+            (accionModal === 'crear' && !usuarioSeleccionado?.password) ||
+            (accionModal === 'editar' && usuarioSeleccionado?.cambiarPassword && !usuarioSeleccionado?.password)
         ) {
             alert('Completa todos los campos requeridos.');
             return;
@@ -36,7 +37,17 @@ function Usuarios() {
             if (accionModal === 'crear') {
                 await agregarUsuario(usuarioSeleccionado, () => cargarUsuarios(setUsuarios));
             } else if (accionModal === 'editar') {
-                await modificarUsuario(usuarioSeleccionado.id, usuarioSeleccionado, () => cargarUsuarios(setUsuarios));
+                const payload = {
+                    name: usuarioSeleccionado.name,
+                    email: usuarioSeleccionado.email,
+                    rol: usuarioSeleccionado.rol
+                };
+
+                if (usuarioSeleccionado.cambiarPassword && usuarioSeleccionado.password) {
+                    payload.password = usuarioSeleccionado.password;
+                }
+
+                await modificarUsuario(usuarioSeleccionado.id, payload, () => cargarUsuarios(setUsuarios));
             }
             cerrarModal();
         } catch (error) {
@@ -234,6 +245,47 @@ function Usuarios() {
                                             <option value="finanzas">finanzas</option>
                                         </select>
                                     </div>
+                                    {accionModal === 'editar' && (
+                                        <div className="form-group">
+                                            <div className="form-check">
+                                                <input
+                                                    type="checkbox"
+                                                    className="form-check-input"
+                                                    id="cambiarPasswordUsuario"
+                                                    checked={!!usuarioSeleccionado?.cambiarPassword}
+                                                    onChange={(e) =>
+                                                        setUsuarioSeleccionado({
+                                                            ...usuarioSeleccionado,
+                                                            cambiarPassword: e.target.checked,
+                                                            password: e.target.checked
+                                                                ? usuarioSeleccionado?.password || ''
+                                                                : ''
+                                                        })
+                                                    }
+                                                />
+                                                <label className="form-check-label" htmlFor="cambiarPasswordUsuario">
+                                                    Cambiar contrasena
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {accionModal === 'editar' && usuarioSeleccionado?.cambiarPassword && (
+                                        <div className="form-group">
+                                            <label htmlFor="passwordEditarUsuario">Nueva contrasena</label>
+                                            <input
+                                                type="password"
+                                                className="form-control"
+                                                id="passwordEditarUsuario"
+                                                value={usuarioSeleccionado ? usuarioSeleccionado.password : ''}
+                                                onChange={(e) =>
+                                                    setUsuarioSeleccionado({
+                                                        ...usuarioSeleccionado,
+                                                        password: e.target.value
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                     {accionModal === 'crear' && (
                                         <div className="form-group">
                                             <label htmlFor="passwordUsuario">Contrasena</label>

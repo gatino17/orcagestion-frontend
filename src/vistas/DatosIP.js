@@ -22,9 +22,12 @@ const DatosIP = () => {
     const [cargandoCentro, setCargandoCentro] = useState(false);
 
     const equiposDefinidos = [
-        "IP PC", "Mascara", "Puerta de Enlace", "Netio", "Camara Laser Radar",
-        "Camara Interior", "Camara Silo 1", "Camara Silo 2", "Axis", "Panel VRM",
-        "Switch 1", "Switch 2", "Switch 3", "Panel Radar", "PC Mass", "Camara Laser"
+        "PC", "Mascara", "Router", "Netio", "Camara PTZ Laser",
+        "Camara Interior", "Camara Silo 1", "Camara Silo 2", "Axis P8221", "Panel Victron",
+        "Switch 1", "Switch 2", "Switch 3", "Radar 1", "Mass", "Camara PTZ termal",
+        "Camara Modulo", "Camara Ensinerador", "Ensilaje interior", "Ensilaje exterior",
+        "Camara Popa", "Camara acceso 1", "Camara acceso 2", "Camara acceso 3", "Camara acceso 4",
+        "Enlace Ubiquiti"
     ];
     useEffect(() => {
         obtenerClientes(setClientes, setError);
@@ -109,7 +112,11 @@ const DatosIP = () => {
                   cliente: centroData.cliente,
                   estado: centroData.estado
               });
-              setEquipos(centroData.equipos || []);
+              const equiposNormalizados = (centroData.equipos || []).map((equipo) => ({
+                  ...equipo,
+                  nombre: canonizarNombreEquipo(equipo.nombre || "")
+              }));
+              setEquipos(equiposNormalizados);
               setConexiones(centroData.conexiones || []);
               setCentroSeleccionado(String(centroData.id_centro));
           } else {
@@ -127,12 +134,6 @@ const DatosIP = () => {
   };
 
 
-    const normalizarTexto = (texto = "") =>
-        texto
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "");
-
     const normalizarEstado = (estado = "") => {
         if (!estado) return "";
         const lower = normalizarTexto(estado);
@@ -143,7 +144,12 @@ const DatosIP = () => {
     const equiposCompletos = [
         ...equipos,
         ...equiposDefinidos
-            .filter((nombreEquipo) => !equipos.some((equipo) => equipo.nombre === nombreEquipo))
+            .filter((nombreEquipo) =>
+                !equipos.some(
+                    (equipo) =>
+                        normalizarTexto(canonizarNombreEquipo(equipo.nombre || "")) === normalizarTexto(nombreEquipo)
+                )
+            )
             .map((nombreEquipo) => ({
                 nombre: nombreEquipo,
                 ip: "",
@@ -931,3 +937,24 @@ const DatosIP = () => {
 };
 
 export default DatosIP;
+    const normalizarTexto = (texto = "") =>
+        texto
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+
+    const ALIAS_EQUIPOS = {
+        "ip pc": "PC",
+        "puerta de enlace": "Router",
+        "axis": "Axis P8221",
+        "camara laser radar": "Camara PTZ Laser",
+        "panel vrm": "Panel Victron",
+        "panel radar": "Radar 1",
+        "pc mass": "Mass",
+        "camara laser": "Camara PTZ termal"
+    };
+
+    const canonizarNombreEquipo = (nombre = "") => {
+        const key = normalizarTexto(nombre).trim();
+        return ALIAS_EQUIPOS[key] || nombre;
+    };

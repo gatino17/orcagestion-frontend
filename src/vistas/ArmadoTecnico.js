@@ -473,6 +473,12 @@ const ArmadoTecnico = () => {
         return `${window.location.protocol}//${window.location.host}`;
     }, []);
 
+    const socketTransports = useMemo(() => {
+        const forcePolling = process.env.REACT_APP_SOCKET_POLLING_ONLY === "1";
+        if (forcePolling || window.location.hostname === "localhost") return ["polling"];
+        return ["websocket", "polling"];
+    }, []);
+
     const materialKey = useCallback((m = {}) => String(m.nombre || "").trim().toLowerCase(), []);
     const materialHash = useCallback((m = {}) => {
         const cantidad = Number(m.cantidad) || 0;
@@ -759,7 +765,7 @@ const ArmadoTecnico = () => {
     useEffect(() => {
         if (!rol) return undefined;
         const socket = io(socketBaseUrl, {
-            transports: ["websocket", "polling"],
+            transports: socketTransports,
             reconnection: true
         });
         const onArmadoUpdated = (evt = {}) => {
@@ -778,7 +784,7 @@ const ArmadoTecnico = () => {
             socket.off("armado_updated", onArmadoUpdated);
             socket.disconnect();
         };
-    }, [rol, socketBaseUrl, fetchArmados, recargarMovimientosRecientes, planillaOpen, armadoActivo, mergeMateriales]);
+    }, [rol, socketBaseUrl, socketTransports, fetchArmados, recargarMovimientosRecientes, planillaOpen, armadoActivo, mergeMateriales]);
 
     const renderEstado = (estado) => {
         const normalizado = (estado || "pendiente").toLowerCase();
@@ -1085,14 +1091,38 @@ const ArmadoTecnico = () => {
             const equipos = Array.isArray(detalles?.equipos) ? detalles.equipos : [];
             const mats = Array.isArray(materiales) ? materiales : [];
 
-            const filasEquipos = equipos
-                .map(
-                    (e) =>
+            const equiposConIdx = (equipos || []).map((e, idx) => ({ ...e, __idx: idx }));
+            const usados = new Set();
+            const bloquesEquipos = [];
+            const pushBloque = (titulo, lista) => {
+                bloquesEquipos.push(`<tr class="section-row"><td colspan="4">${escapeHtml(titulo)}</td></tr>`);
+                if (!lista.length) {
+                    bloquesEquipos.push(`<tr><td colspan="4" class="empty-row">Sin registros</td></tr>`);
+                    return;
+                }
+                lista.forEach((e) => {
+                    bloquesEquipos.push(
                         `<tr><td>${escapeHtml(e.nombre || "-")}</td><td>${escapeHtml(e.caja || "-")}</td><td>${escapeHtml(
                             e.numero_serie || "-"
                         )}</td><td>${escapeHtml(e.codigo || "-")}</td></tr>`
-                )
-                .join("");
+                    );
+                });
+            };
+
+            GRUPOS_EQUIPOS.forEach((g) => {
+                const itemsNorm = (g.items || []).map((n) => normalizarNombreEquipo(n));
+                const presentes = equiposConIdx.filter((e) => {
+                    if (usados.has(e.__idx)) return false;
+                    return itemsNorm.includes(normalizarNombreEquipo(e.nombre || ""));
+                });
+                presentes.forEach((e) => usados.add(e.__idx));
+                pushBloque(g.titulo, presentes);
+            });
+
+            const extras = equiposConIdx.filter((e) => !usados.has(e.__idx));
+            pushBloque("Otros", extras);
+
+            const filasEquipos = bloquesEquipos.join("");
 
             const filasMateriales = mats
                 .map(
@@ -1108,34 +1138,75 @@ const ArmadoTecnico = () => {
                 <head>
                     <meta charset="UTF-8" />
                     <style>
-                        body { font-family: Arial, sans-serif; }
-                        h2 { margin: 0 0 8px 0; }
-                        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; }
-                        th, td { border: 1px solid #cbd5e1; padding: 6px; font-size: 12px; }
-                        th { background: #e2e8f0; text-align: left; }
+                        body { font-family: "Segoe UI", Arial, sans-serif; color:#0f172a; padding:18px; }
+                        h3 { margin: 14px 0 8px 0; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+                        .header-table td { border: 1px solid #b8c7d9; vertical-align: top; }
+                        .brand-cell { width: 220px; background:#173a6a; color:#fff; text-align:center; padding: 16px 10px; }
+                        .brand-orca { font-size: 38px; letter-spacing: 6px; font-weight: 800; line-height: 1; }
+                        .brand-sub { font-size: 15px; letter-spacing: 2px; font-weight: 700; margin-top: 8px; }
+                        .company-cell { padding: 8px 12px; min-width: 380px; }
+                        .company-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+                        .company-line { font-size: 12px; line-height: 1.5; }
+                        .head-side td, .head-side th { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
+                        .head-side th { background:#eef2f7; text-align:left; width: 150px; }
+                        .meta-table th, .meta-table td { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
+                        .meta-table th { width: 140px; background: #eef2f7; font-weight: 700; text-transform: uppercase; }
+                        .items-table th, .items-table td { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
+                        .items-table thead th { background:#dbe7f5; text-align:left; text-transform: uppercase; font-weight: 700; }
+                        .section-row td { background:#0f2d57; color:#fff; font-weight:700; text-transform: uppercase; }
+                        .empty-row { color:#64748b; font-style: italic; }
                     </style>
                 </head>
                 <body>
-                    <h2>Planilla Armado #${escapeHtml(idArmado)}</h2>
-                    <table>
-                        <tr><th>Centro</th><td>${escapeHtml(nombreCentro)}</td></tr>
-                        <tr><th>Cliente</th><td>${escapeHtml(cliente)}</td></tr>
-                        <tr><th>Técnico</th><td>${escapeHtml(tecnico)}</td></tr>
-                        <tr><th>Estado</th><td>${escapeHtml(row.estado || "-")}</td></tr>
-                        <tr><th>Asignado</th><td>${escapeHtml(formatearFecha(row.fecha_asignacion || row.created_at))}</td></tr>
-                        <tr><th>Inicio armado</th><td>${escapeHtml(formatearFecha(row.fecha_inicio))}</td></tr>
-                        <tr><th>Cierre</th><td>${escapeHtml(formatearFecha(row.fecha_cierre))}</td></tr>
-                        <tr><th>Total cajas</th><td>${escapeHtml(row.total_cajas ?? 0)}</td></tr>
+                    <table class="header-table">
+                        <tr>
+                            <td class="brand-cell">
+                                <div class="brand-orca">ORCA</div>
+                                <div class="brand-sub">TECNOLOGIA</div>
+                            </td>
+                            <td class="company-cell">
+                                <div class="company-title">Inventario de equipos</div>
+                                <div class="company-line"><strong>SOCIEDAD ORCA TECNOLOGIA SPA.</strong></div>
+                                <div class="company-line">Tel. (065)2753524</div>
+                                <div class="company-line">www.orcatecnologia.cl</div>
+                                <div class="company-line">E-mail: ioyarzun@orcatecnologia.cl</div>
+                            </td>
+                            <td>
+                                <table class="head-side" style="width:100%; margin:0;">
+                                    <tr><th>Total cajas</th><td>${escapeHtml(row.total_cajas ?? 0)}</td></tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <table class="meta-table">
+                        <tr>
+                            <th>Centro</th><td>${escapeHtml(nombreCentro)}</td>
+                            <th>Asignado</th><td>${escapeHtml(formatearFecha(row.fecha_asignacion || row.created_at))}</td>
+                        </tr>
+                        <tr>
+                            <th>Cliente</th><td>${escapeHtml(cliente)}</td>
+                            <th>Inicio armado</th><td>${escapeHtml(formatearFecha(row.fecha_inicio))}</td>
+                        </tr>
+                        <tr>
+                            <th>Tecnico</th><td>${escapeHtml(tecnico)}</td>
+                            <th>Cierre</th><td>${escapeHtml(formatearFecha(row.fecha_cierre))}</td>
+                        </tr>
+                        <tr>
+                            <th>Estado</th><td>${escapeHtml(row.estado || "-")}</td>
+                            <th></th><td></td>
+                        </tr>
                     </table>
 
                     <h3>Equipos</h3>
-                    <table>
-                        <thead><tr><th>Equipo</th><th>Caja</th><th>N° Serie</th><th>Código</th></tr></thead>
+                    <table class="items-table">
+                        <thead><tr><th>Equipo</th><th>Caja</th><th>Nro Serie</th><th>Codigo</th></tr></thead>
                         <tbody>${filasEquipos || "<tr><td colspan='4'>Sin equipos</td></tr>"}</tbody>
                     </table>
 
                     <h3>Materiales</h3>
-                    <table>
+                    <table class="items-table">
                         <thead><tr><th>Material</th><th>Cantidad</th><th>Caja</th></tr></thead>
                         <tbody>${filasMateriales || "<tr><td colspan='3'>Sin materiales</td></tr>"}</tbody>
                     </table>
@@ -1147,7 +1218,11 @@ const ArmadoTecnico = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `armado_${idArmado}_${new Date().toISOString().slice(0, 10)}.xls`;
+            const centroArchivo = String(nombreCentro || "centro")
+                .trim()
+                .replace(/[\\/:*?"<>|]/g, "")
+                .replace(/\s+/g, "_");
+            a.download = `armado_${centroArchivo}_${idArmado}_${new Date().toISOString().slice(0, 10)}.xls`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
