@@ -43,6 +43,9 @@ const Soporte = () => {
     const [filtroPeriodo, setFiltroPeriodo] = useState("anio-actual");
     const [fechaInicioPersonalizada, setFechaInicioPersonalizada] = useState("");
     const [fechaFinPersonalizada, setFechaFinPersonalizada] = useState("");
+    const [filtroNombre, setFiltroNombre] = useState("");
+    const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
+    const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
 
     const refrescarSoportes = async () => {
         setLoading(true);
@@ -155,6 +158,45 @@ const Soporte = () => {
             return true;
         });
     }, [soportes, rangoFechas]);
+
+    const soportesFiltradosBusqueda = useMemo(() => {
+        const normalizarTexto = (valor = "") =>
+            String(valor)
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+
+        const nombreBusqueda = normalizarTexto(filtroNombre).trim();
+
+        const inicioBusqueda = fechaInicioBusqueda ? new Date(fechaInicioBusqueda) : null;
+        const finBusqueda = fechaFinBusqueda ? new Date(fechaFinBusqueda) : null;
+
+        if (inicioBusqueda) inicioBusqueda.setHours(0, 0, 0, 0);
+        if (finBusqueda) finBusqueda.setHours(23, 59, 59, 999);
+
+        return soportesFiltrados.filter((soporte) => {
+            const fecha = soporte.fecha_soporte ? new Date(soporte.fecha_soporte) : null;
+            if (!fecha || Number.isNaN(fecha.getTime())) return false;
+
+            if (inicioBusqueda && fecha < inicioBusqueda) return false;
+            if (finBusqueda && fecha > finBusqueda) return false;
+
+            if (!nombreBusqueda) return true;
+
+            const candidato = normalizarTexto(
+                [
+                    soporte.centro?.nombre,
+                    soporte.centro?.cliente,
+                    soporte.problema,
+                    soporte.tipo,
+                    soporte.solucion
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+            );
+            return candidato.includes(nombreBusqueda);
+        });
+    }, [soportesFiltrados, filtroNombre, fechaInicioBusqueda, fechaFinBusqueda]);
 
     // Métricas
     const totalSoportesGeneral = soportes.length;
@@ -387,7 +429,7 @@ const Soporte = () => {
     };
 
     const datosOrdenados = useMemo(() => {
-        const ordenados = [...soportesFiltrados].sort((a, b) => {
+        const ordenados = [...soportesFiltradosBusqueda].sort((a, b) => {
             const fechaA = new Date(a.fecha_soporte || 0).getTime();
             const fechaB = new Date(b.fecha_soporte || 0).getTime();
             return fechaB - fechaA;
@@ -396,7 +438,7 @@ const Soporte = () => {
             ...item,
             rowNumber: index + 1
         }));
-    }, [soportesFiltrados]);
+    }, [soportesFiltradosBusqueda]);
 
     const resumenEstado = useMemo(() => {
         const base = {
@@ -779,6 +821,41 @@ const Soporte = () => {
 
             <div className="card data-table-card">
                 <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                        <small className="text-muted">
+                            Mostrando {datosOrdenados.length} resultado{datosOrdenados.length === 1 ? "" : "s"}
+                        </small>
+                    </div>
+                    <div className="row mb-3">
+                        <div className="col-lg-6">
+                            <small className="text-muted text-uppercase d-block mb-1">Buscar por nombre</small>
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="Centro, cliente o problema"
+                                value={filtroNombre}
+                                onChange={(e) => setFiltroNombre(e.target.value)}
+                            />
+                        </div>
+                        <div className="col-lg-3 mt-3 mt-lg-0">
+                            <small className="text-muted text-uppercase d-block mb-1">Rango desde</small>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={fechaInicioBusqueda}
+                                onChange={(e) => setFechaInicioBusqueda(e.target.value)}
+                            />
+                        </div>
+                        <div className="col-lg-3 mt-3 mt-lg-0">
+                            <small className="text-muted text-uppercase d-block mb-1">Rango hasta</small>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={fechaFinBusqueda}
+                                onChange={(e) => setFechaFinBusqueda(e.target.value)}
+                            />
+                        </div>
+                    </div>
                     <DataTable
                         columns={columns}
                         data={datosOrdenados}

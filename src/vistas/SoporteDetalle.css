@@ -54,6 +54,108 @@
     color: rgba(255, 255, 255, 0.75);
 }
 
+.incidentes-card .card-body {
+    background: #ffffff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    border: 1px solid #e2e8f0;
+    padding: 1.5rem;
+    min-height: 138px;
+}
+
+.incidentes-card .card-body h5,
+.incidentes-card .card-body h2 {
+    color: #0f172a;
+}
+
+.metric-main-line {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.35rem;
+}
+
+.metric-main-values {
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-inline-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.45rem;
+}
+
+.incidentes-card .metric-subtitle {
+    color: #475569;
+}
+
+.incidentes-card .metric-icon {
+    background: rgba(14, 165, 233, 0.12);
+    color: #0284c7;
+}
+
+.metric-general-pill {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.icon-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.52rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.icon-stat-pending {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.icon-stat-resolved {
+    background: #16a34a;
+    color: #ffffff;
+}
+
+.icon-stat i {
+    color: #ffffff;
+}
+
+.icon-stat strong {
+    color: #ffffff;
+}
+
+
+.tipo-soporte-card .card-body {
+    background: #ffffff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    border: 1px solid #e2e8f0;
+}
+
+.tipo-soporte-card .card-body h5 {
+    color: #0f172a;
+}
+
+.tipo-soporte-card .metric-subtitle {
+    color: #475569;
+}
+
+.tipo-soporte-card .metric-icon {
+    background: rgba(14, 165, 233, 0.12);
+    color: #0284c7;
+}
+
+.tipo-soporte-card .badge {
+    color: #ffffff !important;
+}
+
 .summary-card,
 .detail-card,
 .data-table-card {
@@ -120,4 +222,13 @@
     height: 32px;
     border-radius: 50%;
     background: rgba(59, 130, 246, 0.08);
+}
+
+.metrics-top-row > [class*="col-"] {
+    display: flex;
+}
+
+.metrics-top-row .metric-card {
+    width: 100%;
+    height: 100%;
 }

@@ -299,10 +299,19 @@ export const eliminarEquipo = async (id_equipo) => {
     }
 };
 
-// Obtener centros  conexiones especiales equipos y datos de centros filtrar por `centro_id`
-export const obtenerDetallesCentro = async (nombre) => {
+// Obtener detalles del centro por id o nombre
+export const obtenerDetallesCentro = async (filtro) => {
     try {
-        const response = await axios.get(`${BASE_URL}/centros/detalles`, { params: { nombre } });
+        const params = {};
+        if (typeof filtro === "number") {
+            params.centro_id = filtro;
+        } else if (typeof filtro === "string") {
+            params.nombre = filtro;
+        } else if (filtro && typeof filtro === "object") {
+            if (filtro.centro_id) params.centro_id = filtro.centro_id;
+            if (filtro.nombre) params.nombre = filtro.nombre;
+        }
+        const response = await axios.get(`${BASE_URL}/centros/detalles`, { params });
         return response.data;
     } catch (error) {
         throw error;
@@ -1413,6 +1422,33 @@ export const eliminarSoporte = async (id) => {
 };
 
 // === Armados técnicos ===
+export const obtenerMantencionPreventiva = async ({ anio, mes, centros = [] }) => {
+    try {
+        const params = {
+            anio,
+            mes,
+            centros: Array.isArray(centros) && centros.length ? centros.join(",") : undefined
+        };
+        const response = await axios.get(`${BASE_URL}/mantencion_preventiva/`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const guardarMantencionPreventivaBulk = async ({ anio, mes, revisiones }) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/mantencion_preventiva/bulk`, {
+            anio,
+            mes,
+            revisiones
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const obtenerArmados = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/armados`, { params });

@@ -34,6 +34,13 @@ const navItems = [
   },
   {
     section: "OPERACIONES",
+    label: "Mantencion preventiva",
+    to: "/mantencion-preventiva",
+    icon: "fas fa-clipboard-check",
+    roles: ["admin", "soporte", "operaciones"],
+  },
+  {
+    section: "OPERACIONES",
     label: "Armado técnico",
     to: "/armados",
     icon: "fas fa-tools",
@@ -218,3 +225,4 @@ function SideNav() {
 }
 
 export default SideNav;
+

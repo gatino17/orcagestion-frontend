@@ -104,6 +104,18 @@ const SoporteDetalle = () => {
     }, [soportes, clienteSeleccionado, busquedaCentro, rangoFecha]);
 
     const totalFallas = soportesFiltrados.length;
+    const resumenEstadoFiltro = useMemo(() => {
+        return soportesFiltrados.reduce(
+            (acc, soporte) => {
+                const estado = String(soporte.estado || "pendiente").toLowerCase();
+                if (estado === "resuelto") acc.resuelto += 1;
+                else if (estado === "en_proceso") acc.enProceso += 1;
+                else acc.pendiente += 1;
+                return acc;
+            },
+            { pendiente: 0, enProceso: 0, resuelto: 0 }
+        );
+    }, [soportesFiltrados]);
     const totalCambiosEquipo = useMemo(() => {
         return soportesFiltrados.filter((soporte) => soporte.cambio_equipo).length;
     }, [soportesFiltrados]);
@@ -118,6 +130,16 @@ const SoporteDetalle = () => {
             .map((soporte) => soporte.centro?.cliente)
             .filter((nombre) => !!nombre);
         return new Set(nombres).size;
+    }, [soportesFiltrados]);
+
+    const resumenTiposSoporte = useMemo(() => {
+        const base = { terreno: 0, remoto: 0 };
+        soportesFiltrados.forEach((soporte) => {
+            const tipo = String(soporte.tipo || "").toLowerCase().trim();
+            if (tipo === "terreno") base.terreno += 1;
+            if (tipo === "remoto") base.remoto += 1;
+        });
+        return base;
     }, [soportesFiltrados]);
 
     const fallasPorCategoria = useMemo(() => {
@@ -476,18 +498,32 @@ const SoporteDetalle = () => {
                 </div>
             </div>
 
-            <div className="row mb-3">
+            <div className="row mb-3 metrics-top-row">
                 <div className="col-md-3 mb-3 mb-md-0">
-                    <div className="card metric-card text-white">
+                    <div className="card metric-card incidentes-card">
                         <div className="card-body">
                             <h5 className="mb-1">Incidentes {clienteSeleccionado ? "del cliente" : "totales"}</h5>
-                            <h2 className="mb-0">{totalFallas}</h2>
+                            <div className="metric-main-line">
+                                <div className="metric-main-values">
+                                    <h2 className="mb-0">{totalFallas}</h2>
+                                    <span className="metric-general-pill">
+                                        General: {resumenGeneral.totalIncidentes}
+                                    </span>
+                                </div>
+                                <div className="metric-inline-status">
+                                    <span className="icon-stat icon-stat-pending" title={`Pendientes: ${resumenEstadoFiltro.pendiente}`}>
+                                        <i className="fas fa-exclamation-circle"></i>
+                                        <strong>{resumenEstadoFiltro.pendiente}</strong>
+                                    </span>
+                                    <span className="icon-stat icon-stat-resolved" title={`Resueltas: ${resumenEstadoFiltro.resuelto}`}>
+                                        <i className="fas fa-check-circle"></i>
+                                        <strong>{resumenEstadoFiltro.resuelto}</strong>
+                                    </span>
+                                </div>
+                            </div>
                             <div className="metric-icon">
                                 <i className="fas fa-bolt"></i>
                             </div>
-                            <span className="metric-subtitle">
-                                General: {resumenGeneral.totalIncidentes}
-                            </span>
                         </div>
                     </div>
                 </div>
@@ -520,16 +556,21 @@ const SoporteDetalle = () => {
                     </div>
                 </div>
                 <div className="col-md-3">
-                    <div className="card metric-card text-white">
+                    <div className="card metric-card tipo-soporte-card">
                         <div className="card-body">
-                            <h5 className="mb-1">Tiempo de resolución</h5>
-                            <h2 className="mb-0">{tiemposResolucion.promedio} días</h2>
+                            <h5 className="mb-1">Tipo de soporte</h5>
                             <div className="metric-icon">
                                 <i className="fas fa-hourglass-half"></i>
                             </div>
-                            <span className="metric-subtitle">
-                                Máximo: {tiemposResolucion.maximo} días ({tiemposResolucion.casos} casos)
-                            </span>
+                            <span className="metric-subtitle">Terreno y remoto en el filtro actual</span>
+                            <div className="d-flex justify-content-between mt-3">
+                                <span className="badge badge-pill badge-primary px-3 py-2">
+                                    Terreno: {resumenTiposSoporte.terreno}
+                                </span>
+                                <span className="badge badge-pill badge-info px-3 py-2">
+                                    Remoto: {resumenTiposSoporte.remoto}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -675,3 +716,4 @@ const SoporteDetalle = () => {
 };
 
 export default SoporteDetalle;
+
