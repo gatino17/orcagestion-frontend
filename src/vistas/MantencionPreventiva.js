@@ -63,6 +63,9 @@ const CAMPOS_REVISION = [
     { key: "diasFaltantesReinicio", label: "Dias faltantes", bloque: "Reinicios" },
     { key: "estadoReinicio", label: "Estado reinicio", bloque: "Reinicios" }
 ];
+const CAMPOS_REVISION_MENSUAL = CAMPOS_REVISION
+    .filter((campo) => campo.bloque !== "Reinicios")
+    .map((campo) => campo.key);
 
 const buildDefaultRevision = () => {
     const status = {};
@@ -75,7 +78,7 @@ const buildDefaultRevision = () => {
         status,
         base,
         observacion: "",
-        fecha: new Date().toISOString().slice(0, 10)
+        fecha: hoyLocalYYYYMMDD()
     };
 };
 
@@ -91,6 +94,13 @@ const normalizarVersionRadar = (valor) => {
         salida += char;
     }
     return salida.slice(0, 12);
+};
+const hoyLocalYYYYMMDD = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
 };
 
 const normalizarNombre = (valor = "") =>
@@ -130,6 +140,7 @@ const MantencionPreventiva = () => {
     const [mostrarTodosCese, setMostrarTodosCese] = useState(false);
     const [editarDatosBase, setEditarDatosBase] = useState(false);
     const [guardando, setGuardando] = useState(false);
+    const [guardandoReinicioPorCentro, setGuardandoReinicioPorCentro] = useState({});
     const [bloquesVisibles, setBloquesVisibles] = useState({
         General: true,
         Armado: true,
@@ -256,7 +267,7 @@ const MantencionPreventiva = () => {
                             status: { ...seed.status, ...(row.estados || {}) },
                             base: { ...seed.base, ...(row.datos_base || {}) },
                             observacion: row.observacion || "",
-                            fecha: row.fecha_revision || new Date().toISOString().slice(0, 10)
+                            fecha: row.fecha_revision || hoyLocalYYYYMMDD()
                         };
                     });
                     return next;
@@ -401,6 +412,31 @@ const MantencionPreventiva = () => {
     const updateField = (idCentro, campo, valor) => {
         updateRevision(idCentro, (actual) => ({ ...actual, [campo]: valor }));
     };
+    const guardarRevisionCentro = async (idCentro, revision) => {
+        setGuardandoReinicioPorCentro((prev) => ({ ...prev, [idCentro]: true }));
+        try {
+            await guardarMantencionPreventivaBulk({
+                anio: Number(anio),
+                mes: Number(mes),
+                revisiones: [
+                    {
+                        centro_id: idCentro,
+                        datos_base: revision.base,
+                        estados: revision.status,
+                        observacion: revision.observacion || "",
+                        fecha_revision: revision.fecha || ""
+                    }
+                ]
+            });
+        } catch (error) {
+            const nombreCentro =
+                centrosVisibles.find((c) => String(c.id) === String(idCentro))?.nombre || `ID ${idCentro}`;
+            console.error("Error guardando reinicio automatico:", error);
+            window.alert(`No se pudo guardar el reinicio de ${nombreCentro}.`);
+        } finally {
+            setGuardandoReinicioPorCentro((prev) => ({ ...prev, [idCentro]: false }));
+        }
+    };
     const calcularEstadoReinicio = (fechaStr) => {
         if (!fechaStr) return { diasFaltantes: "", estado: "" };
         const fecha = new Date(`${fechaStr}T00:00:00`);
@@ -417,22 +453,34 @@ const MantencionPreventiva = () => {
     };
     const updateFechaReinicio = (idCentro, fechaStr) => {
         const calc = calcularEstadoReinicio(fechaStr);
-        updateRevision(idCentro, (actual) => ({
-            ...actual,
-            base: {
-                ...actual.base,
-                fechaReinicio: fechaStr,
-                diasFaltantesReinicio: calc.diasFaltantes,
-                estadoReinicio: calc.estado
-            }
-        }));
+        const key = `${periodoKey}:${idCentro}`;
+        setRegistros((prev) => {
+            const actual = prev[key] || buildDefaultRevision();
+            const nextRevision = {
+                ...actual,
+                base: {
+                    ...actual.base,
+                    fechaReinicio: fechaStr,
+                    diasFaltantesReinicio: calc.diasFaltantes,
+                    estadoReinicio: calc.estado
+                }
+            };
+            // Reinicios se guarda en backend de forma inmediata (flujo semanal).
+            guardarRevisionCentro(idCentro, nextRevision);
+            return { ...prev, [key]: nextRevision };
+        });
     };
 
     const estadoGeneral = (revision) => {
-        const estados = Object.values(revision.status);
-        if (estados.some((item) => item === "Critico")) return "Critico";
-        if (estados.some((item) => item === "Observado")) return "Observado";
-        if (estados.some((item) => item === "OK")) return "OK";
+        const estadosMensuales = CAMPOS_REVISION_MENSUAL.map(
+            (key) => revision?.status?.[key] || ""
+        );
+        const revisados = estadosMensuales.filter(Boolean).length;
+        if (revisados === 0) return "Pendiente";
+        if (revisados < estadosMensuales.length) return "Pendiente";
+        if (estadosMensuales.some((item) => item === "Critico")) return "Critico";
+        if (estadosMensuales.some((item) => item === "Observado")) return "Observado";
+        if (estadosMensuales.some((item) => item === "OK")) return "OK";
         return "Pendiente";
     };
 
@@ -630,35 +678,62 @@ const MantencionPreventiva = () => {
                                             {camposVisibles.map((campo) => (
                                                 <td key={`${centroItem.id}-${campo.key}`}>
                                                     {campo.key === "fechaReinicio" ? (
-                                                        <input
-                                                            type="date"
-                                                            className="form-control form-control-sm"
-                                                            value={revision.base[campo.key] || ""}
-                                                            onChange={(e) =>
-                                                                updateFechaReinicio(centroItem.id, e.target.value)
-                                                            }
-                                                        />
+                                                        <div className="d-flex align-items-center">
+                                                            <input
+                                                                type="date"
+                                                                className="form-control form-control-sm"
+                                                                value={revision.base[campo.key] || ""}
+                                                                disabled={!!guardandoReinicioPorCentro[centroItem.id]}
+                                                                onChange={(e) =>
+                                                                    updateFechaReinicio(centroItem.id, e.target.value)
+                                                                }
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-outline-danger ml-2"
+                                                                disabled={!!guardandoReinicioPorCentro[centroItem.id]}
+                                                                onClick={() =>
+                                                                    updateFechaReinicio(
+                                                                        centroItem.id,
+                                                                        hoyLocalYYYYMMDD()
+                                                                    )
+                                                                }
+                                                            >
+                                                                Hoy
+                                                            </button>
+                                                            {guardandoReinicioPorCentro[centroItem.id] && (
+                                                                <i className="fas fa-spinner fa-spin ml-2 text-danger"></i>
+                                                            )}
+                                                        </div>
                                                     ) : campo.key === "diasFaltantesReinicio" ? (
                                                         <span
                                                             className={`badge badge-pill ${
                                                                 String(
-                                                                    revision.base[campo.key] || reinicioCalc.diasFaltantes || ""
+                                                                    (revision.base?.fechaReinicio
+                                                                        ? reinicioCalc.diasFaltantes
+                                                                        : revision.base[campo.key]) || ""
                                                                 ) === "0"
                                                                     ? "badge-danger"
                                                                     : "badge-secondary"
                                                             }`}
                                                         >
-                                                            {revision.base[campo.key] || reinicioCalc.diasFaltantes || "-"}
+                                                            {(revision.base?.fechaReinicio
+                                                                ? reinicioCalc.diasFaltantes
+                                                                : revision.base[campo.key]) || "-"}
                                                         </span>
                                                     ) : campo.key === "estadoReinicio" ? (
                                                         <span
                                                             className={`badge badge-pill ${
-                                                                (revision.base[campo.key] || reinicioCalc.estado || "") === "Reiniciar"
+                                                                ((revision.base?.fechaReinicio
+                                                                    ? reinicioCalc.estado
+                                                                    : revision.base[campo.key]) || "") === "Reiniciar"
                                                                     ? "badge-danger"
                                                                     : "badge-success"
                                                             }`}
                                                         >
-                                                            {revision.base[campo.key] || reinicioCalc.estado || "-"}
+                                                            {(revision.base?.fechaReinicio
+                                                                ? reinicioCalc.estado
+                                                                : revision.base[campo.key]) || "-"}
                                                         </span>
                                                     ) : campo.key === "versionRadar" ? (
                                                         <div className="d-flex flex-column cell-stack">
