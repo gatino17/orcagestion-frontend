@@ -36,6 +36,7 @@ function Centros() {
     const [respaldoAdicional, setRespaldoAdicional] = useState(false);
     const [valorContrato, setValorContrato] = useState(0);
     const [estado, setEstado] = useState('activo');
+    const [esCentral, setEsCentral] = useState(false);
     const [rolUsuario, setRolUsuario] = useState('');
     const [growthYear, setGrowthYear] = useState(new Date().getFullYear());
     const [growthMonth, setGrowthMonth] = useState('all');
@@ -465,6 +466,7 @@ function Centros() {
             respaldo_adicional: respaldoAdicional === 'true' || false,
             valor_contrato: parseFloat(valorContrato),
             estado,
+            es_central: esCentral,
         };
 
         try {
@@ -511,6 +513,7 @@ function Centros() {
         setRespaldoAdicional(centro.respaldo_adicional || false);
         setValorContrato(centro.valor_contrato || 0);
         setEstado(centro.estado || "activo");
+        setEsCentral(!!centro.es_central);
 
             // Configura el centro en edición para utilizarlo al guardar
         setEditarCentro(centro);
@@ -563,6 +566,7 @@ function Centros() {
             setRespaldoAdicional(false);
             setValorContrato(0);
             setEstado('activo');
+            setEsCentral(false);
             setEditarCentro(null); // Opcional: si tienes un estado para el centro en edición, lo restableces también
           };
 
@@ -1293,6 +1297,20 @@ function Centros() {
                                         <option value="cese">Cese</option>
                                         <option value="retirado">Retirado</option>
                                     </select>
+                                </div>
+                                <div className="form-group">
+                                    <div className="form-check">
+                                        <input
+                                            id="esCentralCheck"
+                                            type="checkbox"
+                                            className="form-check-input"
+                                            checked={esCentral}
+                                            onChange={(e) => setEsCentral(e.target.checked)}
+                                        />
+                                        <label className="form-check-label" htmlFor="esCentralCheck">
+                                            Marcar como Central
+                                        </label>
+                                    </div>
                                 </div>
                             </form>
                         </div>

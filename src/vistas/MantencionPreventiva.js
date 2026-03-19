@@ -127,6 +127,14 @@ const esCentroEnCese = (centro) => {
     if (centro?.fecha_cese) return true;
     return false;
 };
+const esCentroCentral = (centro) => {
+    if (centro?.es_central === true) return true;
+    const raw = String(centro?.es_central ?? "").toLowerCase().trim();
+    if (raw === "true" || raw === "1" || raw === "si" || raw === "sí") return true;
+    // Fallback defensivo por datos antiguos/no migrados: si el nombre contiene "central".
+    const nombre = String(centro?.nombre || "").toLowerCase();
+    return nombre.includes("central");
+};
 
 const MantencionPreventiva = () => {
     const navigate = useNavigate();
@@ -205,13 +213,21 @@ const MantencionPreventiva = () => {
         () => centrosVisibles.filter((item) => !esCentroRetirado(item)),
         [centrosVisibles]
     );
-    const centrosActivosVisibles = useMemo(
-        () => centrosNoRetirados.filter((item) => !esCentroEnCese(item)),
+    const centrosCentrales = useMemo(
+        () => centrosNoRetirados.filter((item) => esCentroCentral(item)),
         [centrosNoRetirados]
     );
-    const centrosCeseVisibles = useMemo(
-        () => centrosNoRetirados.filter((item) => esCentroEnCese(item)),
+    const centrosOperativosNoCentral = useMemo(
+        () => centrosNoRetirados.filter((item) => !esCentroCentral(item)),
         [centrosNoRetirados]
+    );
+    const centrosActivosVisibles = useMemo(
+        () => centrosOperativosNoCentral.filter((item) => !esCentroEnCese(item)),
+        [centrosOperativosNoCentral]
+    );
+    const centrosCeseVisibles = useMemo(
+        () => centrosOperativosNoCentral.filter((item) => esCentroEnCese(item)),
+        [centrosOperativosNoCentral]
     );
     const centrosCeseRecientes = useMemo(() => {
         const sorted = [...centrosCeseVisibles].sort((a, b) => {
@@ -554,12 +570,39 @@ const MantencionPreventiva = () => {
         }
     };
 
-    const renderTablaCentros = (listaCentros, tipo) => (
+    const renderTablaCentros = (listaCentros, tipo, centrales = []) => (
         <div className={`card checklist-card mb-3 ${tipo === "cese" ? "cese-card" : "activos-card"}`}>
             <div className="card-body">
-                <h6 className="mb-3">
-                    {tipo === "activos" ? "Centros activos" : "Centros en cese"} ({listaCentros.length})
-                </h6>
+                <div className="d-flex justify-content-between align-items-start flex-wrap mb-3">
+                    <h6 className="mb-0">
+                        {tipo === "activos" ? "Centros activos" : "Centros en cese"} ({listaCentros.length})
+                    </h6>
+                    {tipo === "activos" && centrales.length > 0 && (
+                        <div className="small text-muted text-right mt-1 mt-md-0">
+                            {centrales.map((c) => (
+                                <div key={`central-${c.id}`}>
+                                    <strong className="text-danger">
+                                        <i className="fas fa-broadcast-tower mr-1"></i>
+                                        Central:
+                                    </strong>{" "}
+                                    <span className="font-weight-bold text-dark">{c.nombre || "-"}</span>{" "}
+                                    {c.correo_centro && (
+                                        <span className="ml-2">
+                                            <i className="fas fa-envelope text-primary mr-1"></i>
+                                            {c.correo_centro}
+                                        </span>
+                                    )}
+                                    {c.telefono && (
+                                        <span className="ml-2 text-success font-weight-bold">
+                                            <i className="fas fa-phone-alt mr-1"></i>
+                                            {c.telefono}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <div className="mb-3 d-flex flex-wrap gap-2">
                     {camposPorBloque.map((grupo) => {
                         const activo = !!bloquesVisibles[grupo.bloque];
@@ -1023,7 +1066,7 @@ const MantencionPreventiva = () => {
                 </div>
             </div>
 
-            {renderTablaCentros(centrosActivosVisibles, "activos")}
+            {renderTablaCentros(centrosActivosVisibles, "activos", centrosCentrales)}
             {renderTablaCentros(centrosCeseRecientes, "cese")}
             {centrosCeseVisibles.length > 5 && (
                 <div className="d-flex justify-content-center mb-3">
