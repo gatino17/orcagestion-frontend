@@ -17,6 +17,33 @@ const obtenerTotalUnico = (items, accessor) => {
     return new Set(valores).size;
 };
 
+const parseFechaLocal = (valor, finDeDia = false) => {
+    if (!valor) return null;
+
+    const texto = String(valor).trim();
+    // Prioriza la parte YYYY-MM-DD incluso si viene con hora/UTC.
+    const soloFecha = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+    let fecha = null;
+
+    if (soloFecha) {
+        const anio = Number(soloFecha[1]);
+        const mes = Number(soloFecha[2]) - 1;
+        const dia = Number(soloFecha[3]);
+        fecha = new Date(anio, mes, dia);
+    } else {
+        fecha = new Date(texto);
+        if (Number.isNaN(fecha.getTime())) return null;
+    }
+
+    if (finDeDia) {
+        fecha.setHours(23, 59, 59, 999);
+    } else {
+        fecha.setHours(0, 0, 0, 0);
+    }
+
+    return fecha;
+};
+
 const Soporte = () => {
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
@@ -78,15 +105,7 @@ const Soporte = () => {
         hoy.setHours(0, 0, 0, 0);
 
         const construirFecha = (valor, finDeDia = false) => {
-            if (!valor) return null;
-            const fecha = new Date(valor);
-            if (Number.isNaN(fecha.getTime())) return null;
-            if (finDeDia) {
-                fecha.setHours(23, 59, 59, 999);
-            } else {
-                fecha.setHours(0, 0, 0, 0);
-            }
-            return fecha;
+            return parseFechaLocal(valor, finDeDia);
         };
 
         switch (filtroPeriodo) {
@@ -145,8 +164,8 @@ const Soporte = () => {
     const soportesFiltrados = useMemo(() => {
         return soportes.filter((soporte) => {
             if (!soporte.fecha_soporte) return false;
-            const fecha = new Date(soporte.fecha_soporte);
-            if (Number.isNaN(fecha.getTime())) {
+            const fecha = parseFechaLocal(soporte.fecha_soporte);
+            if (!fecha || Number.isNaN(fecha.getTime())) {
                 return false;
             }
             if (rangoFechas.inicio && fecha < rangoFechas.inicio) {
@@ -168,14 +187,11 @@ const Soporte = () => {
 
         const nombreBusqueda = normalizarTexto(filtroNombre).trim();
 
-        const inicioBusqueda = fechaInicioBusqueda ? new Date(fechaInicioBusqueda) : null;
-        const finBusqueda = fechaFinBusqueda ? new Date(fechaFinBusqueda) : null;
-
-        if (inicioBusqueda) inicioBusqueda.setHours(0, 0, 0, 0);
-        if (finBusqueda) finBusqueda.setHours(23, 59, 59, 999);
+        const inicioBusqueda = parseFechaLocal(fechaInicioBusqueda);
+        const finBusqueda = parseFechaLocal(fechaFinBusqueda, true);
 
         return soportesFiltrados.filter((soporte) => {
-            const fecha = soporte.fecha_soporte ? new Date(soporte.fecha_soporte) : null;
+            const fecha = soporte.fecha_soporte ? parseFechaLocal(soporte.fecha_soporte) : null;
             if (!fecha || Number.isNaN(fecha.getTime())) return false;
 
             if (inicioBusqueda && fecha < inicioBusqueda) return false;
@@ -327,8 +343,8 @@ const Soporte = () => {
 
     const formatearFecha = (fecha) => {
         if (!fecha) return "";
-        const fechaObj = new Date(fecha);
-        fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
+        const fechaObj = parseFechaLocal(fecha);
+        if (!fechaObj) return "";
         const dia = String(fechaObj.getDate()).padStart(2, "0");
         const mes = String(fechaObj.getMonth() + 1).padStart(2, "0");
         const anio = fechaObj.getFullYear();
@@ -337,15 +353,14 @@ const Soporte = () => {
 
     const formatearParaInputFecha = (fecha) => {
         if (!fecha) return "";
-        if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-            return fecha;
-        }
-        const fechaObj = new Date(fecha);
-        if (Number.isNaN(fechaObj.getTime())) {
+        const fechaObj = parseFechaLocal(fecha);
+        if (!fechaObj) {
             return "";
         }
-        fechaObj.setMinutes(fechaObj.getMinutes() - fechaObj.getTimezoneOffset());
-        return fechaObj.toISOString().slice(0, 10);
+        const dia = String(fechaObj.getDate()).padStart(2, "0");
+        const mes = String(fechaObj.getMonth() + 1).padStart(2, "0");
+        const anio = fechaObj.getFullYear();
+        return `${anio}-${mes}-${dia}`;
     };
 
     const validarRelacionFechas = (inicio, fin) => {
@@ -400,10 +415,10 @@ const Soporte = () => {
 
     const calcularDiasAbiertos = (soporte) => {
         if (!soporte.fecha_soporte) return 0;
-        const inicio = new Date(soporte.fecha_soporte);
-        if (Number.isNaN(inicio.getTime())) return 0;
-        const fin = soporte.fecha_cierre ? new Date(soporte.fecha_cierre) : new Date();
-        if (Number.isNaN(fin.getTime())) return 0;
+        const inicio = parseFechaLocal(soporte.fecha_soporte);
+        if (!inicio || Number.isNaN(inicio.getTime())) return 0;
+        const fin = soporte.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre, true) : new Date();
+        if (!fin || Number.isNaN(fin.getTime())) return 0;
         const diferencia = fin.getTime() - inicio.getTime();
         return Math.max(0, Math.round(diferencia / (1000 * 60 * 60 * 24)));
     };
@@ -430,8 +445,8 @@ const Soporte = () => {
 
     const datosOrdenados = useMemo(() => {
         const ordenados = [...soportesFiltradosBusqueda].sort((a, b) => {
-            const fechaA = new Date(a.fecha_soporte || 0).getTime();
-            const fechaB = new Date(b.fecha_soporte || 0).getTime();
+            const fechaA = parseFechaLocal(a.fecha_soporte)?.getTime() || 0;
+            const fechaB = parseFechaLocal(b.fecha_soporte)?.getTime() || 0;
             return fechaB - fechaA;
         });
         return ordenados.map((item, index) => ({
@@ -520,7 +535,8 @@ const Soporte = () => {
             selector: (row) => row.fecha_soporte,
             sortable: true,
             sortFunction: (rowA, rowB) =>
-                new Date(rowA.fecha_soporte || 0).getTime() - new Date(rowB.fecha_soporte || 0).getTime(),
+                (parseFechaLocal(rowA.fecha_soporte)?.getTime() || 0) -
+                (parseFechaLocal(rowB.fecha_soporte)?.getTime() || 0),
             cell: (row) => formatearFecha(row.fecha_soporte),
             width: "100px"
         },

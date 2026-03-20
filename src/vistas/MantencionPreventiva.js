@@ -24,6 +24,7 @@ const MESES = [
 const CAMPOS_REVISION = [
     { key: "versionRadar", label: "Version radar", bloque: "General" },
     { key: "sensor", label: "Sensor", bloque: "General" },
+    { key: "calibracion", label: "Calibracion", bloque: "General" },
     { key: "pc", label: "PC", bloque: "Armado" },
     { key: "router", label: "Router", bloque: "Armado" },
     { key: "switch", label: "Switch", bloque: "Armado" },

@@ -1,0 +1,216 @@
+.informes-centros-page {
+  padding-bottom: 1.5rem;
+}
+
+.informes-centros-hero {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  margin-bottom: 1rem;
+}
+
+.informes-centros-hero .card-body,
+.informes-centros-hero {
+  padding: 1rem 1.25rem;
+}
+
+.informes-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.informes-hero-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.informes-kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.informes-centros-hero h2 {
+  margin: 0.15rem 0 0;
+  color: #0f172a;
+}
+
+.informes-subtitle {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+}
+
+.informes-centros-filtros {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  margin-bottom: 1rem;
+}
+
+.informes-filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.informes-col-span-2 {
+  grid-column: span 2;
+}
+
+.informes-filtros-grid label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.informes-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.metrica-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  padding: 0.8rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.metrica-card small {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.metrica-card h4 {
+  margin: 0.2rem 0 0;
+  color: #0f172a;
+  font-size: 1.35rem;
+}
+
+.metrica-icon {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  font-size: 1rem;
+  opacity: 0.18;
+}
+
+.metrica-card-total {
+  background: linear-gradient(135deg, rgba(219, 234, 254, 0.8), #fff);
+}
+
+.metrica-card-total .metrica-icon { color: #1d4ed8; }
+
+.metrica-card-activos {
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.8), #fff);
+}
+
+.metrica-card-activos .metrica-icon { color: #15803d; }
+
+.metrica-card-ceses {
+  background: linear-gradient(135deg, rgba(255, 237, 213, 0.85), #fff);
+}
+
+.metrica-card-ceses .metrica-icon { color: #c2410c; }
+
+.metrica-card-centrales {
+  background: linear-gradient(135deg, rgba(243, 232, 255, 0.85), #fff);
+}
+
+.metrica-card-centrales .metrica-icon { color: #7e22ce; }
+
+.informes-centros-tabla {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+}
+
+.informes-empty {
+  padding: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.informes-table .equipos-col {
+  min-width: 260px;
+  white-space: pre-wrap;
+}
+
+.informes-table thead th {
+  border-top: none;
+  background: #0f172a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.informes-table td {
+  vertical-align: middle;
+}
+
+@media (max-width: 992px) {
+  .informes-col-span-2 {
+    grid-column: span 1;
+  }
+}
+
+.informes-table .estado-activo {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.informes-table .estado-cese {
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.informes-table .estado-traslado {
+  color: #d97706;
+  font-weight: 700;
+}
+
+.informes-table .estado-retirado,
+.informes-table .estado-retiro {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.informes-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.informes-editor-card {
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.35);
+}

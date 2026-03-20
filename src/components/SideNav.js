@@ -41,6 +41,13 @@ const navItems = [
   },
   {
     section: "OPERACIONES",
+    label: "Informes centros",
+    to: "/informes-centros",
+    icon: "fas fa-chart-bar",
+    roles: ["admin", "soporte", "operaciones"],
+  },
+  {
+    section: "OPERACIONES",
     label: "Armado técnico",
     to: "/armados",
     icon: "fas fa-tools",

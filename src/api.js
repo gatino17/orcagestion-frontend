@@ -1421,6 +1421,47 @@ export const eliminarSoporte = async (id) => {
     }
 };
 
+// ===================== ACTAS ENTREGA =====================
+export const obtenerActasEntrega = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/actas_entrega/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener actas de entrega:", error);
+        throw error;
+    }
+};
+
+export const crearActaEntrega = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/actas_entrega/`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear acta de entrega:", error);
+        throw error;
+    }
+};
+
+export const actualizarActaEntrega = async (idActaEntrega, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/actas_entrega/${idActaEntrega}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar acta de entrega:", error);
+        throw error;
+    }
+};
+
+export const eliminarActaEntrega = async (idActaEntrega) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/actas_entrega/${idActaEntrega}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar acta de entrega:", error);
+        throw error;
+    }
+};
+
 // === Armados técnicos ===
 export const obtenerMantencionPreventiva = async ({ anio, mes, centros = [] }) => {
     try {

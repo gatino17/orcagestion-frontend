@@ -14,6 +14,7 @@ import Home from "./vistas/Home";
 import Soporte from "./vistas/Soporte";
 import SoporteDetalle from "./vistas/SoporteDetalle";
 import MantencionPreventiva from "./vistas/MantencionPreventiva";
+import InformesCentros from "./vistas/InformesCentros";
 import Clientes from "./vistas/Clientes";
 import Calendario from "./vistas/Calendario";
 import HistorialTrabajos from "./vistas/HistorialTrabajos";
@@ -98,6 +99,14 @@ function App() {
                             element={
                               <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <MantencionPreventiva />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/informes-centros"
+                            element={
+                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                                    <InformesCentros />
                                 </PrivateRoute>
                             }
                         />
