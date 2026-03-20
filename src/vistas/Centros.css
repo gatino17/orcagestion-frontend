@@ -118,7 +118,9 @@
   display: flex;
   gap: 1rem;
   padding: 1.25rem 1.5rem 1.5rem;
-  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0.01));
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 22px rgba(15, 23, 42, 0.08);
   border-radius: 18px;
 }
 
@@ -171,6 +173,11 @@
   padding-right: 0.35rem;
 }
 
+.growth-view-toggle {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
 .growth-axis-y span {
   position: absolute;
   right: 0;
@@ -181,11 +188,15 @@
 .growth-chart-svg {
   flex: 1;
   position: relative;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.05), rgba(255, 255, 255, 0.72));
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  padding: 0.45rem 0.5rem 0.15rem;
 }
 
 .growth-chart-svg svg {
   width: 100%;
-  height: 140px;
+  height: 168px;
 }
 
 .growth-tooltip-layer {
@@ -253,9 +264,9 @@
 }
 
 .growth-grid-line {
-  stroke: rgba(15, 23, 42, 0.08);
+  stroke: rgba(15, 23, 42, 0.1);
   stroke-width: 1;
-  stroke-dasharray: 4 6;
+  stroke-dasharray: 3 7;
 }
 
 
@@ -277,11 +288,11 @@
   grid-template-columns: repeat(12, 1fr);
   text-align: center;
   gap: 0.35rem;
-  margin-top: 0.35rem;
+  margin-top: 0.55rem;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .growth-legend {
@@ -296,6 +307,57 @@
   justify-content: flex-end;
   margin-top: 0;
   padding: 0 1.5rem;
+}
+
+.growth-chart-svg svg path {
+  transition: all 0.22s ease;
+}
+
+.growth-point rect {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: growthBarRise 380ms ease-out both;
+}
+
+.growth-point circle {
+  animation: growthDotPop 260ms ease-out both;
+}
+
+.growth-point text {
+  animation: growthLabelFade 300ms ease-out both;
+}
+
+@keyframes growthBarRise {
+  0% {
+    transform: scaleY(0.06);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 0.88;
+  }
+}
+
+@keyframes growthDotPop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes growthLabelFade {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .growth-legend-item {
@@ -392,6 +454,13 @@
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
+.summary-card-header h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .summary-card ul {
   list-style: none;
   padding: 0;
@@ -405,6 +474,42 @@
   margin: 0.2rem 0;
   font-weight: 600;
   color: #0f172a;
+}
+
+.summary-card .summary-item-activo {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(16, 185, 129, 0.14));
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 10px;
+  padding: 0.35rem 0.55rem;
+  margin-bottom: 0.4rem;
+}
+
+.summary-card-total {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed rgba(15, 23, 42, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-card-total span {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.summary-card-total strong {
+  min-width: 34px;
+  text-align: center;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  font-size: 0.95rem;
 }
 
 .centros-empty {
@@ -540,6 +645,35 @@
   padding: 0.1rem 0.65rem;
   border-radius: 999px;
   margin-left: 0.5rem;
+}
+
+.centro-form-section--cese {
+  border-color: rgba(249, 115, 22, 0.4);
+  background: linear-gradient(135deg, rgba(255, 237, 213, 0.8), rgba(255, 247, 237, 0.9));
+}
+
+.centro-form-section-title--cese {
+  color: #9a3412;
+}
+
+.highlight-termination {
+  border: 2px solid rgba(249, 115, 22, 0.45);
+  border-radius: 14px;
+  padding: 0.75rem;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.18);
+}
+
+.highlight-termination label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.date-pill--cese {
+  background: linear-gradient(120deg, #f97316, #ea580c);
 }
 
 .centros-table-wrapper .rdt_Table {

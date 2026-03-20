@@ -8,6 +8,19 @@ import ModalActividad from '../modales/ModalActividad';
 import './RegistrosDocumentos.css';
 
 
+const esCentroTipoCentral = (actividad) => {
+    const raw = String(actividad?.es_central ?? '').toLowerCase().trim();
+    const flagCentral =
+        actividad?.es_central === true ||
+        raw === 'true' ||
+        raw === '1' ||
+        raw === 'si' ||
+        raw === 'sí' ||
+        raw === 'sÃ­';
+    const nombreCentro = String(actividad?.nombre_centro || '').toLowerCase();
+    return flagCentral || nombreCentro.includes('central');
+};
+
 
 function RegistrosDocumentos() {
 
@@ -390,7 +403,15 @@ function RegistrosDocumentos() {
             (row) => row.instalacion_fecha || row.centro_fecha_instalacion
         ),
         crearColumnaDocumento('Traslado', 'traslado_fecha', 'traslado_documento', 'fa-truck', 'registro-doc-section--traslado', 'traslado'),
-        crearColumnaDocumento('Cese', 'cese_fecha', 'cese_documento', 'fa-pause-circle', 'registro-doc-section--cese', 'cese'),
+        crearColumnaDocumento(
+            'Cese',
+            'cese_fecha',
+            'cese_documento',
+            'fa-pause-circle',
+            'registro-doc-section--cese',
+            'cese',
+            (row) => row.cese_fecha || ((row.estado || '').toLowerCase() === 'cese' ? row.centro_fecha_termino : null)
+        ),
         crearColumnaDocumento('Retiro', 'retiro_fecha', 'retiro_documento', 'fa-times-circle', 'registro-doc-section--retiro', 'retiro'),
         crearColumnaDocumento('Inventario', null, 'inventario_documento', 'fa-box-open', 'registro-doc-section--inventario', 'inventario'),
     ];
@@ -429,6 +450,7 @@ function RegistrosDocumentos() {
         const mapa = new Map();
 
         actividades.forEach((act, index) => {
+            if (esCentroTipoCentral(act)) return;
             const nombreCliente = act.cliente || act.nombre_cliente || 'Cliente sin nombre';
             const centroKey = act.id_centro || act.nombre_centro || `centro-${index}`;
             const estado = (act.estado || '').toLowerCase();
@@ -614,14 +636,17 @@ function RegistrosDocumentos() {
                                 <div className="registros-summary-card" key={`${cliente.nombre}-${index}`}>
                                     <div className="summary-card-header">
                                         <h4>{cliente.nombre}</h4>
-                                        <span className="badge bg-light text-dark">{cliente.total} centros</span>
                                     </div>
                                     <ul>
-                                        <li><i className="fas fa-check text-success"></i> Activos: {cliente.activo}</li>
+                                        <li className="summary-item-activo"><i className="fas fa-check text-success"></i> Activos: {cliente.activo}</li>
                                         <li><i className="fas fa-pause text-secondary"></i> En cese: {cliente.cese}</li>
                                         <li><i className="fas fa-truck text-warning"></i> Traslado: {cliente.traslado}</li>
                                         <li><i className="fas fa-times text-danger"></i> Retirados: {cliente.retiro}</li>
                                     </ul>
+                                    <div className="summary-card-total">
+                                        <span>Total centros</span>
+                                        <strong>{cliente.total}</strong>
+                                    </div>
                                 </div>
                             ))
                         ) : (

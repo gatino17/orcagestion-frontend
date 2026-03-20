@@ -41,6 +41,7 @@ function Centros() {
     const [growthYear, setGrowthYear] = useState(new Date().getFullYear());
     const [growthMonth, setGrowthMonth] = useState('all');
     const [clienteGrafico, setClienteGrafico] = useState('all');
+    const [growthChartType, setGrowthChartType] = useState('curva');
     const [hoverInfo, setHoverInfo] = useState(null);
 
     useEffect(() => {
@@ -73,7 +74,7 @@ function Centros() {
     }, []);
           //resumen targetas por cliente
 
-    const obtenerFechaCentro = (centro) => centro.fecha_instalacion || centro.fecha_activacion;
+    const obtenerFechaCentro = (centro) => centro.fecha_instalacion || centro.fecha_activacion || centro.fecha_termino;
 
     const normalizarFechaInput = (fecha) => {
         if (!fecha) return '';
@@ -82,7 +83,18 @@ function Centros() {
         parsed.setMinutes(parsed.getMinutes() - parsed.getTimezoneOffset());
         return parsed.toISOString().split('T')[0];
     };
-
+    const esCentroTipoCentral = (centro) => {
+        const raw = String(centro?.es_central ?? '').toLowerCase().trim();
+        const flagCentral =
+            centro?.es_central === true ||
+            raw === 'true' ||
+            raw === '1' ||
+            raw === 'si' ||
+            raw === 's�' ||
+            raw === 'sí';
+        const nombre = String(centro?.nombre || '').toLowerCase();
+        return flagCentral || nombre.includes('central');
+    };
     const growthYears = useMemo(() => {
         const years = new Set();
         centros.forEach((centro) => {
@@ -103,8 +115,11 @@ function Centros() {
         }
     }, [growthYears, growthYear]);
 
+
+
           const generarResumenClientes = (centrosData) => {
             const resumen = centrosData.reduce((acc, centro) => {
+                if (esCentroTipoCentral(centro)) return acc;
                 const clienteNombre = centro.cliente;
                 if (!acc[clienteNombre]) {
                     acc[clienteNombre] = {
@@ -152,6 +167,34 @@ function Centros() {
         return Number.isNaN(value) ? null : value;
     }, [growthMonth]);
 
+    const monthOptions = useMemo(() => {
+        const hoy = new Date();
+        const anioActual = hoy.getFullYear();
+        const mesActual = hoy.getMonth();
+
+        const maxMes = growthYear !== 'all' && Number(growthYear) === anioActual
+            ? mesActual
+            : 11;
+
+        return monthLabels.slice(0, maxMes + 1).map((month, idx) => ({
+            label: month,
+            value: String(idx)
+        }));
+    }, [growthYear, monthLabels]);
+    useEffect(() => {
+        if (growthMonth === 'all') return;
+        const selected = Number(growthMonth);
+        if (Number.isNaN(selected)) {
+            setGrowthMonth('all');
+            return;
+        }
+        const maxDisponible = monthOptions.length ? Number(monthOptions[monthOptions.length - 1].value) : 11;
+        if (selected > maxDisponible) {
+            setGrowthMonth('all');
+        }
+    }, [growthMonth, monthOptions]);
+
+
     const crecimientoMensual = useMemo(() => {
         if (!centros.length) {
             return { months: monthLabels, series: [], detalles: {}, estadoSeries: {}, estadoDetalles: {} };
@@ -163,11 +206,21 @@ function Centros() {
         const estadoDetalles = {};
         const targetYear = growthYear === 'all' ? null : growthYear;
         centros.forEach((centro) => {
+            if (esCentroTipoCentral(centro)) return;
             if (!centro.cliente) return;
             const rawDate = obtenerFechaCentro(centro);
-            if (!rawDate) return;
-            const fecha = new Date(rawDate);
-            if (Number.isNaN(fecha.getTime())) return;
+            let fecha = null;
+            if (rawDate) {
+                const parsed = new Date(rawDate);
+                if (!Number.isNaN(parsed.getTime())) {
+                    fecha = parsed;
+                }
+            }
+
+            const fallbackYear = targetYear === null ? new Date().getFullYear() : Number(targetYear);
+            const startYear = fecha ? fecha.getFullYear() : fallbackYear;
+            const startMonth = fecha ? fecha.getMonth() : 0;
+
             const cliente = centro.cliente;
             if (!map[cliente]) {
                 map[cliente] = new Array(12).fill(0);
@@ -194,8 +247,6 @@ function Centros() {
 
             const estadoCentro = (centro.estado || '').toLowerCase();
 
-            const startYear = fecha.getFullYear();
-            const startMonth = fecha.getMonth();
 
             let fechaTermino = null;
             if (centro.fecha_termino) {
@@ -215,11 +266,16 @@ function Centros() {
                     return;
                 }
                 for (let m = safeStart; m <= safeEnd; m += 1) {
-                    map[cliente][m] += 1;
                     const centroNombre = centro.nombre || `Centro ${centro.id}`;
-                    if (!detallesMap[cliente][m].includes(centroNombre)) {
-                        detallesMap[cliente][m].push(centroNombre);
+
+                    // La curva principal es "clientes activos"; no suma ceses/traslados/retiros.
+                    if (estadoCentro === 'activo') {
+                        map[cliente][m] += 1;
+                        if (!detallesMap[cliente][m].includes(centroNombre)) {
+                            detallesMap[cliente][m].push(centroNombre);
+                        }
                     }
+
                     if (estadoSeries[cliente][estadoCentro]) {
                         estadoSeries[cliente][estadoCentro][m] += 1;
                         if (!estadoDetalles[cliente][estadoCentro][m].includes(centroNombre)) {
@@ -268,15 +324,28 @@ function Centros() {
 
     const visibleMonths = useMemo(() => {
         const total = crecimientoMensual.months.length || 0;
-        if (monthIndexFilter === null || monthIndexFilter >= total) {
-            return crecimientoMensual.months;
+        if (!total) return [];
+
+        const hoy = new Date();
+        const anioActual = hoy.getFullYear();
+        const mesActualIndex = hoy.getMonth();
+
+        let maxIndex = total - 1;
+        if (growthYear !== 'all' && Number(growthYear) === anioActual) {
+            maxIndex = Math.min(maxIndex, mesActualIndex);
         }
-        return crecimientoMensual.months.slice(0, monthIndexFilter + 1);
-    }, [crecimientoMensual.months, monthIndexFilter]);
+
+        const endIndex = monthIndexFilter === null
+            ? maxIndex
+            : Math.min(monthIndexFilter, maxIndex);
+
+        return crecimientoMensual.months.slice(0, endIndex + 1);
+    }, [crecimientoMensual.months, monthIndexFilter, growthYear]);
 
     const clientesDisponibles = useMemo(() => {
         const set = new Set();
         centros.forEach((centro) => {
+            if (esCentroTipoCentral(centro)) return;
             if (centro.cliente) {
                 set.add(centro.cliente);
             }
@@ -288,6 +357,7 @@ function Centros() {
         if (clienteGrafico === 'all') return null;
         const base = { activo: 0, traslado: 0, cese: 0, retirado: 0 };
         centros.forEach((centro) => {
+            if (esCentroTipoCentral(centro)) return;
             if (centro.cliente !== clienteGrafico) return;
             const estadoKey = (centro.estado || '').toLowerCase();
             if (base[estadoKey] !== undefined) {
@@ -304,25 +374,37 @@ function Centros() {
         { key: 'retirado', label: 'Retirados', color: '#ef4444' }
     ];
 
-        const buildLinePath = (values = [], width = 520, height = 140, maxValue = 1) => {
-            if (!values.length) return "";
+        const buildSeriesPoints = (values = [], width = 520, height = 140, maxValue = 1) => {
+            if (!values.length) return [];
             const max = Math.max(...values, maxValue, 1);
             const total = values.length;
+            const step = total ? width / total : width;
+            return values.map((value, index) => ({
+                value,
+                x: total === 1 ? width / 2 : step * index + step / 2,
+                y: height - (value / max) * height
+            }));
+        };
 
-            if (total === 1) {
-                const x = width / 2;
-                const y = height - (values[0] / max) * height;
-                return `M${x} ${y} L${x} ${y}`;
+        const buildSmoothLinePath = (points = []) => {
+            if (!points.length) return "";
+            if (points.length === 1) return `M${points[0].x} ${points[0].y}`;
+            let path = `M${points[0].x} ${points[0].y}`;
+            for (let i = 1; i < points.length; i += 1) {
+                const prev = points[i - 1];
+                const curr = points[i];
+                const cpX = (prev.x + curr.x) / 2;
+                path += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
             }
+            return path;
+        };
 
-            const step = width / total;
-            return values
-                .map((value, index) => {
-                    const x = step * index + step / 2;
-                    const y = height - (value / max) * height;
-                    return `${index === 0 ? "M" : "L"}${x} ${y}`;
-                })
-                .join(" " );
+        const buildAreaPath = (points = [], chartBottom = 140) => {
+            if (!points.length) return "";
+            const linePath = buildSmoothLinePath(points);
+            const first = points[0];
+            const last = points[points.length - 1];
+            return `${linePath} L ${last.x} ${chartBottom} L ${first.x} ${chartBottom} Z`;
         };
         const lineColors = ["#fb923c", "#38bdf8", "#22c55e", "#f472b6", "#a855f7", "#fcd34d"];
 
@@ -418,15 +500,16 @@ function Centros() {
             : [];
 
         const chartWidth = 800;
-        const chartHeight = 140;
+        const chartHeight = 168;
         const labelOffset = 4;
         const chartMaxValue = Math.max(
             ...orderedGrowthSeries.flatMap((serie) => serie.points),
             1
         );
+        const chartMaxDomain = Math.max(chartMaxValue, Math.ceil(chartMaxValue * 1.12));
         const yTicks = useMemo(() => {
             const ticks = [];
-            const max = chartMaxValue || 1;
+            const max = chartMaxDomain || 1;
             const step = Math.max(1, Math.ceil(max / 4));
             for (let value = 0; value <= max; value += step) {
                 ticks.push(value);
@@ -442,7 +525,7 @@ function Centros() {
                 }
             }
             return ticks.reverse();
-        }, [chartMaxValue]);
+        }, [chartMaxDomain]);
 
 
 
@@ -460,6 +543,7 @@ function Centros() {
             fecha_instalacion: fechaInstalacion || null,
             fecha_activacion: fechaActivacion || null,
             fecha_termino: fechaTermino || null,
+            fecha_cese: estado === 'cese' ? (fechaTermino || null) : null,
             cantidad_radares: parseInt(cantidadRadares, 10),
             cantidad_camaras: parseInt(cantidadCamaras, 10),
             base_tierra: baseTierra  === 'true' || false,
@@ -700,14 +784,21 @@ function Centros() {
             },
         ];
 
+        const clientesFiltro = useMemo(() => {
+            return Array.from(new Set((centros || []).map((c) => c.cliente).filter(Boolean)))
+                .sort((a, b) => a.localeCompare(b));
+        }, [centros]);
+
         const filteredCentros = centros.filter((centro) => {
           const matchNombre = filterText ? centro.nombre.toLowerCase().includes(filterText.toLowerCase()) : true;
-          const matchCliente = filterCliente ? centro.cliente.toLowerCase().includes(filterCliente.toLowerCase()) : true;
+          const matchCliente = filterCliente ? String(centro.cliente || '') === filterCliente : true;
           return matchNombre && matchCliente;
       });
 
         const metricas = useMemo(() => {
-            const activos = centros.filter((centro) => centro.estado?.toLowerCase() === 'activo').length;
+            const activos = centros.filter(
+                (centro) => centro.estado?.toLowerCase() === 'activo' && !esCentroTipoCentral(centro)
+            ).length;
             const cese = centros.filter((centro) => centro.estado?.toLowerCase() === 'cese').length;
             const retiro = centros.filter((centro) => {
                 const estado = centro.estado?.toLowerCase();
@@ -815,14 +906,17 @@ function Centros() {
                             <div className="summary-card" key={index}>
                                 <div className="summary-card-header">
                                     <h4>{cliente.nombre}</h4>
-                                    <span className="badge bg-light text-dark">{cliente.total} centros</span>
                                 </div>
                                 <ul>
-                                    <li><i className="fas fa-check text-success"></i> Activos: {cliente.activo}</li>
+                                    <li className="summary-item-activo"><i className="fas fa-check text-success"></i> Activos: {cliente.activo}</li>
                                     <li><i className="fas fa-pause text-secondary"></i> En cese: {cliente.cese}</li>
                                     <li><i className="fas fa-truck text-warning"></i> Traslado: {cliente.traslado}</li>
                                     <li><i className="fas fa-times text-danger"></i> Retirados: {cliente.retiro}</li>
                                 </ul>
+                                <div className="summary-card-total">
+                                    <span>Total centros</span>
+                                    <strong>{cliente.total}</strong>
+                                </div>
                             </div>
                         ))
                     ) : (
@@ -882,14 +976,37 @@ function Centros() {
                                         onChange={(e) => setGrowthMonth(e.target.value)}
                                     >
                                         <option value="all">Todo el año</option>
-                                        {monthLabels.map((month, idx) => (
-                                            <option key={month} value={idx}>
-                                                {month}
+                                        {monthOptions.map((month) => (
+                                            <option key={month.label} value={month.value}>
+                                                {month.label}
                                             </option>
                                         ))}
                                     </select>
                                 </div>
                             )}
+                            <div className="growth-view-toggle">
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${growthChartType === 'curva' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => setGrowthChartType('curva')}
+                                >
+                                    Curva
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${growthChartType === 'linea' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => setGrowthChartType('linea')}
+                                >
+                                    Linea
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${growthChartType === 'barra' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                    onClick={() => setGrowthChartType('barra')}
+                                >
+                                    Barras
+                                </button>
+                            </div>
                         </div>
                         </div>
                         {growthMetrics.length > 0 && (
@@ -942,8 +1059,8 @@ function Centros() {
                         <div className="growth-chart-lines">
                         <div className="growth-axis-y">
                             {yTicks.map((value) => {
-                                const rawY = chartHeight - (value / chartMaxValue) * chartHeight;
-                                const isMaxValue = value === chartMaxValue;
+                                const rawY = chartHeight - (value / chartMaxDomain) * chartHeight;
+                                const isMaxValue = value === chartMaxDomain;
                                 const yPosition = Math.max(0, rawY - (isMaxValue ? 6 : 0));
 
                                 let translate = '-50%';
@@ -1004,7 +1121,7 @@ function Centros() {
                                 preserveAspectRatio="none"
                             >
                                 {yTicks.map((tick) => {
-                                    const y = chartHeight - (tick / chartMaxValue) * chartHeight;
+                                    const y = chartHeight - (tick / chartMaxDomain) * chartHeight;
                                     return (
                                         <line
                                             key={`grid-${tick}`}
@@ -1018,54 +1135,99 @@ function Centros() {
                                 })}
                                 <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} className="growth-axis-line" />
                                 {(estadoSeriesCliente || orderedGrowthSeries).map((serie, index) => {
-                                    const path = buildLinePath(serie.points, chartWidth, chartHeight, chartMaxValue);
+                                    const points = buildSeriesPoints(serie.points, chartWidth, chartHeight, chartMaxDomain);
+                                    const path = buildSmoothLinePath(points);
+                                    const areaPath = buildAreaPath(points, chartHeight);
                                     const color = serie.color || lineColors[index % lineColors.length];
-                                    const totalPoints = serie.points.length;
+                                    const seriesCount = (estadoSeriesCliente || orderedGrowthSeries).length || 1;
+                                    const totalPoints = points.length;
                                     const step = totalPoints ? chartWidth / totalPoints : chartWidth;
+                                    const barSlot = Math.max(6, Math.min(18, (step * 0.78) / seriesCount));
+                                    const barOffsetBase = ((seriesCount - 1) * barSlot) / 2;
                                     return (
                                         <g key={`${serie.cliente}-${serie.metaEstado || 'total'}`}>
-                                            <path
-                                                d={path}
-                                                stroke={color}
-                                                fill="none"
-                                                strokeWidth="1.4"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                            {serie.points.map((value, i) => {
+                                            {growthChartType !== 'barra' && (
+                                                <path
+                                                    d={areaPath}
+                                                    fill={color}
+                                                    fillOpacity={growthChartType === 'curva' ? '0.12' : '0'}
+                                                    stroke="none"
+                                                />
+                                            )}
+                                            {growthChartType !== 'barra' && (
+                                                <path
+                                                    d={path}
+                                                    stroke={color}
+                                                    fill="none"
+                                                    strokeWidth={growthChartType === 'linea' ? '1.8' : '2.4'}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            )}
+                                            {points.map(({ value, x, y }, i) => {
                                                 if (value <= 0) return null;
-                                                const x = totalPoints === 1 ? chartWidth / 2 : step * i + step / 2;
-                                                const y = chartHeight - (value / chartMaxValue) * chartHeight;
                                                 const centrosMes = serie.metaEstado
                                                     ? (crecimientoMensual.estadoDetalles?.[clienteGrafico]?.[serie.metaEstado]?.[i] || [])
                                                     : (crecimientoMensual.detalles?.[serie.cliente]?.[i] || []);
+                                                const barX = x - barOffsetBase + index * barSlot - barSlot / 2;
+                                                const barHeight = Math.max(2, chartHeight - y);
+                                                const prevValue = i > 0 ? points[i - 1].value : null;
+                                                const mostrarLabel = i === 0 || i === points.length - 1 || prevValue !== value;
                                                 return (
                                                     <g key={`${serie.cliente}-${i}`} className="growth-point">
-                                                        <circle
-                                                            cx={x}
-                                                            cy={y}
-                                                            r={1.4}
-                                                            fill="transparent"
-                                                            stroke={color}
-                                                            strokeWidth="0.8"
-                                                            onMouseEnter={() =>
+                                                        {growthChartType === 'barra' ? (
+                                                            <rect
+                                                                x={barX}
+                                                                y={y}
+                                                                width={barSlot}
+                                                                height={barHeight}
+                                                                rx="1.5"
+                                                                fill={color}
+                                                                fillOpacity="0.88"
+                                                                onMouseEnter={() =>
                                                                     setHoverInfo({
                                                                         clientLabel: serie.displayName || serie.cliente,
                                                                         month: visibleMonths[i] || crecimientoMensual.months[i],
                                                                         value,
                                                                         centros: centrosMes,
-                                                                    left: `${(x / chartWidth) * 100}%`,
-                                                                    top: `${(y / chartHeight) * 100}%`,
-                                                                    metaEstado: serie.metaEstado || null,
-                                                                    destacado:
-                                                                        serie.metaEstado === 'activo' && centrosMes.length
-                                                                            ? centrosMes[centrosMes.length - 1]
-                                                                            : null
-                                                                })
-                                                            }
-                                                            onMouseLeave={() => setHoverInfo(null)}
-                                                        />
-                                                        {value > 0 && (
+                                                                        left: `${(x / chartWidth) * 100}%`,
+                                                                        top: `${(y / chartHeight) * 100}%`,
+                                                                        metaEstado: serie.metaEstado || null,
+                                                                        destacado:
+                                                                            serie.metaEstado === 'activo' && centrosMes.length
+                                                                                ? centrosMes[centrosMes.length - 1]
+                                                                                : null
+                                                                    })
+                                                                }
+                                                                onMouseLeave={() => setHoverInfo(null)}
+                                                            />
+                                                        ) : (
+                                                            <circle
+                                                                cx={x}
+                                                                cy={y}
+                                                                r={2.4}
+                                                                fill={color}
+                                                                stroke="#ffffff"
+                                                                strokeWidth="1.2"
+                                                                onMouseEnter={() =>
+                                                                    setHoverInfo({
+                                                                        clientLabel: serie.displayName || serie.cliente,
+                                                                        month: visibleMonths[i] || crecimientoMensual.months[i],
+                                                                        value,
+                                                                        centros: centrosMes,
+                                                                        left: `${(x / chartWidth) * 100}%`,
+                                                                        top: `${(y / chartHeight) * 100}%`,
+                                                                        metaEstado: serie.metaEstado || null,
+                                                                        destacado:
+                                                                            serie.metaEstado === 'activo' && centrosMes.length
+                                                                                ? centrosMes[centrosMes.length - 1]
+                                                                                : null
+                                                                    })
+                                                                }
+                                                                onMouseLeave={() => setHoverInfo(null)}
+                                                            />
+                                                        )}
+                                                        {value > 0 && growthChartType !== 'barra' && mostrarLabel && (
                                                             <text
                                                                 x={x}
                                                                 y={Math.max(10, y - labelOffset)}
@@ -1084,7 +1246,12 @@ function Centros() {
                                     );
                                 })}
                             </svg>
-                            <div className="growth-axis">
+                            <div
+                                className="growth-axis"
+                                style={{
+                                    gridTemplateColumns: `repeat(${Math.max(visibleMonths.length, 1)}, minmax(0, 1fr))`
+                                }}
+                            >
                                 {visibleMonths.map((month) => (
                                     <span key={month}>{month}</span>
                                 ))}
@@ -1098,13 +1265,18 @@ function Centros() {
                 <div className="card-body filter-grid">
                     <div>
                         <label>Buscar por cliente</label>
-                        <input
-                            type="text"
+                        <select
                             className="form-control"
                             value={filterCliente}
                             onChange={(e) => setFilterCliente(e.target.value)}
-                            placeholder="Nombre del cliente"
-                        />
+                        >
+                            <option value="">Todos los clientes</option>
+                            {clientesFiltro.map((cliente) => (
+                                <option key={cliente} value={cliente}>
+                                    {cliente}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <label>Buscar por centro</label>
@@ -1236,17 +1408,36 @@ function Centros() {
                                                 onChange={(e) => setFechaActivacion(e.target.value)}
                                             />
                                         </div>
-                                        <div className="form-group">
-                                            <label>Fecha de Término</label>
-                                            <input
-                                                type="date"
-                                                className="form-control"
-                                                value={fechaTermino}
-                                                onChange={(e) => setFechaTermino(e.target.value)}
-                                            />
-                                        </div>
                                     </div>
                                 </div>
+                                <div className="form-group">
+                                    <label>Estado</label>
+                                    <select className="form-control" value={estado} onChange={(e) => setEstado(e.target.value)}>
+                                        <option value="activo">Activo</option>
+                                        <option value="traslado">Traslado</option>
+                                        <option value="cese">Cese</option>
+                                        <option value="retirado">Retirado</option>
+                                    </select>
+                                </div>
+                                {estado === 'cese' && (
+                                    <div className="centro-form-section centro-form-section--cese">
+                                        <h5 className="centro-form-section-title centro-form-section-title--cese">Fecha de termino por cese</h5>
+                                        <div className="centro-form-dates">
+                                            <div className="form-group highlight-termination">
+                                                <label>
+                                                    Fecha de Termino
+                                                    <span className="date-pill date-pill--cese">Cese</span>
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    className="form-control"
+                                                    value={fechaTermino}
+                                                    onChange={(e) => setFechaTermino(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="form-group">
                                     <label>Base Tierra</label>
                                     <select
@@ -1290,15 +1481,6 @@ function Centros() {
                                     </div>
                                 )}
                                 <div className="form-group">
-                                    <label>Estado</label>
-                                    <select className="form-control" value={estado} onChange={(e) => setEstado(e.target.value)}>
-                                        <option value="activo">Activo</option>
-                                        <option value="traslado">Traslado</option>
-                                        <option value="cese">Cese</option>
-                                        <option value="retirado">Retirado</option>
-                                    </select>
-                                </div>
-                                <div className="form-group">
                                     <div className="form-check">
                                         <input
                                             id="esCentralCheck"
@@ -1326,5 +1508,8 @@ function Centros() {
 }
 
 export default Centros;
+
+
+
 
 
