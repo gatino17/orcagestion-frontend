@@ -417,10 +417,11 @@ const Soporte = () => {
         if (!soporte.fecha_soporte) return 0;
         const inicio = parseFechaLocal(soporte.fecha_soporte);
         if (!inicio || Number.isNaN(inicio.getTime())) return 0;
-        const fin = soporte.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre, true) : new Date();
+        const fin = soporte.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre) : new Date();
         if (!fin || Number.isNaN(fin.getTime())) return 0;
+        fin.setHours(0, 0, 0, 0);
         const diferencia = fin.getTime() - inicio.getTime();
-        return Math.max(0, Math.round(diferencia / (1000 * 60 * 60 * 24)));
+        return Math.max(0, Math.floor(diferencia / (1000 * 60 * 60 * 24)));
     };
 
     const renderEstado = (valor) => {
