@@ -10,6 +10,33 @@ import {
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import "./Soporte.css";
 
+const CATEGORIA_OTRA = "OTRA";
+const CATEGORIAS_FALLA = [
+    "ENERGIA",
+    "CAMARAS",
+    "RADAR",
+    "SENSOR",
+    "SOFTWARE",
+    "HARDWARE",
+    "CONFIGURACION",
+    "CALIBRACION",
+    "MANTENCION",
+    "ENLACE",
+    "ALARMAS",
+    "LICENCIA",
+    "TERCEROS",
+    "USUARIO",
+    "UPS",
+    "VRM",
+    "BATERIAS",
+    "GENERADOR",
+    "NETIO",
+    "REDES",
+    "ROUTER",
+    "PC",
+    "SWITCH"
+];
+
 const obtenerTotalUnico = (items, accessor) => {
     const valores = items
         .map(accessor)
@@ -58,6 +85,7 @@ const Soporte = () => {
     const [fechaSoporte, setFechaSoporte] = useState("");
     const [solucion, setSolucion] = useState("");
     const [categoriaFalla, setCategoriaFalla] = useState("");
+    const [categoriaFallaOtra, setCategoriaFallaOtra] = useState("");
     const [cambioEquipo, setCambioEquipo] = useState(false);
     const [equipoCambiado, setEquipoCambiado] = useState("");
     const [estado, setEstado] = useState("pendiente");
@@ -250,6 +278,7 @@ const Soporte = () => {
         setFechaSoporte("");
         setSolucion("");
         setCategoriaFalla("");
+        setCategoriaFallaOtra("");
         setCambioEquipo(false);
         setEquipoCambiado("");
         setEditarSoporte(null);
@@ -277,13 +306,18 @@ const Soporte = () => {
     };
 
     const handleGuardarSoporte = async () => {
+        const categoriaNormalizada =
+            categoriaFalla === CATEGORIA_OTRA
+                ? categoriaFallaOtra.trim().toUpperCase()
+                : categoriaFalla;
+
         const soporteData = {
             centro_id: parseInt(centroId, 10),
             problema,
             tipo,
             fecha_soporte: fechaSoporte,
             solucion,
-            categoria_falla: categoriaFalla,
+            categoria_falla: categoriaNormalizada,
             cambio_equipo: cambioEquipo,
             equipo_cambiado: equipoCambiado,
             estado,
@@ -327,7 +361,14 @@ const Soporte = () => {
         const fechaCierreNormalizada = formatearParaInputFecha(soporte.fecha_cierre);
         setFechaSoporte(fechaSoporteNormalizada);
         setSolucion(soporte.solucion);
-        setCategoriaFalla(soporte.categoria_falla ? soporte.categoria_falla.toUpperCase() : "");
+        const categoriaActual = soporte.categoria_falla ? soporte.categoria_falla.toUpperCase() : "";
+        if (categoriaActual && !CATEGORIAS_FALLA.includes(categoriaActual)) {
+            setCategoriaFalla(CATEGORIA_OTRA);
+            setCategoriaFallaOtra(categoriaActual);
+        } else {
+            setCategoriaFalla(categoriaActual);
+            setCategoriaFallaOtra("");
+        }
         setCambioEquipo(soporte.cambio_equipo);
         setEquipoCambiado(soporte.equipo_cambiado ? soporte.equipo_cambiado.toUpperCase() : "");
         const errorFechas = validarRelacionFechas(fechaSoporteNormalizada, fechaCierreNormalizada);
@@ -971,12 +1012,27 @@ const Soporte = () => {
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold">Categoria de falla</label>
-                                        <input
-                                            placeholder="Ej: ELECTRICA, COMUNICACIONES..."
+                                        <select
                                             value={categoriaFalla}
-                                            onChange={(e) => setCategoriaFalla(e.target.value.toUpperCase())}
-                                            className="form-control text-uppercase"
-                                        />
+                                            onChange={(e) => setCategoriaFalla(e.target.value)}
+                                            className="form-control"
+                                        >
+                                            <option value="">Seleccionar categoria...</option>
+                                            {CATEGORIAS_FALLA.map((categoria) => (
+                                                <option key={categoria} value={categoria}>
+                                                    {categoria}
+                                                </option>
+                                            ))}
+                                            <option value={CATEGORIA_OTRA}>OTRA</option>
+                                        </select>
+                                        {categoriaFalla === CATEGORIA_OTRA && (
+                                            <input
+                                                placeholder="Especificar categoria"
+                                                value={categoriaFallaOtra}
+                                                onChange={(e) => setCategoriaFallaOtra(e.target.value.toUpperCase())}
+                                                className="form-control text-uppercase mt-2"
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
