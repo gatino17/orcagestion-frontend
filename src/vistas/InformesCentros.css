@@ -141,6 +141,20 @@
 .informes-centros-tabla {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  background: #fff;
+}
+
+.informes-centros-tabla .card-body {
+  padding: 0.95rem 1rem;
+}
+
+.informes-centros-tabla .table-responsive {
+  border: 1px solid #dbe7ff;
+  border-radius: 12px;
+  overflow: auto;
+  background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
 }
 
 .informes-empty {
@@ -156,16 +170,64 @@
 
 .informes-table thead th {
   border-top: none;
-  background: #0f172a;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
   color: #fff;
   font-weight: 700;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  border-color: rgba(255, 255, 255, 0.16);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .informes-table td {
   vertical-align: middle;
+  border-color: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.informes-table tbody tr:nth-child(even) {
+  background-color: #f6faff;
+}
+
+.informes-table tbody tr:hover {
+  background-color: #eaf3ff;
+}
+
+.informes-table td:first-child,
+.informes-table th:first-child {
+  min-width: 52px;
+  text-align: center;
+}
+
+.informes-table td:last-child,
+.informes-table th:last-child {
+  min-width: 152px;
+}
+
+.informes-table .btn {
+  border-radius: 8px;
+  font-weight: 700;
+  min-width: 102px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.informes-table .btn + .btn {
+  margin-left: 0.35rem;
+}
+
+.informes-table .acciones-col {
+  white-space: nowrap;
+}
+
+.informes-table .acciones-col .btn {
+  margin-bottom: 0.35rem;
 }
 
 @media (max-width: 992px) {
@@ -213,4 +275,65 @@
   border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   box-shadow: 0 22px 60px rgba(15, 23, 42, 0.35);
+}
+
+.informes-editor-header {
+  background: linear-gradient(135deg, #f8fbff, #eef4ff);
+  border-bottom: 1px solid #dbe7ff;
+  position: relative;
+  padding-right: 3rem;
+}
+
+.informes-editor-subtitle {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.informes-editor-close-btn {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  border-radius: 8px;
+}
+
+.informes-editor-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  background: #fff;
+}
+
+.informes-editor-section-title {
+  margin: 0 0 0.65rem;
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.firma-check {
+  display: inline-block;
+  margin-left: 0.35rem;
+  color: #16a34a;
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+.signature-preview-box {
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.signature-preview-img {
+  display: block;
+  width: 100%;
+  max-height: 88px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
 }

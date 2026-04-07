@@ -1668,3 +1668,44 @@ export const descargarHistorialCentroPDF = async (centroId) => {
         console.error('Error descargando historial del centro en PDF:', error);
     }
 };
+
+// ===================== PERMISOS DE TRABAJO =====================
+export const obtenerPermisosTrabajo = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/permisos_trabajo/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener permisos de trabajo:", error);
+        throw error;
+    }
+};
+
+export const crearPermisoTrabajo = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/permisos_trabajo/`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear permiso de trabajo:", error);
+        throw error;
+    }
+};
+
+export const actualizarPermisoTrabajo = async (idPermisoTrabajo, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/permisos_trabajo/${idPermisoTrabajo}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar permiso de trabajo:", error);
+        throw error;
+    }
+};
+
+export const eliminarPermisoTrabajo = async (idPermisoTrabajo) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/permisos_trabajo/${idPermisoTrabajo}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar permiso de trabajo:", error);
+        throw error;
+    }
+};
