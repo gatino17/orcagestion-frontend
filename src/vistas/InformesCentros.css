@@ -154,7 +154,12 @@
   border: 1px solid #dbe7ff;
   border-radius: 12px;
   overflow: auto;
-  background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+  background: #ffffff;
+}
+
+.informes-table {
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .informes-empty {
@@ -170,16 +175,17 @@
 
 .informes-table thead th {
   border-top: none;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  background: #1f4fb8;
   color: #fff;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-color: rgba(255, 255, 255, 0.16);
   position: sticky;
   top: 0;
   z-index: 2;
+  padding: 0.58rem 0.62rem;
 }
 
 .informes-table td {
@@ -187,11 +193,12 @@
   border-color: #e2e8f0;
   color: #0f172a;
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
+  padding: 0.5rem 0.6rem;
 }
 
 .informes-table tbody tr:nth-child(even) {
-  background-color: #f6faff;
+  background-color: #f8fbff;
 }
 
 .informes-table tbody tr:hover {
@@ -206,13 +213,15 @@
 
 .informes-table td:last-child,
 .informes-table th:last-child {
-  min-width: 152px;
+  min-width: 265px;
 }
 
 .informes-table .btn {
   border-radius: 8px;
   font-weight: 700;
-  min-width: 102px;
+  min-width: 88px;
+  font-size: 0.74rem;
+  padding: 0.24rem 0.46rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -223,11 +232,77 @@
 }
 
 .informes-table .acciones-col {
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .informes-table .acciones-col .btn {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
+}
+
+.informes-table .acciones-col > .btn {
+  margin-right: 0.3rem;
+}
+
+.informes-pagination-bar {
+  margin-top: 0.9rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  background: #f8fbff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.informes-pagination-left,
+.informes-pagination-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.informes-pagination-label {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.informes-pagination-count {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.informes-page-size-select {
+  width: 86px;
+  height: 32px;
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.informes-page-indicator {
+  min-width: 110px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.informes-page-btn {
+  min-width: 96px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 700;
 }
 
 @media (max-width: 992px) {

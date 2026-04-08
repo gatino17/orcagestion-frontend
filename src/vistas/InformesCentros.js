@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import {
+    obtenerEquipos,
     obtenerActasEntrega,
     crearActaEntrega,
     actualizarActaEntrega,
     eliminarActaEntrega,
+    obtenerArmados,
+    obtenerMaterialesArmado,
     obtenerPermisosTrabajo,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
@@ -22,8 +25,19 @@ const SUBCATEGORIAS = [
 
 const toInputDate = (value) => {
     if (!value) return "";
-    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const latam = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (latam) return `${latam[3]}-${latam[2]}-${latam[1]}`;
+    const dt = new Date(raw);
+    if (!Number.isNaN(dt.getTime())) {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, "0");
+        const d = String(dt.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+    }
+    return "";
 };
 
 const toDisplayDate = (value) => {
@@ -107,6 +121,142 @@ const normalizeGpsPointInput = (value) => {
     if (text && !text.startsWith("-")) text = `-${text}`;
     return text;
 };
+const normalizeText = (value = "") =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+const SINONIMOS_EQUIPOS = {
+    "ip pc": "pc",
+    "ip pc nvr": "pc",
+    "puerta de enlace": "router",
+    "router (puerta de enlace)": "router",
+    "mastil": "mastil",
+    "mástil": "mastil",
+    "switch cisco + adaptador": "switch (cisco)",
+    "switch cisco": "switch (cisco)"
+};
+
+const GRUPOS_EQUIPOS_ARMADO = [
+    {
+        titulo: "Oficina",
+        items: [
+            "PC",
+            "Monitor",
+            "Mouse",
+            "Teclado",
+            "Router",
+            "Switch",
+            "Switch (Cisco)",
+            "Switch raqueable",
+            "Camara Interior",
+            "Parlantes",
+            "Sensor Magnetico",
+            "Rack 9U - tuercas - tornillos",
+            "Bandeja Rack - tornillos",
+            "Zapatilla Rack (PDU)"
+        ]
+    },
+    {
+        titulo: "Tablero Alarma",
+        items: [
+            "Tablero 500x400x200",
+            "Baliza Interior",
+            "Bocina Interior",
+            "Baliza Exterior 1",
+            "Baliza Exterior 2",
+            "Bocina Exterior 1",
+            "Bocina Exterior 2",
+            "Foco led 1 150W",
+            "Foco led 2 150W",
+            "Foco led 1 50W",
+            "Foco led 2 50W",
+            "Fuente poder 12V",
+            "Axis P8221"
+        ]
+    },
+    {
+        titulo: "Tablero Respaldo",
+        items: [
+            "Tablero 1200x800x300",
+            "Tablero 1000x600x300",
+            "Inversor cargador Victron",
+            "Panel Victron",
+            "Bateria 1",
+            "Bateria 2",
+            "Bateria 3",
+            "Bateria 4",
+            "Bateria 5",
+            "Bateria 6",
+            "UPS online",
+            "Switch POE",
+            "Sensor magnetico respaldo",
+            "Sensor magnetico cargador",
+            "Cargador 1",
+            "Cargador 2",
+            "Tablero Cargador 750x500x250"
+        ]
+    },
+    {
+        titulo: "Mastil",
+        items: [
+            "Tablero Derivacion (400x300x200)",
+            "Radar 1",
+            "Radar 2",
+            "Cable rj radar 1",
+            "Cable rj radar 2",
+            "Soporte radar 1",
+            "Soporte radar 2",
+            "Camara PTZ termal",
+            "Camara PTZ Laser",
+            "Camara PTZ Laser 2",
+            "Camara Modulo",
+            "Camara Silo 1",
+            "Camara Silo 2",
+            "Camara Ensinerador",
+            "Ensilaje interior",
+            "Ensilaje exterior",
+            "Camara Popa",
+            "Camara acceso 1",
+            "Camara acceso 2",
+            "Camara acceso 3",
+            "Camara acceso 4",
+            "Enlace Ubiquiti"
+        ]
+    },
+    {
+        titulo: "Tablero Camara",
+        items: [
+            "Tablero Camara (500x700x250)",
+            "Poe Power 1",
+            "Poe Power 2",
+            "Poe Power 3",
+            "Poe Power 4",
+            "Poe Power 5",
+            "Switch POE 1",
+            "Switch POE 2",
+            "Mass",
+            "Tablero 750x500x250",
+            "Switch 1",
+            "Switch 2",
+            "Switch 3",
+            "Switch 4",
+            "Netio"
+        ]
+    }
+];
+
+const normalizarNombreEquipo = (nombre = "") => {
+    let n = String(nombre || "")
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    if (SINONIMOS_EQUIPOS[n]) n = SINONIMOS_EQUIPOS[n];
+    return n;
+};
 
 function InformesCentros() {
     const [centros, setCentros] = useState([]);
@@ -158,6 +308,10 @@ function InformesCentros() {
     const [permisoMedicionNeutroTierra, setPermisoMedicionNeutroTierra] = useState("");
     const [permisoHertz, setPermisoHertz] = useState("");
     const [permisoDescripcionTrabajo, setPermisoDescripcionTrabajo] = useState("");
+    const [actaPage, setActaPage] = useState(1);
+    const [permisoPage, setPermisoPage] = useState(1);
+    const [actaPageSize, setActaPageSize] = useState(10);
+    const [permisoPageSize, setPermisoPageSize] = useState(10);
 
     const centrosOrdenados = useMemo(
         () => [...centros].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""))),
@@ -201,19 +355,72 @@ function InformesCentros() {
         return centrosOrdenados.filter((centro) => getCentroClienteKey(centro) === clienteIdForm);
     }, [centrosOrdenados, clienteIdForm]);
 
+    const centrosFiltroCliente = useMemo(() => {
+        if (filtroCliente === "all") return centrosOrdenados;
+        const clienteNorm = normalizeText(filtroCliente);
+        return centrosOrdenados.filter((centro) => normalizeText(centro?.cliente) === clienteNorm);
+    }, [centrosOrdenados, filtroCliente]);
+
     const actasFiltradas = useMemo(() => {
         return actasEntrega.filter((acta) => {
-            if (filtroCliente !== "all" && (acta.cliente || acta.empresa) !== filtroCliente) return false;
+            if (filtroCliente !== "all") {
+                const clienteActa = normalizeText(acta.cliente || acta.empresa || "");
+                if (clienteActa !== normalizeText(filtroCliente)) return false;
+            }
+            if (filtroCentroId && String(acta.centro_id || "") !== String(filtroCentroId)) return false;
+            const fecha = toInputDate(acta.fecha_registro);
+            if (filtroFechaDesde && (!fecha || fecha < filtroFechaDesde)) return false;
+            if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
             return true;
         });
-    }, [actasEntrega, filtroCliente]);
+    }, [actasEntrega, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
 
     const permisosFiltrados = useMemo(() => {
         return permisosTrabajo.filter((permiso) => {
-            if (filtroCliente !== "all" && (permiso.cliente || permiso.empresa) !== filtroCliente) return false;
+            if (filtroCliente !== "all") {
+                const clientePermiso = normalizeText(permiso.cliente || permiso.empresa || "");
+                if (clientePermiso !== normalizeText(filtroCliente)) return false;
+            }
+            if (filtroCentroId && String(permiso.centro_id || "") !== String(filtroCentroId)) return false;
+            const fecha = toInputDate(permiso.fecha_ingreso);
+            if (filtroFechaDesde && (!fecha || fecha < filtroFechaDesde)) return false;
+            if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
             return true;
         });
-    }, [permisosTrabajo, filtroCliente]);
+    }, [permisosTrabajo, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
+
+    const totalActaPages = Math.max(1, Math.ceil(actasFiltradas.length / actaPageSize));
+    const totalPermisoPages = Math.max(1, Math.ceil(permisosFiltrados.length / permisoPageSize));
+    const actasPaginadas = useMemo(() => {
+        const start = (actaPage - 1) * actaPageSize;
+        return actasFiltradas.slice(start, start + actaPageSize);
+    }, [actasFiltradas, actaPage, actaPageSize]);
+    const permisosPaginados = useMemo(() => {
+        const start = (permisoPage - 1) * permisoPageSize;
+        return permisosFiltrados.slice(start, start + permisoPageSize);
+    }, [permisosFiltrados, permisoPage, permisoPageSize]);
+
+    useEffect(() => {
+        if (!filtroCentroId) return;
+        const exists = centrosFiltroCliente.some((c) => String(c.id || c.id_centro) === String(filtroCentroId));
+        if (!exists) setFiltroCentroId("");
+    }, [filtroCliente, centrosFiltroCliente, filtroCentroId]);
+
+    useEffect(() => {
+        setActaPage(1);
+    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, subcategoria, actaPageSize]);
+
+    useEffect(() => {
+        setPermisoPage(1);
+    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, subcategoria, permisoPageSize]);
+
+    useEffect(() => {
+        if (actaPage > totalActaPages) setActaPage(totalActaPages);
+    }, [actaPage, totalActaPages]);
+
+    useEffect(() => {
+        if (permisoPage > totalPermisoPages) setPermisoPage(totalPermisoPages);
+    }, [permisoPage, totalPermisoPages]);
 
     const permisoCentroSeleccionadoForm = useMemo(
         () => centros.find((c) => String(c.id || c.id_centro) === String(permisoCentroIdForm)),
@@ -646,8 +853,8 @@ function InformesCentros() {
     .btn-print { background:#16a34a; color:#fff; }
     .btn-close { background:#e2e8f0; color:#0f172a; }
     .content { padding:16px 18px; }
-    .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:12px; break-inside: avoid; page-break-inside: avoid; }
-    .field { border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; background:#fff; break-inside: avoid; page-break-inside: avoid; }
+    .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:12px; break-inside:auto; page-break-inside:auto; }
+    .field { border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; background:#fff; break-inside:auto; page-break-inside:auto; }
     .field b { display:block; font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; letter-spacing:.04em; }
     .wide { grid-column:1 / -1; }
     .sig-box { border:1px solid #e2e8f0; border-radius:8px; padding:8px; background:#fff; min-height:84px; display:flex; align-items:center; justify-content:center; }
@@ -667,8 +874,10 @@ function InformesCentros() {
       .toolbar{display:none;} 
       .wrap{margin:0; border:0; border-radius:0;} 
       .head h1{font-size:15px;}
-      .sec-title{font-size:10px; margin:6px 0 4px;}
+      .sec-title{font-size:10px; margin:4px 0 3px; break-inside:avoid; page-break-inside:avoid;}
       .field b{font-size:10px;}
+      .grid{gap:6px; margin-bottom:8px; break-inside:auto; page-break-inside:auto;}
+      .field{padding:6px 8px; font-size:11px; break-inside:auto; page-break-inside:auto;}
       .orca-cell{background:#245b98 !important; color:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
       .orca-sub{color:#245b98 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
     }
@@ -912,6 +1121,125 @@ function InformesCentros() {
         verPermisoPdf(permiso);
     };
 
+    const verArmadoDesdeActa = async (acta) => {
+        const centroId = Number(acta?.centro_id || 0);
+        if (!centroId) {
+            alert("Esta acta no tiene centro valido para buscar armados.");
+            return;
+        }
+        try {
+            const [armadosData, equiposData] = await Promise.all([
+                obtenerArmados({ centro_id: centroId, estado: "finalizado" }),
+                obtenerEquipos(centroId)
+            ]);
+            const lista = Array.isArray(armadosData) ? armadosData : [];
+            if (!lista.length) {
+                alert("Este centro no tiene armados finalizados.");
+                return;
+            }
+            const armadoVinculadoId = Number(acta?.armado_id || 0);
+            const armadoVinculado = armadoVinculadoId
+                ? lista.find((x) => Number(x?.id_armado || 0) === armadoVinculadoId)
+                : null;
+            const armado = armadoVinculado || lista
+                .slice()
+                .sort((a, b) => new Date(b?.fecha_cierre || 0).getTime() - new Date(a?.fecha_cierre || 0).getTime())[0];
+            const armadoId = Number(armado?.id_armado || 0);
+            const materialesData = armadoId ? await obtenerMaterialesArmado(armadoId) : [];
+            const equipos = Array.isArray(equiposData) ? equiposData : [];
+            const materiales = Array.isArray(materialesData) ? materialesData : [];
+            const equiposConIdx = equipos.map((e, idx) => ({ ...e, __idx: idx }));
+            const usados = new Set();
+            const filasEquiposPartes = [];
+            const pushBloque = (titulo, lista) => {
+                filasEquiposPartes.push(`
+                  <tr style="background:#1e3a8a;color:#ffffff;">
+                    <td colspan="4" style="padding:6px 8px;border:1px solid #e2e8f0;font-weight:800;text-transform:uppercase;font-size:11.5px;">${esc(titulo)}</td>
+                  </tr>
+                `);
+                if (!lista.length) {
+                    filasEquiposPartes.push(`
+                      <tr><td colspan="4" style="text-align:center;color:#64748b;padding:6px 8px;border:1px solid #e2e8f0;font-size:11.5px;">Sin registros</td></tr>
+                    `);
+                    return;
+                }
+                lista.forEach((e) => {
+                    filasEquiposPartes.push(`
+                      <tr>
+                        <td style="padding:6px 8px;border:1px solid #e2e8f0;font-size:11.5px;">${esc(e?.nombre || "-")}</td>
+                        <td style="padding:6px 8px;border:1px solid #e2e8f0;font-size:11.5px;">${esc(e?.caja || "-")}</td>
+                        <td style="padding:6px 8px;border:1px solid #e2e8f0;font-size:11.5px;">${esc(e?.numero_serie || e?.nro_serie || "-")}</td>
+                        <td style="padding:6px 8px;border:1px solid #e2e8f0;font-size:11.5px;">${esc(e?.codigo || "-")}</td>
+                      </tr>
+                    `);
+                });
+            };
+            GRUPOS_EQUIPOS_ARMADO.forEach((grupo) => {
+                const itemsNorm = (grupo.items || []).map((n) => normalizarNombreEquipo(n));
+                const presentes = equiposConIdx.filter((e) => {
+                    if (usados.has(e.__idx)) return false;
+                    return itemsNorm.includes(normalizarNombreEquipo(e?.nombre || ""));
+                });
+                presentes.forEach((e) => usados.add(e.__idx));
+                pushBloque(grupo.titulo, presentes);
+            });
+            const extras = equiposConIdx.filter((e) => !usados.has(e.__idx));
+            pushBloque("Otros", extras);
+            const filasEquipos = filasEquiposPartes.join("");
+            const body = `
+              <div class="doc-top">
+                <div class="orca-logo">
+                  <div class="orca-row">
+                    <div class="orca-cell">O</div>
+                    <div class="orca-cell">R</div>
+                    <div class="orca-cell">C</div>
+                    <div class="orca-cell">A</div>
+                  </div>
+                  <div class="orca-sub">Tecnologias</div>
+                </div>
+                <div class="doc-meta">
+                  <div class="meta-line">N°: ${esc(armado?.id_armado || "-")}</div>
+                  <div class="meta-line">Tecnico: ${esc(armado?.tecnico?.nombre || "-")}</div>
+                  <div class="meta-line">Fecha cierre: ${esc(toDisplayDate(armado?.fecha_cierre))}</div>
+                </div>
+              </div>
+
+              <div class="sec-title">Resumen de armado</div>
+              <div class="grid">
+                <div class="field"><b>Centro</b>${esc(armado?.centro?.nombre || acta?.centro || "-")}</div>
+                <div class="field"><b>Cliente</b>${esc(armado?.centro?.cliente || acta?.empresa || acta?.cliente || "-")}</div>
+                <div class="field"><b>Estado</b>${esc(armado?.estado || "-")}</div>
+                <div class="field"><b>Total cajas</b>${esc(armado?.total_cajas ?? "-")}</div>
+                <div class="field"><b>Asignado</b>${esc(toDisplayDate(armado?.fecha_asignacion))}</div>
+                <div class="field"><b>Inicio armado</b>${esc(toDisplayDate(armado?.fecha_inicio))}</div>
+                <div class="field wide"><b>Observacion</b>${esc(armado?.observacion || "-")}</div>
+              </div>
+
+              <div class="sec-title">Equipos</div>
+              <div class="field wide" style="padding:0;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr style="background:#eff6ff;">
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e2e8f0;">Equipo</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e2e8f0;">Caja</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e2e8f0;">Nro Serie</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e2e8f0;">Codigo</th>
+                    </tr>
+                  </thead>
+                  <tbody>${filasEquipos}</tbody>
+                </table>
+              </div>
+            `;
+            openPreviewPdf(
+                `${armado?.id_armado || "-"} - Informe de Armado ${armado?.centro?.nombre || acta?.centro || ""}`,
+                body
+            );
+        } catch (error) {
+            console.error("Error al cargar armado desde acta:", error);
+            alert("No se pudo abrir el armado asociado.");
+        }
+    };
+
     return (
         <div className="informes-centros-page container-fluid">
             <div className="card informes-centros-hero">
@@ -954,7 +1282,7 @@ function InformesCentros() {
                         <label>Centro</label>
                         <select className="form-control" value={filtroCentroId} onChange={(e) => setFiltroCentroId(e.target.value)}>
                             <option value="">Todos los centros</option>
-                            {centrosOrdenados.map((centro) => (
+                            {centrosFiltroCliente.map((centro) => (
                                 <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
                                     {centro.nombre}
                                 </option>
@@ -994,67 +1322,109 @@ function InformesCentros() {
                             ) : !actasFiltradas.length ? (
                                 <div className="informes-empty">No hay actas de entrega para los filtros seleccionados.</div>
                             ) : (
-                                <div className="table-responsive">
-                                    <table className="table table-sm table-hover informes-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>N</th>
-                                                <th>Empresa</th>
-                                                <th>Region / Localidad</th>
-                                                <th>Centro</th>
-                                                <th>Codigo Ponton</th>
-                                                <th>Fecha registro</th>
-                                                <th>Tecnico 1</th>
-                                                <th>Tecnico 2</th>
-                                                <th>Recepciona</th>
-                                                <th>Equipos considerados en este sistema</th>
-                                                <th>Centro origen (traslado)</th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {actasFiltradas.map((acta, index) => (
-                                                <tr key={acta.id_acta_entrega}>
-                                                    <td>{index + 1}</td>
-                                                    <td>{acta.empresa || "-"}</td>
-                                                    <td>
-                                                        <div>{acta.region || "-"}</div>
-                                                        <small className="text-muted">{acta.localidad || "-"}</small>
-                                                    </td>
-                                                    <td>{acta.centro || "-"}</td>
-                                                    <td>{acta.codigo_ponton || "-"}</td>
-                                                    <td>{toDisplayDate(acta.fecha_registro)}</td>
-                                                    <td>{acta.tecnico_1 || "-"}</td>
-                                                    <td>{acta.tecnico_2 || "-"}</td>
-                                                    <td>{acta.recepciona_nombre || "-"}</td>
-                                                    <td className="equipos-col">{acta.equipos_considerados || "-"}</td>
-                                                    <td>{acta.centro_origen_traslado || "-"}</td>
-                                                    <td className="acciones-col">
-                                                        <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarActa(acta)}>
-                                                            <i className="fas fa-folder-open mr-1" />
-                                                            Acta
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-info mr-2" onClick={() => handleAbrirPermisoDesdeActa(acta)}>
-                                                            <i className="fas fa-clipboard-list mr-1" />
-                                                            Permiso
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verActaPdf(acta)}>
-                                                            <i className="fas fa-file-pdf mr-1" />
-                                                            Ver acta
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoDesdeActaPdf(acta)}>
-                                                            <i className="fas fa-file-pdf mr-1" />
-                                                            Ver permiso
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarActa(acta.id_acta_entrega)}>
-                                                            <i className="fas fa-trash-alt" />
-                                                        </button>
-                                                    </td>
+                                <>
+                                    <div className="table-responsive">
+                                        <table className="table table-sm table-hover informes-table mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>N</th>
+                                                    <th>Empresa</th>
+                                                    <th>Region / Localidad</th>
+                                                    <th>Centro</th>
+                                                    <th>Codigo Ponton</th>
+                                                    <th>Fecha registro</th>
+                                                    <th>Tecnico 1</th>
+                                                    <th>Tecnico 2</th>
+                                                    <th>Recepciona</th>
+                                                    <th>Equipos considerados en este sistema</th>
+                                                    <th>Centro origen (traslado)</th>
+                                                    <th>Acciones</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody>
+                                                {actasPaginadas.map((acta, index) => (
+                                                    <tr key={acta.id_acta_entrega}>
+                                                        <td>{(actaPage - 1) * actaPageSize + index + 1}</td>
+                                                        <td>{acta.empresa || "-"}</td>
+                                                        <td>
+                                                            <div>{acta.region || "-"}</div>
+                                                            <small className="text-muted">{acta.localidad || "-"}</small>
+                                                        </td>
+                                                        <td>{acta.centro || "-"}</td>
+                                                        <td>{acta.codigo_ponton || "-"}</td>
+                                                        <td>{toDisplayDate(acta.fecha_registro)}</td>
+                                                        <td>{acta.tecnico_1 || "-"}</td>
+                                                        <td>{acta.tecnico_2 || "-"}</td>
+                                                        <td>{acta.recepciona_nombre || "-"}</td>
+                                                        <td className="equipos-col">{acta.equipos_considerados || "-"}</td>
+                                                        <td>{acta.centro_origen_traslado || "-"}</td>
+                                                        <td className="acciones-col">
+                                                            <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarActa(acta)}>
+                                                                <i className="fas fa-folder-open mr-1" />
+                                                                Acta
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-info mr-2" onClick={() => handleAbrirPermisoDesdeActa(acta)}>
+                                                                <i className="fas fa-clipboard-list mr-1" />
+                                                                Permiso
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verActaPdf(acta)}>
+                                                                <i className="fas fa-file-pdf mr-1" />
+                                                                Acta
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoDesdeActaPdf(acta)}>
+                                                                <i className="fas fa-file-pdf mr-1" />
+                                                                Permiso
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-success mr-2" onClick={() => verArmadoDesdeActa(acta)}>
+                                                                <i className="fas fa-tools mr-1" />
+                                                                Armado
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarActa(acta.id_acta_entrega)}>
+                                                                <i className="fas fa-trash-alt" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="informes-pagination-bar">
+                                        <div className="informes-pagination-left">
+                                            <span className="informes-pagination-label">
+                                                <i className="fas fa-list-ul" /> Ver
+                                            </span>
+                                            <select
+                                                className="form-control form-control-sm informes-page-size-select"
+                                                value={actaPageSize}
+                                                onChange={(e) => setActaPageSize(Number(e.target.value) || 10)}>
+                                                <option value={10}>10</option>
+                                                <option value={15}>15</option>
+                                                <option value={30}>30</option>
+                                            </select>
+                                            <span className="informes-pagination-label">registros</span>
+                                        </div>
+                                        <small className="informes-pagination-count">
+                                            Mostrando {(actaPage - 1) * actaPageSize + 1}-{Math.min(actaPage * actaPageSize, actasFiltradas.length)} de {actasFiltradas.length}
+                                        </small>
+                                        <div className="informes-pagination-right">
+                                            <button
+                                                className="btn btn-sm btn-outline-secondary informes-page-btn"
+                                                disabled={actaPage <= 1}
+                                                onClick={() => setActaPage((p) => Math.max(1, p - 1))}>
+                                                <i className="fas fa-chevron-left" /> Anterior
+                                            </button>
+                                            <span className="informes-page-indicator">
+                                                Pagina {actaPage} / {totalActaPages}
+                                            </span>
+                                            <button
+                                                className="btn btn-sm btn-outline-secondary informes-page-btn"
+                                                disabled={actaPage >= totalActaPages}
+                                                onClick={() => setActaPage((p) => Math.min(totalActaPages, p + 1))}>
+                                                Siguiente <i className="fas fa-chevron-right" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -1235,69 +1605,107 @@ function InformesCentros() {
                             ) : !permisosFiltrados.length ? (
                                 <div className="informes-empty">No hay permisos de trabajo para los filtros seleccionados.</div>
                             ) : (
-                                <div className="table-responsive">
-                                    <table className="table table-sm table-hover informes-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>N</th>
-                                                <th>Empresa</th>
-                                                <th>Centro</th>
-                                                <th>Codigo Ponton</th>
-                                                <th>Fecha ingreso</th>
-                                                <th>Fecha salida</th>
-                                                <th>Correo centro</th>
-                                                <th>Region / Localidad</th>
-                                                <th>Tecnico 1</th>
-                                                <th>Tecnico 2</th>
-                                                <th>Recepciona</th>
-                                                <th>Puntos GPS</th>
-                                                <th>Fase/Neutro</th>
-                                                <th>Neutro/Tierra</th>
-                                                <th>Hertz</th>
-                                                <th>Descripcion</th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {permisosFiltrados.map((permiso, index) => (
-                                                <tr key={permiso.id_permiso_trabajo}>
-                                                    <td>{index + 1}</td>
-                                                    <td>{permiso.empresa || permiso.cliente || "-"}</td>
-                                                    <td>{permiso.centro || "-"}</td>
-                                                    <td>{permiso.codigo_ponton || "-"}</td>
-                                                    <td>{toDisplayDate(permiso.fecha_ingreso)}</td>
-                                                    <td>{toDisplayDate(permiso.fecha_salida)}</td>
-                                                    <td>{permiso.correo_centro || "-"}</td>
-                                                    <td>
-                                                        <div>{permiso.region || "-"}</div>
-                                                        <small className="text-muted">{permiso.localidad || "-"}</small>
-                                                    </td>
-                                                    <td>{permiso.tecnico_1 || "-"}</td>
-                                                    <td>{permiso.tecnico_2 || "-"}</td>
-                                                    <td>{permiso.recepciona_nombre || "-"}</td>
-                                                    <td>{permiso.puntos_gps || "-"}</td>
-                                                    <td>{permiso.medicion_fase_neutro || "-"}</td>
-                                                    <td>{permiso.medicion_neutro_tierra || "-"}</td>
-                                                    <td>{permiso.hertz || "-"}</td>
-                                                    <td className="equipos-col">{permiso.descripcion_trabajo || "-"}</td>
-                                                    <td className="acciones-col">
-                                                        <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
-                                                            <i className="fas fa-folder-open mr-1" />
-                                                            Abrir
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
-                                                            <i className="fas fa-file-pdf mr-1" />
-                                                            Ver
-                                                        </button>
-                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
-                                                            <i className="fas fa-trash-alt" />
-                                                        </button>
-                                                    </td>
+                                <>
+                                    <div className="table-responsive">
+                                        <table className="table table-sm table-hover informes-table mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>N</th>
+                                                    <th>Empresa</th>
+                                                    <th>Centro</th>
+                                                    <th>Codigo Ponton</th>
+                                                    <th>Fecha ingreso</th>
+                                                    <th>Fecha salida</th>
+                                                    <th>Correo centro</th>
+                                                    <th>Region / Localidad</th>
+                                                    <th>Tecnico 1</th>
+                                                    <th>Tecnico 2</th>
+                                                    <th>Recepciona</th>
+                                                    <th>Puntos GPS</th>
+                                                    <th>Fase/Neutro</th>
+                                                    <th>Neutro/Tierra</th>
+                                                    <th>Hertz</th>
+                                                    <th>Descripcion</th>
+                                                    <th>Acciones</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody>
+                                                {permisosPaginados.map((permiso, index) => (
+                                                    <tr key={permiso.id_permiso_trabajo}>
+                                                        <td>{(permisoPage - 1) * permisoPageSize + index + 1}</td>
+                                                        <td>{permiso.empresa || permiso.cliente || "-"}</td>
+                                                        <td>{permiso.centro || "-"}</td>
+                                                        <td>{permiso.codigo_ponton || "-"}</td>
+                                                        <td>{toDisplayDate(permiso.fecha_ingreso)}</td>
+                                                        <td>{toDisplayDate(permiso.fecha_salida)}</td>
+                                                        <td>{permiso.correo_centro || "-"}</td>
+                                                        <td>
+                                                            <div>{permiso.region || "-"}</div>
+                                                            <small className="text-muted">{permiso.localidad || "-"}</small>
+                                                        </td>
+                                                        <td>{permiso.tecnico_1 || "-"}</td>
+                                                        <td>{permiso.tecnico_2 || "-"}</td>
+                                                        <td>{permiso.recepciona_nombre || "-"}</td>
+                                                        <td>{permiso.puntos_gps || "-"}</td>
+                                                        <td>{permiso.medicion_fase_neutro || "-"}</td>
+                                                        <td>{permiso.medicion_neutro_tierra || "-"}</td>
+                                                        <td>{permiso.hertz || "-"}</td>
+                                                        <td className="equipos-col">{permiso.descripcion_trabajo || "-"}</td>
+                                                        <td className="acciones-col">
+                                                            <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
+                                                                <i className="fas fa-folder-open mr-1" />
+                                                                Abrir
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
+                                                                <i className="fas fa-file-pdf mr-1" />
+                                                                Permiso
+                                                            </button>
+                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
+                                                                <i className="fas fa-trash-alt" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="informes-pagination-bar">
+                                        <div className="informes-pagination-left">
+                                            <span className="informes-pagination-label">
+                                                <i className="fas fa-list-ul" /> Ver
+                                            </span>
+                                            <select
+                                                className="form-control form-control-sm informes-page-size-select"
+                                                value={permisoPageSize}
+                                                onChange={(e) => setPermisoPageSize(Number(e.target.value) || 10)}>
+                                                <option value={10}>10</option>
+                                                <option value={15}>15</option>
+                                                <option value={30}>30</option>
+                                            </select>
+                                            <span className="informes-pagination-label">registros</span>
+                                        </div>
+                                        <small className="informes-pagination-count">
+                                            Mostrando {(permisoPage - 1) * permisoPageSize + 1}-{Math.min(permisoPage * permisoPageSize, permisosFiltrados.length)} de {permisosFiltrados.length}
+                                        </small>
+                                        <div className="informes-pagination-right">
+                                            <button
+                                                className="btn btn-sm btn-outline-secondary informes-page-btn"
+                                                disabled={permisoPage <= 1}
+                                                onClick={() => setPermisoPage((p) => Math.max(1, p - 1))}>
+                                                <i className="fas fa-chevron-left" /> Anterior
+                                            </button>
+                                            <span className="informes-page-indicator">
+                                                Pagina {permisoPage} / {totalPermisoPages}
+                                            </span>
+                                            <button
+                                                className="btn btn-sm btn-outline-secondary informes-page-btn"
+                                                disabled={permisoPage >= totalPermisoPages}
+                                                onClick={() => setPermisoPage((p) => Math.min(totalPermisoPages, p + 1))}>
+                                                Siguiente <i className="fas fa-chevron-right" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -1673,6 +2081,7 @@ function InformesCentros() {
                     </div>
                 </div>
             ) : null}
+
         </div>
     );
 }
