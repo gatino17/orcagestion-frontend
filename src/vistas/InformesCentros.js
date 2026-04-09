@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import {
     obtenerEquipos,
@@ -9,9 +9,11 @@ import {
     obtenerArmados,
     obtenerMaterialesArmado,
     obtenerPermisosTrabajo,
+    obtenerMantencionesTerreno,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
-    eliminarPermisoTrabajo
+    eliminarPermisoTrabajo,
+    eliminarMantencionTerreno
 } from "../api";
 import "./InformesCentros.css";
 
@@ -82,6 +84,28 @@ const signatureHtml = (value, label = "Sin firma") => {
         return `<img src="${value}" alt="Firma" class="sig-img" />`;
     }
     return `<div class="sig-text">${esc(value)}</div>`;
+};
+
+const evidenceHtml = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return `<div class="sig-empty">Sin evidencia</div>`;
+    let items = [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            items = parsed.map((v) => String(v || "").trim()).filter(Boolean);
+        }
+    } catch (_) {
+        items = [];
+    }
+    if (!items.length) items = [raw];
+    const rendered = items.slice(0, 3).map((src, idx) => {
+        if (/^data:image\/[a-zA-Z0-9+.-]+;base64,/.test(src) || /^https?:\/\//i.test(src)) {
+            return `<div class="evi-item"><img src="${esc(src)}" alt="Evidencia ${idx + 1}" class="evi-img" /></div>`;
+        }
+        return `<div class="evi-item"><div class="sig-text">${esc(src)}</div></div>`;
+    });
+    return `<div class="evi-grid">${rendered.join("")}</div>`;
 };
 
 const parseGpsPoints = (value) => {
@@ -583,17 +607,18 @@ function InformesCentros() {
     };
 
     const cargarPermisos = async () => {
-        if (subcategoria !== "intervencion") return;
+        if (!["intervencion", "mantencion"].includes(subcategoria)) return;
         setLoadingActas(true);
         try {
-            const data = await obtenerPermisosTrabajo({
+            const fetcher = subcategoria === "mantencion" ? obtenerMantencionesTerreno : obtenerPermisosTrabajo;
+            const data = await fetcher({
                 centro_id: filtroCentroId || undefined,
                 fecha_desde: filtroFechaDesde || undefined,
                 fecha_hasta: filtroFechaHasta || undefined
             });
             setPermisosTrabajo(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Error al cargar permisos de trabajo:", error);
+            console.error("Error al cargar registros:", error);
             setPermisosTrabajo([]);
         } finally {
             setLoadingActas(false);
@@ -619,7 +644,7 @@ function InformesCentros() {
     useEffect(() => {
         if (subcategoria === "acta_entrega") {
             cargarActas();
-        } else if (subcategoria === "intervencion") {
+        } else if (subcategoria === "intervencion" || subcategoria === "mantencion") {
             cargarPermisos();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -831,6 +856,17 @@ function InformesCentros() {
         }
     };
 
+    const handleEliminarMantencion = async (id) => {
+        if (!window.confirm("Quieres eliminar esta mantencion en terreno?")) return;
+        try {
+            await eliminarMantencionTerreno(id);
+            await cargarPermisos();
+        } catch (error) {
+            console.error("Error al eliminar mantencion en terreno:", error);
+            alert("No se pudo eliminar la mantencion en terreno.");
+        }
+    };
+
     const openPreviewPdf = (title, bodyHtml) => {
         const w = window.open("", "_blank", "width=980,height=760");
         if (!w) {
@@ -859,6 +895,10 @@ function InformesCentros() {
     .wide { grid-column:1 / -1; }
     .sig-box { border:1px solid #e2e8f0; border-radius:8px; padding:8px; background:#fff; min-height:84px; display:flex; align-items:center; justify-content:center; }
     .sig-img { max-width:100%; max-height:76px; object-fit:contain; }
+    .evi-box { border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#fff; min-height:160px; }
+    .evi-grid { display:grid; grid-template-columns:1fr; gap:12px; align-items:stretch; }
+    .evi-item { display:flex; flex-direction:column; }
+    .evi-img { width:100%; max-height:420px; object-fit:contain; border-radius:8px; background:#f8fafc; border:1px solid #dbeafe; }
     .sig-empty, .sig-text { color:#64748b; font-weight:600; font-size:12px; text-align:center; }
     .doc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; }
     .doc-meta h2 { margin:0 0 6px; color:#1d4ed8; font-size:20px; }
@@ -958,7 +998,11 @@ function InformesCentros() {
         openPreviewPdf("Acta de Entrega y Recepción", body);
     };
 
-    const verPermisoPdf = (permiso) => {
+    const verPermisoPdf = (permiso, opts = {}) => {
+        const idField = opts.idField || "id_permiso_trabajo";
+        const tituloDocumento = opts.tituloDocumento || "Permiso de Trabajo - Informe de Intervencion y Recepcion";
+        const incluirResponsabilidad = !!opts.incluirResponsabilidad;
+        const correlativo = String(permiso?.[idField] || "sin-numero");
         const gpsItems = String(permiso.puntos_gps || "")
             .split("|")
             .map((p) => p.trim())
@@ -983,12 +1027,13 @@ function InformesCentros() {
         }
         const sellosHtml = sellosItems.length
             ? sellosItems
-                  .map(
-                      (s, idx) =>
-                          `<div style="padding:6px 8px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:6px;"><b>Sello ${
-                              idx + 1
-                          }</b> - Ubicacion: ${esc(s.ubicacion || "-")} | Numero: ${esc(s.numero || "-")}</div>`
-                  )
+                  .map((s, idx) => {
+                      const antiguo = s.numero_anterior || s.numero || "-";
+                      const nuevo = s.numero_nuevo || "sin cambio";
+                      return `<div style="padding:6px 8px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:6px;"><b>Sello ${
+                          idx + 1
+                      }</b> - Ubicacion: ${esc(s.ubicacion || "-")} | Antiguo: ${esc(antiguo)} | Nuevo: ${esc(nuevo)}</div>`;
+                  })
                   .join("")
             : "-";
 
@@ -1007,7 +1052,7 @@ function InformesCentros() {
             <div class="orca-sub">Tecnologias</div>
           </div>
           <div class="doc-meta">
-            <div class="meta-line">N°: ${esc(permiso.id_permiso_trabajo || "-")}</div>
+            <div class="meta-line">N°: ${esc(correlativo)}</div>
             <div class="meta-line">Fecha y hora: ${esc(toDisplayDate(permiso.fecha_ingreso))}, ${esc(toDisplayHour(permiso.created_at))}</div>
             <div class="meta-line">Tecnico 1: ${esc(permiso.tecnico_1 || "-")}</div>
             ${permiso.tecnico_2 ? `<div class="meta-line">Tecnico 2: ${esc(permiso.tecnico_2)}</div>` : ""}
@@ -1033,6 +1078,7 @@ function InformesCentros() {
         <div class="grid">
           <div class="field"><b>Base tierra</b>${baseTierraText}</div>
           <div class="field"><b>Cantidad de radares</b>${esc(permiso.cantidad_radares ?? "-")}</div>
+          ${incluirResponsabilidad ? `<div class="field"><b>Responsabilidad</b>${esc(permiso.responsabilidad || "-")}</div>` : ""}
         </div>
 
         <div class="sec-title">Fechas de intervencion</div>
@@ -1086,11 +1132,17 @@ function InformesCentros() {
         <div class="sec-title">Descripcion del trabajo</div>
         <div class="grid">
           <div class="field wide"><b>Descripcion del trabajo</b>${esc(permiso.descripcion_trabajo || "-")}</div>
+        </div>
+
+        <div class="sec-title">Evidencia</div>
+        <div class="grid">
+          <div class="field wide">
+            <div class="evi-box">${evidenceHtml(permiso.evidencia_foto)}</div>
+          </div>
         </div>`;
-        const correlativo = String(permiso.id_permiso_trabajo || "sin-numero");
         const centroNombre = String(permiso.centro || "sin-centro").trim();
         openPreviewPdf(
-            `${correlativo} - Permiso de Trabajo - Informe de Intervencion y Recepcion ${centroNombre}`,
+            `${correlativo} - ${tituloDocumento} ${centroNombre}`,
             body
         );
     };
@@ -1586,24 +1638,32 @@ function InformesCentros() {
                         </div>
                     ) : null}
                 </>
-            ) : subcategoria === "intervencion" ? (
+            ) : (subcategoria === "intervencion" || subcategoria === "mantencion") ? (
                 <>
                     <div className="card informes-centros-tabla">
                         <div className="card-body">
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div>
-                                    <h5 className="mb-1">Permisos de trabajo</h5>
-                                    <p className="text-muted mb-0">Registros creados desde mobile y web.</p>
+                                    <h5 className="mb-1">{subcategoria === "mantencion" ? "Mantenciones en terreno" : "Permisos de trabajo"}</h5>
+                                    <p className="text-muted mb-0">
+                                        {subcategoria === "mantencion" ? "Registros creados desde mobile en mantenciones de terreno." : "Registros creados desde mobile y web."}
+                                    </p>
                                 </div>
-                                <button className="btn btn-primary" onClick={abrirNuevoPermiso}>
-                                    <i className="fas fa-plus mr-2" />
-                                    Nuevo permiso
-                                </button>
+                                {subcategoria === "intervencion" ? (
+                                    <button className="btn btn-primary" onClick={abrirNuevoPermiso}>
+                                        <i className="fas fa-plus mr-2" />
+                                        Nuevo permiso
+                                    </button>
+                                ) : null}
                             </div>
                             {loadingCentros || loadingActas ? (
                                 <div className="informes-empty">Cargando informacion...</div>
                             ) : !permisosFiltrados.length ? (
-                                <div className="informes-empty">No hay permisos de trabajo para los filtros seleccionados.</div>
+                                <div className="informes-empty">
+                                    {subcategoria === "mantencion"
+                                        ? "No hay mantenciones en terreno para los filtros seleccionados."
+                                        : "No hay permisos de trabajo para los filtros seleccionados."}
+                                </div>
                             ) : (
                                 <>
                                     <div className="table-responsive">
@@ -1631,7 +1691,7 @@ function InformesCentros() {
                                             </thead>
                                             <tbody>
                                                 {permisosPaginados.map((permiso, index) => (
-                                                    <tr key={permiso.id_permiso_trabajo}>
+                                                    <tr key={permiso.id_permiso_trabajo || permiso.id_mantencion_terreno}>
                                                         <td>{(permisoPage - 1) * permisoPageSize + index + 1}</td>
                                                         <td>{permiso.empresa || permiso.cliente || "-"}</td>
                                                         <td>{permiso.centro || "-"}</td>
@@ -1652,17 +1712,39 @@ function InformesCentros() {
                                                         <td>{permiso.hertz || "-"}</td>
                                                         <td className="equipos-col">{permiso.descripcion_trabajo || "-"}</td>
                                                         <td className="acciones-col">
-                                                            <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
-                                                                <i className="fas fa-folder-open mr-1" />
-                                                                Abrir
-                                                            </button>
-                                                            <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
-                                                                <i className="fas fa-file-pdf mr-1" />
-                                                                Permiso
-                                                            </button>
-                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
-                                                                <i className="fas fa-trash-alt" />
-                                                            </button>
+                                                            {subcategoria === "intervencion" ? (
+                                                                <>
+                                                                    <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
+                                                                        <i className="fas fa-folder-open mr-1" />
+                                                                        Abrir
+                                                                    </button>
+                                                                    <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
+                                                                        <i className="fas fa-file-pdf mr-1" />
+                                                                        Permiso
+                                                                    </button>
+                                                                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
+                                                                        <i className="fas fa-trash-alt" />
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <button
+                                                                        className="btn btn-sm btn-outline-secondary mr-2"
+                                                                        onClick={() =>
+                                                                            verPermisoPdf(permiso, {
+                                                                                idField: "id_mantencion_terreno",
+                                                                                tituloDocumento: "Mantencion en Terreno - Informe",
+                                                                                incluirResponsabilidad: true
+                                                                            })
+                                                                        }>
+                                                                        <i className="fas fa-file-pdf mr-1" />
+                                                                        Mantencion
+                                                                    </button>
+                                                                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarMantencion(permiso.id_mantencion_terreno)}>
+                                                                        <i className="fas fa-trash-alt" />
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}

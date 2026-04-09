@@ -1709,3 +1709,24 @@ export const eliminarPermisoTrabajo = async (idPermisoTrabajo) => {
         throw error;
     }
 };
+
+// ===================== MANTENCIONES TERRENO =====================
+export const obtenerMantencionesTerreno = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/mantenciones_terreno/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener mantenciones en terreno:", error);
+        throw error;
+    }
+};
+
+export const eliminarMantencionTerreno = async (idMantencionTerreno) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/mantenciones_terreno/${idMantencionTerreno}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar mantencion en terreno:", error);
+        throw error;
+    }
+};
