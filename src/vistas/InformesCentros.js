@@ -10,6 +10,7 @@ import {
     obtenerMaterialesArmado,
     obtenerPermisosTrabajo,
     obtenerMantencionesTerreno,
+    obtenerCambiosEquipoMantencion,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
     eliminarPermisoTrabajo,
@@ -907,8 +908,9 @@ function InformesCentros() {
     .orca-row { display:grid; grid-template-columns:repeat(4, 1fr); gap:0; margin-bottom:4px; }
     .orca-cell { width:23px; height:23px; background:#245b98; color:#fff; border-radius:0; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .orca-sub { text-align:center; color:#245b98; font-size:11px; font-weight:900; letter-spacing:0.14em; text-transform:uppercase; padding-left:1px; }
-    .sec-title { margin: 8px 0 5px; color:#1d4ed8; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.02em; break-after: avoid; page-break-after: avoid; }
-    @media print { 
+	    .sec-title { margin: 8px 0 5px; color:#1d4ed8; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.02em; break-after: avoid; page-break-after: avoid; }
+	    .page-break-before { break-before: page; page-break-before: always; }
+	    @media print { 
       @page { margin: 12mm; }
       body{background:#fff;} 
       .toolbar{display:none;} 
@@ -918,9 +920,10 @@ function InformesCentros() {
       .field b{font-size:10px;}
       .grid{gap:6px; margin-bottom:8px; break-inside:auto; page-break-inside:auto;}
       .field{padding:6px 8px; font-size:11px; break-inside:auto; page-break-inside:auto;}
-      .orca-cell{background:#245b98 !important; color:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
-      .orca-sub{color:#245b98 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
-    }
+	      .orca-cell{background:#245b98 !important; color:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+	      .orca-sub{color:#245b98 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+	      .page-break-before { break-before: page; page-break-before: always; }
+	    }
   </style>
 </head>
 <body>
@@ -1002,7 +1005,8 @@ function InformesCentros() {
         const idField = opts.idField || "id_permiso_trabajo";
         const tituloDocumento = opts.tituloDocumento || "Permiso de Trabajo - Informe de Intervencion y Recepcion";
         const incluirResponsabilidad = !!opts.incluirResponsabilidad;
-        const correlativo = String(permiso?.[idField] || "sin-numero");
+	    const correlativo = String(permiso?.[idField] || "sin-numero");
+	    const hasEvidence = !!String(permiso?.evidencia_foto || "").trim();
         const gpsItems = String(permiso.puntos_gps || "")
             .split("|")
             .map((p) => p.trim())
@@ -1039,6 +1043,20 @@ function InformesCentros() {
 
         const baseTierraText =
             permiso.base_tierra === true ? "Si" : permiso.base_tierra === false ? "No" : esc(permiso.base_tierra || "-");
+        const cambiosEquipo = Array.isArray(permiso.cambios_equipo) ? permiso.cambios_equipo : [];
+        const cambiosEquipoHtml = cambiosEquipo.length
+            ? cambiosEquipo
+                  .map(
+                      (c, idx) => `
+                        <div style="padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:8px;">
+                          <div style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">Cambio ${idx + 1}</div>
+                          <div><b>Equipo:</b> ${esc(c.equipo || "-")}</div>
+                          <div><b>Serie:</b> ${esc(c.serie_anterior || "-")} → ${esc(c.serie_nueva || "-")}</div>
+                        </div>
+                      `
+                  )
+                  .join("")
+            : `<div class="sig-empty">Sin cambios de equipo registrados</div>`;
 
         const body = `
         <div class="doc-top">
@@ -1104,6 +1122,20 @@ function InformesCentros() {
           <div class="field wide"><b>Detalle</b>${sellosHtml}</div>
         </div>
 
+        <div class="sec-title">Descripcion del trabajo</div>
+        <div class="grid">
+          <div class="field wide"><b>Descripcion del trabajo</b>${esc(permiso.descripcion_trabajo || "-")}</div>
+        </div>
+
+        ${
+          incluirResponsabilidad
+            ? `<div class="sec-title">Cambio de equipo</div>
+        <div class="grid">
+          <div class="field wide">${cambiosEquipoHtml}</div>
+        </div>`
+            : ""
+        }
+
         <div class="sec-title">Cliente</div>
         <div class="grid">
           <div class="field"><b>Recepciona</b>${esc(permiso.recepciona_nombre || "-")}</div>
@@ -1128,18 +1160,18 @@ function InformesCentros() {
             <div style="margin-top:6px;font-size:12px;font-weight:700;color:#334155;text-align:center;">${esc(permiso.recepciona_nombre || "Sin nombre")}</div>
           </div>
         </div>
-
-        <div class="sec-title">Descripcion del trabajo</div>
-        <div class="grid">
-          <div class="field wide"><b>Descripcion del trabajo</b>${esc(permiso.descripcion_trabajo || "-")}</div>
-        </div>
-
-        <div class="sec-title">Evidencia</div>
-        <div class="grid">
-          <div class="field wide">
-            <div class="evi-box">${evidenceHtml(permiso.evidencia_foto)}</div>
-          </div>
-        </div>`;
+	        ${
+	          hasEvidence
+	            ? `<div class="page-break-before">
+	        <div class="sec-title">Evidencia</div>
+	        <div class="grid">
+	          <div class="field wide">
+	            <div class="evi-box">${evidenceHtml(permiso.evidencia_foto)}</div>
+	          </div>
+	        </div>
+	        </div>`
+	            : ""
+	        }`;
         const centroNombre = String(permiso.centro || "sin-centro").trim();
         openPreviewPdf(
             `${correlativo} - ${tituloDocumento} ${centroNombre}`,
@@ -1171,6 +1203,29 @@ function InformesCentros() {
             return;
         }
         verPermisoPdf(permiso);
+    };
+
+    const verMantencionPdf = async (mantencion) => {
+        const mantencionId = Number(mantencion?.id_mantencion_terreno || 0);
+        if (!mantencionId) {
+            alert("Mantencion invalida para vista previa.");
+            return;
+        }
+        let cambios = [];
+        try {
+            const data = await obtenerCambiosEquipoMantencion(mantencionId);
+            cambios = Array.isArray(data) ? data : [];
+        } catch (error) {
+            console.error("Error al cargar cambios de equipo para vista previa:", error);
+        }
+        verPermisoPdf(
+            { ...mantencion, cambios_equipo: cambios },
+            {
+                idField: "id_mantencion_terreno",
+                tituloDocumento: "Mantencion en Terreno - Informe",
+                incluirResponsabilidad: true
+            }
+        );
     };
 
     const verArmadoDesdeActa = async (acta) => {
@@ -1730,13 +1785,7 @@ function InformesCentros() {
                                                                 <>
                                                                     <button
                                                                         className="btn btn-sm btn-outline-secondary mr-2"
-                                                                        onClick={() =>
-                                                                            verPermisoPdf(permiso, {
-                                                                                idField: "id_mantencion_terreno",
-                                                                                tituloDocumento: "Mantencion en Terreno - Informe",
-                                                                                incluirResponsabilidad: true
-                                                                            })
-                                                                        }>
+                                                                        onClick={() => verMantencionPdf(permiso)}>
                                                                         <i className="fas fa-file-pdf mr-1" />
                                                                         Mantencion
                                                                     </button>

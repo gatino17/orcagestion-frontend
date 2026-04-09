@@ -1730,3 +1730,13 @@ export const eliminarMantencionTerreno = async (idMantencionTerreno) => {
         throw error;
     }
 };
+
+export const obtenerCambiosEquipoMantencion = async (idMantencionTerreno) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/mantenciones_terreno/${idMantencionTerreno}/cambios_equipo`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener cambios de equipo de mantencion:", error);
+        throw error;
+    }
+};
