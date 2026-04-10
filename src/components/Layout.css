@@ -57,6 +57,111 @@ body.sidenav-expanded .app-header {
     gap: 0.85rem;
 }
 
+.header-notif-wrap {
+    position: relative;
+}
+
+.notif-dot {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #0f172a;
+}
+
+.header-icon-button.notif-alert {
+    background: rgba(239, 68, 68, 0.26);
+    border-color: rgba(248, 113, 113, 0.88);
+    color: #fff;
+    animation: notifPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes notifPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+.notif-dropdown {
+    position: absolute;
+    right: 0;
+    top: 48px;
+    width: 360px;
+    max-width: calc(100vw - 1rem);
+    background: #ffffff;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.28);
+    z-index: 1200;
+    overflow: hidden;
+}
+
+.notif-title {
+    padding: 0.7rem 0.9rem;
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.notif-empty {
+    padding: 0.9rem;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.notif-list {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.notif-item {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.notif-item:last-child {
+    border-bottom: none;
+}
+
+.notif-item.armado {
+    background: #eff6ff;
+}
+
+.notif-item.mantencion {
+    background: #f0fdf4;
+}
+
+.notif-text {
+    color: #0f172a;
+    font-size: 0.86rem;
+    line-height: 1.35;
+}
+
+.notif-date {
+    display: block;
+    color: #64748b;
+    margin-top: 0.2rem;
+}
+
 .header-icon-button {
     width: 42px;
     height: 42px;
@@ -76,10 +181,19 @@ body.sidenav-expanded .app-header {
 }
 
 .header-icon-button.logout {
-    width: auto;
-    padding: 0 1.25rem;
-    background: rgba(239, 68, 68, 0.25);
-    border-color: rgba(248, 113, 113, 0.6);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.42), rgba(220, 38, 38, 0.35));
+    border-color: rgba(252, 165, 165, 0.95);
+    color: #fff;
+    box-shadow: 0 10px 20px rgba(127, 29, 29, 0.28);
+}
+
+.header-icon-button.logout:hover {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.6), rgba(220, 38, 38, 0.5));
+    border-color: #fecaca;
+    transform: translateY(-1px);
 }
 
 .status-pill {
@@ -147,7 +261,9 @@ body.sidenav-expanded .app-header {
     }
 
     .header-icon-button.logout {
-        padding: 0 1rem;
+        width: 40px;
+        height: 40px;
+        padding: 0;
     }
 }
 
@@ -365,7 +481,9 @@ body.sidenav-expanded .app-header {
     }
 
     .header-icon-button.logout {
-        padding: 0 0.9rem;
+        width: 36px;
+        height: 36px;
+        padding: 0;
     }
 
     .status-pill {

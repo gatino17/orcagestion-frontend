@@ -16,7 +16,7 @@ import {
     borrarMovimientoGlobal,
     cargarHistorialEquiposArmado
 } from "../controllers/armadosControllers";
-import { obtenerDetallesCentro, obtenerMaterialesArmado } from "../api";
+import { obtenerDetallesCentro, obtenerMaterialesArmado, validarSerieEquipo } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
@@ -595,17 +595,8 @@ const ArmadoTecnico = () => {
         []
     );
 
-    // Mantener vivas las cajas usadas históricamente (movimientos) para que no se pierdan al recargar.
-    useEffect(() => {
-        if (!movimientos.length) return;
-        const cajasMovs = movimientos
-            .map((m) => (m.caja || "Caja 1").trim())
-            .filter(Boolean);
-        setCajas((prev = []) => {
-            const union = Array.from(new Set([...prev, ...cajasMovs]));
-            return union.length ? union : ["Caja 1"];
-        });
-    }, [movimientos]);
+    // Nota: no se usan cajas historicas para el contador visible de planilla.
+    // El total debe reflejar solo cajas activas detectadas en equipos/materiales actuales.
 
     const tecnicoRecientePorEquipo = useMemo(() => {
         const mapa = new Map();
@@ -1200,10 +1191,7 @@ const ArmadoTecnico = () => {
                 const cajasDetectadas = Array.from(new Set([...cajasMateriales, ...cajasEquipos]));
                 setMateriales(merged);
                 setMaterialesSnapshot(crearSnapshotMateriales(merged));
-                setCajas((prev) => {
-                    const union = Array.from(new Set([...(prev || []), ...cajasDetectadas]));
-                    return union.length ? union : ["Caja 1"];
-                });
+                setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
                 await cargarMovimientos(armado.id_armado, setMovimientos);
             });
             setTabPlanilla("equipos");
@@ -1234,10 +1222,7 @@ const ArmadoTecnico = () => {
             const cajasEquipos = equiposNorm.map((e) => (e.caja || "Caja 1").trim());
             const cajasMateriales = materiales.map((m) => (m.caja || "Caja 1").trim());
             const cajasDetectadas = Array.from(new Set([...cajasEquipos, ...cajasMateriales]));
-            setCajas((prev = []) => {
-                const union = Array.from(new Set([...prev, ...cajasDetectadas]));
-                return union.length ? union : ["Caja 1"];
-            });
+            setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
         } catch (err) {
             console.error("Error al recargar planilla:", err);
         }
@@ -1273,6 +1258,19 @@ const ArmadoTecnico = () => {
                 payload.fecha_cierre = hoy;
             }
             await modificarArmado(id, payload);
+            if (nuevoEstado === "finalizado") {
+                window.dispatchEvent(
+                    new CustomEvent("orcagest-notif-armado-finalizado", {
+                        detail: {
+                            id_armado: id,
+                            centro_nombre: row?.centro?.nombre || row?.centro_nombre || "centro",
+                            tecnico_name: row?.tecnico?.nombre || row?.tecnico_nombre || userNombre || "Tecnico",
+                            fecha_cierre: hoy,
+                            fecha_evento: new Date().toISOString(),
+                        },
+                    })
+                );
+            }
             await fetchArmados();
         } catch (err) {
             console.error("No se pudo actualizar estado:", err);
@@ -1448,6 +1446,25 @@ const ArmadoTecnico = () => {
                     e.id_equipo &&
                     String(e.nombre || "").toLowerCase().trim() === String(equipo.nombre || "").toLowerCase().trim()
             );
+
+            const serie = String(equipo?.numero_serie || "").trim();
+            if (serie) {
+                const centroActual = armadoActivo?.centro?.id_centro || armadoActivo?.centro_id;
+                const excludeId = equipo.id_equipo || existente?.id_equipo;
+                const validacion = await validarSerieEquipo(serie, {
+                    ...(excludeId ? { exclude_equipo_id: excludeId } : {}),
+                    ...(centroActual ? { centro_id: centroActual } : {})
+                });
+                if (validacion?.duplicado) {
+                    const centroDup = validacion?.equipo?.centro_nombre || "otro centro";
+                    const equipoDup = validacion?.equipo?.nombre || "equipo";
+                    alert(
+                        `La serie ${serie} ya esta registrada en ${centroDup} (${equipoDup}).\n` +
+                        "No se puede guardar en este armado. Solicita el cambio al responsable."
+                    );
+                    return;
+                }
+            }
 
             if (equipo.id_equipo || existente) {
                 await modificarEquipo(equipo.id_equipo || existente.id_equipo, {
@@ -2026,10 +2043,8 @@ const ArmadoTecnico = () => {
                                                                         setMaterialesSnapshot(crearSnapshotMateriales(merged));
                                                                         const cajasMateriales = merged.map((m) => (m.caja || "Caja 1").trim());
                                                                         const cajasEquipos = (equipos || []).map((e) => (e.caja || "Caja 1").trim());
-                                                                        setCajas((prev = []) => {
-                                                                            const union = Array.from(new Set([...prev, ...cajasMateriales, ...cajasEquipos]));
-                                                                            return union.length ? union : ["Caja 1"];
-                                                                        });
+                                                                        const cajasDetectadas = Array.from(new Set([...cajasMateriales, ...cajasEquipos]));
+                                                                        setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
                                                                     });
                                                                     await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
                                                                     recargarMovimientosRecientes();

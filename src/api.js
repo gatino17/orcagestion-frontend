@@ -289,6 +289,17 @@ export const actualizarEquipo = async (id_equipo, equipoData) => {
     }
 };
 
+export const validarSerieEquipo = async (numero_serie, params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/equipos/validar-serie`, {
+            params: { numero_serie, ...params },
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 // Eliminar un equipo por `id`
 export const eliminarEquipo = async (id_equipo) => {
     try {
