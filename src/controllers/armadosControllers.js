@@ -10,7 +10,9 @@ import {
     obtenerMaterialesArmado,
     guardarMaterialesArmado,
     obtenerMovimientosArmado,
-    obtenerMovimientosRecientes
+    obtenerMovimientosRecientes,
+    eliminarMovimientoGlobal,
+    obtenerHistorialEquiposArmado
 } from "../api";
 
 export const cargarArmados = async (setArmados, params = {}) => {
@@ -126,5 +128,24 @@ export const cargarMovimientosRecientes = async (setMovimientos, limit = 20, pag
         }
     } catch (error) {
         console.error("Error al cargar movimientos recientes:", error);
+    }
+};
+
+export const borrarMovimientoGlobal = async (movimientoId, callback) => {
+    try {
+        await eliminarMovimientoGlobal(movimientoId);
+        callback?.();
+    } catch (error) {
+        console.error("Error al eliminar movimiento global:", error);
+        throw error;
+    }
+};
+
+export const cargarHistorialEquiposArmado = async (armadoId) => {
+    try {
+        return await obtenerHistorialEquiposArmado(armadoId);
+    } catch (error) {
+        console.error("Error al cargar historial de equipos:", error);
+        throw error;
     }
 };

@@ -1570,12 +1570,36 @@ export const obtenerMovimientosArmado = async (armadoId) => {
     }
 };
 
+export const obtenerHistorialEquiposArmado = async (armadoId) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/${armadoId}/historial-equipos`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener historial de equipos:", error);
+        throw error;
+    }
+};
+
 export const obtenerMovimientosRecientes = async (limit = 20, page = 1, filtros = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/armados/movimientos`, { params: { limit, page, ...filtros } });
         return response.data;
     } catch (error) {
         console.error("Error al obtener movimientos recientes:", error);
+        throw error;
+    }
+};
+
+export const eliminarMovimientoGlobal = async (movimientoId) => {
+    try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const config = token
+            ? { headers: { Authorization: `Bearer ${token}` } }
+            : undefined;
+        const response = await axios.delete(`${BASE_URL}/armados/movimientos/${movimientoId}`, config);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar movimiento global:", error);
         throw error;
     }
 };

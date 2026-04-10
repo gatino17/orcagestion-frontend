@@ -12,7 +12,9 @@ import {
     guardarMateriales,
     cargarMovimientos,
     cargarMovimientosRecientes,
-    borrarParticipacion
+    borrarParticipacion,
+    borrarMovimientoGlobal,
+    cargarHistorialEquiposArmado
 } from "../controllers/armadosControllers";
 import { obtenerDetallesCentro, obtenerMaterialesArmado } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
@@ -424,10 +426,17 @@ const ArmadoTecnico = () => {
     const [movsLimit, setMovsLimit] = useState(10);
     const [movsPage, setMovsPage] = useState(1);
     const [movsTotal, setMovsTotal] = useState(0);
+    const [movClienteFiltro, setMovClienteFiltro] = useState("");
     const [movArmadoFiltro, setMovArmadoFiltro] = useState("");
     const [movSerieFiltro, setMovSerieFiltro] = useState("");
     const [movimientosNuevos, setMovimientosNuevos] = useState({});
     const [parpadeoOn, setParpadeoOn] = useState(false);
+    const [movSeleccionados, setMovSeleccionados] = useState([]);
+    const [eliminandoSeleccion, setEliminandoSeleccion] = useState(false);
+    const [historialOpen, setHistorialOpen] = useState(false);
+    const [historialLoading, setHistorialLoading] = useState(false);
+    const [historialData, setHistorialData] = useState({ armado: null, resumen: [], eventos: [] });
+    const [historialTab, setHistorialTab] = useState("resumen");
     const lastSeenMovIdRef = useRef(0);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
@@ -640,13 +649,113 @@ const ArmadoTecnico = () => {
     const recargarMovimientosRecientes = useCallback(() => {
         const filtros = {};
         if (movArmadoFiltro) filtros.armado_id = movArmadoFiltro;
+        if (movClienteFiltro) filtros.cliente = movClienteFiltro;
         if ((movSerieFiltro || "").trim()) filtros.numero_serie = movSerieFiltro.trim();
         cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
             setMovsTotal(meta.total || 0);
             setMovsPage(meta.page || 1);
             setMovsLimit(meta.limit || movsLimit);
         }, filtros);
-    }, [movArmadoFiltro, movSerieFiltro, movsLimit, movsPage]);
+    }, [movArmadoFiltro, movClienteFiltro, movSerieFiltro, movsLimit, movsPage]);
+
+    const handleEliminarMovimientoGlobal = useCallback(async (mov) => {
+        const id = Number(mov?.id_movimiento || 0);
+        if (!id) return;
+        if (!window.confirm("Quieres eliminar este movimiento del historial global?")) return;
+        try {
+            await borrarMovimientoGlobal(id);
+            await recargarMovimientosRecientes();
+            if (armadoActivo?.id_armado && Number(armadoActivo.id_armado) === Number(mov?.armado_id)) {
+                await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
+                const nombreCentro = armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre;
+                if (nombreCentro) {
+                    const detalles = await cargarDetallesCentro(nombreCentro);
+                    const equiposNorm = mergeEquiposPredef(detalles?.equipos || []);
+                    setEquipos(equiposNorm);
+                }
+            }
+        } catch (error) {
+            const status = error?.response?.status;
+            const msg = error?.response?.data?.message || error?.message;
+            if (status === 403) {
+                alert("Solo un administrador puede eliminar movimientos.");
+            } else {
+                alert(`No se pudo eliminar el movimiento.${msg ? ` (${msg})` : ""}`);
+            }
+        }
+    }, [armadoActivo, recargarMovimientosRecientes, mergeEquiposPredef]);
+
+    const handleVerHistorialCentro = useCallback(async () => {
+        if (!movArmadoFiltro) return;
+        setHistorialLoading(true);
+        setHistorialOpen(true);
+        setHistorialTab("resumen");
+        try {
+            const data = await cargarHistorialEquiposArmado(movArmadoFiltro);
+            setHistorialData({
+                armado: data?.armado || null,
+                resumen: Array.isArray(data?.resumen) ? data.resumen : [],
+                eventos: Array.isArray(data?.eventos) ? data.eventos : []
+            });
+        } catch (error) {
+            setHistorialData({ armado: null, resumen: [], eventos: [] });
+            alert("No se pudo cargar el historial del centro.");
+        } finally {
+            setHistorialLoading(false);
+        }
+    }, [movArmadoFiltro]);
+
+    const historialResumen = useMemo(() => (Array.isArray(historialData?.resumen) ? historialData.resumen : []), [historialData]);
+    const historialEventos = useMemo(() => (Array.isArray(historialData?.eventos) ? historialData.eventos : []), [historialData]);
+
+    const normalizarNombreHistorial = useCallback((nombre = "") => {
+        const base = String(nombre || "").replace(/\s*\(reemplazo_mantencion_N\d+\)\s*$/i, "").trim();
+        return normalizarNombreEquipo(base);
+    }, [normalizarNombreEquipo]);
+
+    const historialResumenPorNombre = useMemo(() => {
+        const map = new Map();
+        historialResumen.forEach((r) => {
+            const key = normalizarNombreHistorial(r?.nombre_item || "");
+            if (!key) return;
+            map.set(key, r);
+        });
+        return map;
+    }, [historialResumen, normalizarNombreHistorial]);
+
+    const historialDetalleFilas = useMemo(() => {
+        const filas = [];
+        const usados = new Set();
+        GRUPOS_EQUIPOS.forEach((g) => {
+            filas.push({ tipo: "titulo", titulo: g.titulo });
+            g.items.forEach((nombre) => {
+                const key = normalizarNombreEquipo(nombre);
+                usados.add(key);
+                filas.push({ tipo: "item", nombre, key, data: historialResumenPorNombre.get(key) || null });
+            });
+        });
+        historialResumen.forEach((r) => {
+            const key = normalizarNombreHistorial(r?.nombre_item || "");
+            if (!key || usados.has(key)) return;
+            if (!filas.some((f) => f.tipo === "titulo" && f.titulo === "Otros")) {
+                filas.push({ tipo: "titulo", titulo: "Otros" });
+            }
+            filas.push({ tipo: "item", nombre: r.nombre_item || "-", key, data: r });
+        });
+        return filas;
+    }, [historialResumen, historialResumenPorNombre, normalizarNombreEquipo, normalizarNombreHistorial]);
+
+    const metricasHistorial = useMemo(() => {
+        const equiposConCambios = historialResumen.filter((r) => Number(r?.cambios || 0) > 0).length;
+        const cambiosTotales = historialResumen.reduce((acc, r) => acc + Number(r?.cambios || 0), 0);
+        const ultimoCambio = historialEventos.length ? historialEventos[0]?.fecha : null;
+        return { equiposConCambios, cambiosTotales, ultimoCambio };
+    }, [historialResumen, historialEventos]);
+
+    const historialResumenConCambios = useMemo(
+        () => historialResumen.filter((r) => Number(r?.cambios || 0) > 0),
+        [historialResumen]
+    );
 
     // Historial global: fallback polling (si websocket no conecta)
     useEffect(() => {
@@ -709,6 +818,100 @@ const ArmadoTecnico = () => {
             return Number(b.id_movimiento || 0) - Number(a.id_movimiento || 0);
         });
     }, [movimientosRecientes]);
+
+    const clienteArmado = useCallback((a = {}) => {
+        return a?.centro?.cliente || a?.cliente || a?.cliente_nombre || "";
+    }, []);
+
+    const clientesMovimientos = useMemo(() => {
+        const set = new Set();
+        (armados || []).forEach((a) => {
+            const c = String(clienteArmado(a) || "").trim();
+            if (c) set.add(c);
+        });
+        return Array.from(set).sort((x, y) => x.localeCompare(y));
+    }, [armados, clienteArmado]);
+
+    const armadosFiltroCliente = useMemo(() => {
+        if (!movClienteFiltro) return armados || [];
+        return (armados || []).filter((a) => String(clienteArmado(a) || "").trim() === movClienteFiltro);
+    }, [armados, movClienteFiltro, clienteArmado]);
+
+    const movimientosRecientesFiltrados = useMemo(
+        () => movimientosRecientesOrdenados,
+        [movimientosRecientesOrdenados]
+    );
+
+    const movimientosVisibles = useMemo(
+        () => movimientosRecientesFiltrados.slice(0, movsLimit),
+        [movimientosRecientesFiltrados, movsLimit]
+    );
+    const idsVisibles = useMemo(
+        () => movimientosVisibles.map((m) => Number(m.id_movimiento)).filter((n) => Number.isFinite(n)),
+        [movimientosVisibles]
+    );
+    const allVisibleSelected = idsVisibles.length > 0 && idsVisibles.every((id) => movSeleccionados.includes(id));
+
+    const toggleSeleccionMovimiento = useCallback((idMov) => {
+        const id = Number(idMov);
+        if (!id) return;
+        setMovSeleccionados((prev) => (
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        ));
+    }, []);
+
+    const toggleSeleccionVisibles = useCallback(() => {
+        if (!idsVisibles.length) return;
+        setMovSeleccionados((prev) => {
+            if (allVisibleSelected) return prev.filter((id) => !idsVisibles.includes(id));
+            return Array.from(new Set([...prev, ...idsVisibles]));
+        });
+    }, [idsVisibles, allVisibleSelected]);
+
+    const handleEliminarSeleccionados = useCallback(async () => {
+        if (!movSeleccionados.length || eliminandoSeleccion) return;
+        if (!window.confirm(`Quieres eliminar ${movSeleccionados.length} movimiento(s)?`)) return;
+        setEliminandoSeleccion(true);
+        let ok = 0;
+        let ultimoError = null;
+        for (const id of movSeleccionados) {
+            try {
+                await borrarMovimientoGlobal(id);
+                ok += 1;
+            } catch (err) {
+                ultimoError = err;
+            }
+        }
+        setEliminandoSeleccion(false);
+        setMovSeleccionados([]);
+        await recargarMovimientosRecientes();
+        if (armadoActivo?.id_armado) {
+            await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
+        }
+        if (ok < movSeleccionados.length) {
+            const msg = ultimoError?.response?.data?.message || ultimoError?.message || "";
+            alert(`Se eliminaron ${ok} de ${movSeleccionados.length}.${msg ? ` (${msg})` : ""}`);
+        }
+    }, [movSeleccionados, eliminandoSeleccion, recargarMovimientosRecientes, armadoActivo, cargarMovimientos]);
+
+    const movsTotalVista = movsTotal || 0;
+    const movsTotalPaginasVista = movsTotalVista ? Math.ceil(movsTotalVista / movsLimit) : 1;
+
+    useEffect(() => {
+        if (!movArmadoFiltro) return;
+        const exists = (armadosFiltroCliente || []).some((a) => String(a.id_armado) === String(movArmadoFiltro));
+        if (!exists) setMovArmadoFiltro("");
+    }, [movArmadoFiltro, armadosFiltroCliente]);
+
+    useEffect(() => {
+        if (movsPage > movsTotalPaginasVista) {
+            setMovsPage(movsTotalPaginasVista);
+        }
+    }, [movsPage, movsTotalPaginasVista]);
+
+    useEffect(() => {
+        setMovSeleccionados([]);
+    }, [movClienteFiltro, movArmadoFiltro, movSerieFiltro, movsPage, movsLimit]);
 
     useEffect(() => {
         if (rol !== "admin") return;
@@ -1962,6 +2165,14 @@ const ArmadoTecnico = () => {
                             <table className="table table-sm table-striped mb-0">
                                 <thead>
                                     <tr>
+                                        <th style={{ width: 36 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={allVisibleSelected}
+                                                onChange={toggleSeleccionVisibles}
+                                                title="Seleccionar visibles"
+                                            />
+                                        </th>
                                         <th>Fecha</th>
                                         <th>Tipo</th>
                                         <th>Ítem</th>
@@ -1987,7 +2198,7 @@ const ArmadoTecnico = () => {
                                     ))}
                                     {movimientos.length === 0 && (
                                         <tr>
-                                            <td colSpan="6" className="text-center text-muted">
+                                            <td colSpan="7" className="text-center text-muted">
                                                 Sin movimientos registrados todavía.
                                             </td>
                                         </tr>
@@ -2008,6 +2219,23 @@ const ArmadoTecnico = () => {
                             <div className="d-flex align-items-center" style={{ gap: "8px" }}>
                                 <select
                                     className="form-control form-control-sm"
+                                    style={{ width: 170 }}
+                                    value={movClienteFiltro}
+                                    onChange={(e) => {
+                                        setMovClienteFiltro(e.target.value);
+                                        setMovArmadoFiltro("");
+                                        setMovsPage(1);
+                                    }}
+                                >
+                                    <option value="">Todos los clientes</option>
+                                    {clientesMovimientos.map((c) => (
+                                        <option key={c} value={c}>
+                                            {c}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    className="form-control form-control-sm"
                                     style={{ width: 160 }}
                                     value={movArmadoFiltro}
                                     onChange={(e) => {
@@ -2016,7 +2244,7 @@ const ArmadoTecnico = () => {
                                     }}
                                 >
                                     <option value="">Todos los centros</option>
-                                    {armados.map((a) => (
+                                    {armadosFiltroCliente.map((a) => (
                                         <option key={a.id_armado} value={a.id_armado}>
                                             {a.centro?.nombre || a.centro_nombre || `Armado #${a.id_armado}`}
                                         </option>
@@ -2032,6 +2260,24 @@ const ArmadoTecnico = () => {
                                         setMovsPage(1);
                                     }}
                                 />
+                                <button
+                                    className="btn btn-sm btn-outline-primary"
+                                    disabled={!movArmadoFiltro}
+                                    onClick={handleVerHistorialCentro}
+                                    title={movArmadoFiltro ? "Ver historial del centro seleccionado" : "Selecciona un centro primero"}
+                                >
+                                    <i className="fas fa-history mr-1" />
+                                    Ver historial
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-outline-danger"
+                                    disabled={!movSeleccionados.length || eliminandoSeleccion}
+                                    onClick={handleEliminarSeleccionados}
+                                    title="Eliminar seleccionados"
+                                >
+                                    <i className="fas fa-trash-alt mr-1" />
+                                    {eliminandoSeleccion ? "Eliminando..." : `Eliminar seleccionados (${movSeleccionados.length})`}
+                                </button>
                                 <small className="text-muted mr-2">Mostrar</small>
                                 <select
                                     className="form-control form-control-sm"
@@ -2049,6 +2295,14 @@ const ArmadoTecnico = () => {
                             <table className="table table-sm table-striped mb-0">
                                 <thead>
                                     <tr>
+                                        <th style={{ width: 36 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={allVisibleSelected}
+                                                onChange={toggleSeleccionVisibles}
+                                                title="Seleccionar visibles"
+                                            />
+                                        </th>
                                         <th>Fecha</th>
                                         <th>Tipo</th>
                                         <th>Ítem</th>
@@ -2060,7 +2314,7 @@ const ArmadoTecnico = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {movimientosRecientesOrdenados.slice(0, movsLimit).map((mov) => (
+                                    {movimientosVisibles.map((mov) => (
                                         <tr
                                             key={`g-${mov.id_movimiento}`}
                                             style={
@@ -2069,6 +2323,13 @@ const ArmadoTecnico = () => {
                                                     : undefined
                                             }
                                         >
+                                            <td>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={movSeleccionados.includes(Number(mov.id_movimiento))}
+                                                    onChange={() => toggleSeleccionMovimiento(mov.id_movimiento)}
+                                                />
+                                            </td>
                                             <td>{formatearFechaHora(mov.fecha)}</td>
                                             <td className="text-capitalize">{mov.tipo}</td>
                                             <td>{mov.nombre_item}</td>
@@ -2076,14 +2337,26 @@ const ArmadoTecnico = () => {
                                             <td>{mov.caja}</td>
                                             <td>{mov.cantidad}</td>
                                             <td>{mov.centro_nombre || `Armado #${mov.armado_id}`}</td>
-                                            <td style={{ color: colorTecnico(mov.tecnico_nombre || mov.tecnico_id) }}>
-                                                {mov.tecnico_nombre || `ID ${mov.tecnico_id || "-"}`}
+                                            <td>
+                                                <div className="d-flex align-items-center justify-content-between" style={{ gap: "8px" }}>
+                                                    <span style={{ color: colorTecnico(mov.tecnico_nombre || mov.tecnico_id) }}>
+                                                        {mov.tecnico_nombre || `ID ${mov.tecnico_id || "-"}`}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        title="Eliminar movimiento"
+                                                        onClick={() => handleEliminarMovimientoGlobal(mov)}
+                                                    >
+                                                        <i className="fas fa-trash-alt" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
-                                    {movimientosRecientes.length === 0 && (
+                                    {movimientosVisibles.length === 0 && (
                                         <tr>
-                                            <td colSpan="8" className="text-center text-muted">
+                                            <td colSpan="9" className="text-center text-muted">
                                                 Sin movimientos registrados todavía.
                                             </td>
                                         </tr>
@@ -2093,7 +2366,7 @@ const ArmadoTecnico = () => {
                         </div>
                         <div className="d-flex justify-content-between align-items-center mt-2">
                             <small className="text-muted">
-                                Página {movsPage} — {(movsTotal ? Math.ceil(movsTotal / movsLimit) : 1)} en total
+                                Página {Math.min(movsPage, movsTotalPaginasVista)} — {movsTotalPaginasVista} en total
                             </small>
                             <div>
                                 <button
@@ -2105,10 +2378,198 @@ const ArmadoTecnico = () => {
                                 </button>
                                 <button
                                     className="btn btn-sm btn-outline-secondary"
-                                    disabled={movsTotal && movsPage >= Math.ceil(movsTotal / movsLimit)}
+                                    disabled={movsPage >= movsTotalPaginasVista}
                                     onClick={() => setMovsPage((p) => p + 1)}
                                 >
                                     Siguiente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {historialOpen && (
+                <div className="modal show d-block" tabIndex="-1" role="dialog">
+                    <div className="modal-dialog modal-xl" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    Historial de equipos
+                                    {historialData?.armado?.centro_nombre ? ` - ${historialData.armado.centro_nombre}` : ""}
+                                </h5>
+                                <button type="button" className="close" onClick={() => setHistorialOpen(false)}>
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                {historialLoading ? (
+                                    <div className="text-muted">Cargando historial...</div>
+                                ) : (
+                                    <>
+                                        <div
+                                            className="mb-3 p-2 px-3 rounded"
+                                            style={{
+                                                background: "linear-gradient(90deg, rgba(37,99,235,0.12) 0%, rgba(14,116,144,0.08) 100%)",
+                                                border: "1px solid rgba(37,99,235,0.2)",
+                                            }}
+                                        >
+                                            <div className="d-flex flex-wrap align-items-center" style={{ gap: 10 }}>
+                                                <span className="badge badge-pill" style={{ background: "#1e3a8a", color: "#fff" }}>
+                                                    Cliente
+                                                </span>
+                                                <strong style={{ color: "#1e3a8a" }}>{historialData?.armado?.cliente_nombre || "-"}</strong>
+                                                <span className="badge badge-pill" style={{ background: "#0ea5e9", color: "#fff" }}>
+                                                    Centro
+                                                </span>
+                                                <strong style={{ color: "#0f172a" }}>{historialData?.armado?.centro_nombre || "-"}</strong>
+                                            </div>
+                                        </div>
+                                        <div className="row mb-3">
+                                            <div className="col-md-4 mb-2">
+                                                <div
+                                                    className="p-2 border rounded"
+                                                    style={{ background: "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)", borderColor: "#93c5fd" }}
+                                                >
+                                                    <small className="d-block" style={{ color: "#1e40af", fontWeight: 600 }}>Equipos con cambios</small>
+                                                    <strong style={{ color: "#1e3a8a", fontSize: "1.15rem" }}>{metricasHistorial.equiposConCambios}</strong>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 mb-2">
+                                                <div
+                                                    className="p-2 border rounded"
+                                                    style={{ background: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)", borderColor: "#fdba74" }}
+                                                >
+                                                    <small className="d-block" style={{ color: "#c2410c", fontWeight: 600 }}>Cambios totales</small>
+                                                    <strong style={{ color: "#9a3412", fontSize: "1.15rem" }}>{metricasHistorial.cambiosTotales}</strong>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4 mb-2">
+                                                <div
+                                                    className="p-2 border rounded"
+                                                    style={{ background: "linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)", borderColor: "#cbd5e1" }}
+                                                >
+                                                    <small className="d-block" style={{ color: "#475569", fontWeight: 600 }}>Ultimo cambio</small>
+                                                    <strong style={{ color: "#334155", fontSize: "1.05rem" }}>{formatearFechaHora(metricasHistorial.ultimoCambio)}</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="btn-group mb-3" role="group" aria-label="Tabs historial">
+                                            <button type="button" className={`btn btn-sm ${historialTab === "resumen" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setHistorialTab("resumen")}>Resumen</button>
+                                            <button type="button" className={`btn btn-sm ${historialTab === "detalle" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setHistorialTab("detalle")}>Detalle tecnico</button>
+                                        </div>
+
+                                        {historialTab === "resumen" && (
+                                            <div className="row">
+                                                {historialResumenConCambios.map((r) => {
+                                                    const cambios = Number(r?.cambios || 0);
+                                                    const color = cambios > 0 ? "#fff7ed" : "#f8fafc";
+                                                    const borde = cambios > 0 ? "#fdba74" : "#e2e8f0";
+                                                    return (
+                                                        <div className="col-md-6 mb-2" key={`card-${r.item_id}`}>
+                                                            <div className="p-2 border rounded" style={{ background: color, borderColor: borde }}>
+                                                                <div className="d-flex justify-content-between align-items-center">
+                                                                    <strong>{r.nombre_item || "-"}</strong>
+                                                                    <span className={`badge ${cambios > 0 ? "badge-warning" : "badge-secondary"}`}>{cambios > 0 ? `${cambios} cambios` : "Sin cambios"}</span>
+                                                                </div>
+                                                                <div className="small text-muted mt-1">{cambios > 0 ? "Anterior -> Actual" : "Inicial -> Actual"}</div>
+                                                                <div>{cambios > 0 ? (r.serie_anterior_actual || "-") : (r.serie_inicial || "-")} -&gt; {r.serie_actual || "-"}</div>
+                                                                <div className="small text-muted mt-1">Ultima actualizacion: {formatearFechaHora(r.ultima_actualizacion)}</div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {!historialResumenConCambios.length && <div className="col-12"><div className="text-muted">No hay equipos con cambios.</div></div>}
+                                            </div>
+                                        )}
+
+                                        {historialTab === "detalle" && (
+                                            <div className="table-responsive mb-3">
+                                                <table
+                                                    className="table table-sm table-striped table-bordered mb-0"
+                                                    style={{
+                                                        border: "1px solid #bfdbfe",
+                                                        borderRadius: 10,
+                                                        overflow: "hidden",
+                                                        background: "#ffffff",
+                                                    }}
+                                                >
+                                                    <thead>
+                                                        <tr style={{ background: "linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)" }}>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Equipo</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie inicial</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie anterior</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie actual</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Cambios</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Ultima actualizacion</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {historialDetalleFilas.map((row, idx) => {
+                                                            if (row.tipo === "titulo") {
+                                                                return (
+                                                                    <tr key={`h-title-${idx}`} style={{ background: "rgba(37, 99, 235, 0.12)" }}>
+                                                                        <td colSpan="6" style={{ color: "#1e3a8a", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                                            {row.titulo}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            }
+                                                            const r = row.data;
+                                                            const tieneCambios = Number(r?.cambios || 0) > 0;
+                                                            return (
+                                                                <tr key={`h-item-${row.key}-${idx}`}>
+                                                                    <td
+                                                                        style={
+                                                                            tieneCambios
+                                                                                ? { color: "#c2410c", fontWeight: 700 }
+                                                                                : undefined
+                                                                        }
+                                                                    >
+                                                                        {row.nombre || "-"}
+                                                                    </td>
+                                                                    <td
+                                                                        style={{
+                                                                            background: "linear-gradient(180deg, rgba(20,184,166,0.14) 0%, rgba(20,184,166,0.08) 100%)",
+                                                                            borderLeft: "4px solid rgba(13, 148, 136, 0.75)",
+                                                                            boxShadow: "inset 0 0 0 1px rgba(20,184,166,0.18)",
+                                                                        }}
+                                                                    >
+                                                                        <div>{r?.serie_inicial || "-"}</div>
+                                                                        <small className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                                            {formatearFecha(r?.serie_inicial_fecha)}
+                                                                        </small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_anterior_actual || "-"}</div>
+                                                                        <small className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                                            {formatearFecha(r?.serie_anterior_actual_fecha)}
+                                                                        </small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
+                                                                        <small className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                                            {formatearFecha(r?.serie_actual_fecha)}
+                                                                            {r?.correlativo_ultimo ? ` · N${r.correlativo_ultimo}` : ""}
+                                                                        </small>
+                                                                    </td>
+                                                                    <td>{r?.cambios || 0}</td>
+                                                                    <td>{formatearFechaHora(r?.ultima_actualizacion)}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                        {!historialDetalleFilas.length && <tr><td colSpan="6" className="text-center text-muted">Sin datos para comparar.</td></tr>}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setHistorialOpen(false)}>
+                                    Cerrar
                                 </button>
                             </div>
                         </div>

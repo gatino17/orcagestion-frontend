@@ -59,6 +59,14 @@ const toDisplayHour = (value) => {
     return `${hh}:${mm}hrs`;
 };
 
+const formatMeasureWithUnit = (value, unit) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "-";
+    const normalized = raw.toLowerCase();
+    if (normalized.includes(unit.toLowerCase())) return raw;
+    return `${raw}${unit.toLowerCase()}`;
+};
+
 const todayLocalInputDate = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -152,6 +160,12 @@ const normalizeText = (value = "") =>
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
+const normalizeCorrelativoSearch = (value = "") =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^n\s*/i, "")
+        .replace(/[^\d]/g, "");
 
 const SINONIMOS_EQUIPOS = {
     "ip pc": "pc",
@@ -297,6 +311,7 @@ function InformesCentros() {
     const [filtroCliente, setFiltroCliente] = useState("all");
     const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
     const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+    const [filtroCorrelativo, setFiltroCorrelativo] = useState("");
 
     // formulario acta de entrega
     const [editandoId, setEditandoId] = useState(null);
@@ -337,6 +352,8 @@ function InformesCentros() {
     const [permisoPage, setPermisoPage] = useState(1);
     const [actaPageSize, setActaPageSize] = useState(10);
     const [permisoPageSize, setPermisoPageSize] = useState(10);
+    const [mostrarDetallePermiso, setMostrarDetallePermiso] = useState(false);
+    const [detallePermisoTab, setDetallePermisoTab] = useState("gps");
 
     const centrosOrdenados = useMemo(
         () => [...centros].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""))),
@@ -401,6 +418,7 @@ function InformesCentros() {
     }, [actasEntrega, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
 
     const permisosFiltrados = useMemo(() => {
+        const correlativoFiltro = normalizeCorrelativoSearch(filtroCorrelativo);
         return permisosTrabajo.filter((permiso) => {
             if (filtroCliente !== "all") {
                 const clientePermiso = normalizeText(permiso.cliente || permiso.empresa || "");
@@ -410,9 +428,15 @@ function InformesCentros() {
             const fecha = toInputDate(permiso.fecha_ingreso);
             if (filtroFechaDesde && (!fecha || fecha < filtroFechaDesde)) return false;
             if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
+            if (correlativoFiltro) {
+                const correlativoActual = subcategoria === "mantencion"
+                    ? String(permiso.id_mantencion_terreno || "")
+                    : String(permiso.id_permiso_trabajo || "");
+                if (!correlativoActual.includes(correlativoFiltro)) return false;
+            }
             return true;
         });
-    }, [permisosTrabajo, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
+    }, [permisosTrabajo, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, subcategoria]);
 
     const totalActaPages = Math.max(1, Math.ceil(actasFiltradas.length / actaPageSize));
     const totalPermisoPages = Math.max(1, Math.ceil(permisosFiltrados.length / permisoPageSize));
@@ -425,6 +449,8 @@ function InformesCentros() {
         return permisosFiltrados.slice(start, start + permisoPageSize);
     }, [permisosFiltrados, permisoPage, permisoPageSize]);
 
+    const cambiarTabDetallePermiso = (tab) => setDetallePermisoTab(tab);
+
     useEffect(() => {
         if (!filtroCentroId) return;
         const exists = centrosFiltroCliente.some((c) => String(c.id || c.id_centro) === String(filtroCentroId));
@@ -433,11 +459,16 @@ function InformesCentros() {
 
     useEffect(() => {
         setActaPage(1);
-    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, subcategoria, actaPageSize]);
+    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, subcategoria, actaPageSize]);
 
     useEffect(() => {
         setPermisoPage(1);
-    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, subcategoria, permisoPageSize]);
+    }, [filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, subcategoria, permisoPageSize]);
+
+    useEffect(() => {
+        setMostrarDetallePermiso(false);
+        setDetallePermisoTab("gps");
+    }, [subcategoria, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, permisoPage]);
 
     useEffect(() => {
         if (actaPage > totalActaPages) setActaPage(totalActaPages);
@@ -1404,6 +1435,17 @@ function InformesCentros() {
                         <label>Fecha hasta</label>
                         <input className="form-control" type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
                     </div>
+                    {(subcategoria === "intervencion" || subcategoria === "mantencion") ? (
+                        <div>
+                            <label>Correlativo</label>
+                            <input
+                                className="form-control"
+                                placeholder="Ej: N128 o 128"
+                                value={filtroCorrelativo}
+                                onChange={(e) => setFiltroCorrelativo(e.target.value)}
+                            />
+                        </div>
+                    ) : null}
                 </div>
             </div>
 
@@ -1703,6 +1745,28 @@ function InformesCentros() {
                                     <p className="text-muted mb-0">
                                         {subcategoria === "mantencion" ? "Registros creados desde mobile en mantenciones de terreno." : "Registros creados desde mobile y web."}
                                     </p>
+                                    <div className="informes-detalle-toolbar mt-2">
+                                        <button
+                                            className={`btn btn-sm ${mostrarDetallePermiso ? "btn-primary" : "btn-outline-primary"}`}
+                                            onClick={() => setMostrarDetallePermiso((v) => !v)}>
+                                            <i className="fas fa-layer-group mr-1" />
+                                            {mostrarDetallePermiso ? "Ocultar detalle" : "Detalle"}
+                                        </button>
+                                        {mostrarDetallePermiso ? (
+                                            <>
+                                                <button
+                                                    className={`btn btn-sm ${detallePermisoTab === "gps" ? "btn-primary" : "btn-outline-primary"}`}
+                                                    onClick={() => cambiarTabDetallePermiso("gps")}>
+                                                    Puntos GPS
+                                                </button>
+                                                <button
+                                                    className={`btn btn-sm ${detallePermisoTab === "energia" ? "btn-primary" : "btn-outline-primary"}`}
+                                                    onClick={() => cambiarTabDetallePermiso("energia")}>
+                                                    Energia
+                                                </button>
+                                            </>
+                                        ) : null}
+                                    </div>
                                 </div>
                                 {subcategoria === "intervencion" ? (
                                     <button className="btn btn-primary" onClick={abrirNuevoPermiso}>
@@ -1726,77 +1790,98 @@ function InformesCentros() {
                                             <thead>
                                                 <tr>
                                                     <th>N</th>
+                                                    <th>Correlativo</th>
                                                     <th>Empresa</th>
                                                     <th>Centro</th>
                                                     <th>Codigo Ponton</th>
                                                     <th>Fecha ingreso</th>
                                                     <th>Fecha salida</th>
-                                                    <th>Correo centro</th>
                                                     <th>Region / Localidad</th>
                                                     <th>Tecnico 1</th>
                                                     <th>Tecnico 2</th>
                                                     <th>Recepciona</th>
-                                                    <th>Puntos GPS</th>
-                                                    <th>Fase/Neutro</th>
-                                                    <th>Neutro/Tierra</th>
-                                                    <th>Hertz</th>
                                                     <th>Descripcion</th>
                                                     <th>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {permisosPaginados.map((permiso, index) => (
-                                                    <tr key={permiso.id_permiso_trabajo || permiso.id_mantencion_terreno}>
-                                                        <td>{(permisoPage - 1) * permisoPageSize + index + 1}</td>
-                                                        <td>{permiso.empresa || permiso.cliente || "-"}</td>
-                                                        <td>{permiso.centro || "-"}</td>
-                                                        <td>{permiso.codigo_ponton || "-"}</td>
-                                                        <td>{toDisplayDate(permiso.fecha_ingreso)}</td>
-                                                        <td>{toDisplayDate(permiso.fecha_salida)}</td>
-                                                        <td>{permiso.correo_centro || "-"}</td>
-                                                        <td>
-                                                            <div>{permiso.region || "-"}</div>
-                                                            <small className="text-muted">{permiso.localidad || "-"}</small>
-                                                        </td>
-                                                        <td>{permiso.tecnico_1 || "-"}</td>
-                                                        <td>{permiso.tecnico_2 || "-"}</td>
-                                                        <td>{permiso.recepciona_nombre || "-"}</td>
-                                                        <td>{permiso.puntos_gps || "-"}</td>
-                                                        <td>{permiso.medicion_fase_neutro || "-"}</td>
-                                                        <td>{permiso.medicion_neutro_tierra || "-"}</td>
-                                                        <td>{permiso.hertz || "-"}</td>
-                                                        <td className="equipos-col">{permiso.descripcion_trabajo || "-"}</td>
-                                                        <td className="acciones-col">
-                                                            {subcategoria === "intervencion" ? (
-                                                                <>
-                                                                    <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
-                                                                        <i className="fas fa-folder-open mr-1" />
-                                                                        Abrir
-                                                                    </button>
-                                                                    <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
-                                                                        <i className="fas fa-file-pdf mr-1" />
-                                                                        Permiso
-                                                                    </button>
-                                                                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
-                                                                        <i className="fas fa-trash-alt" />
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <button
-                                                                        className="btn btn-sm btn-outline-secondary mr-2"
-                                                                        onClick={() => verMantencionPdf(permiso)}>
-                                                                        <i className="fas fa-file-pdf mr-1" />
-                                                                        Mantencion
-                                                                    </button>
-                                                                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarMantencion(permiso.id_mantencion_terreno)}>
-                                                                        <i className="fas fa-trash-alt" />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {permisosPaginados.map((permiso, index) => {
+                                                    const rowKey = permiso.id_permiso_trabajo || permiso.id_mantencion_terreno;
+                                                    return (
+                                                        <React.Fragment key={`${subcategoria}-${rowKey || index}`}>
+                                                            <tr>
+                                                                <td>{(permisoPage - 1) * permisoPageSize + index + 1}</td>
+                                                                <td>
+                                                                    {subcategoria === "mantencion"
+                                                                        ? `N${permiso.id_mantencion_terreno || "-"}`
+                                                                        : `N${permiso.id_permiso_trabajo || "-"}`}
+                                                                </td>
+                                                                <td>{permiso.empresa || permiso.cliente || "-"}</td>
+                                                                <td>{permiso.centro || "-"}</td>
+                                                                <td>{permiso.codigo_ponton || "-"}</td>
+                                                                <td>{toDisplayDate(permiso.fecha_ingreso)}</td>
+                                                                <td>{toDisplayDate(permiso.fecha_salida)}</td>
+                                                                <td>
+                                                                    <div>{permiso.region || "-"}</div>
+                                                                    <small className="text-muted">{permiso.localidad || "-"}</small>
+                                                                </td>
+                                                                <td>{permiso.tecnico_1 || "-"}</td>
+                                                                <td>{permiso.tecnico_2 || "-"}</td>
+                                                                <td>{permiso.recepciona_nombre || "-"}</td>
+                                                                <td className="equipos-col">{permiso.descripcion_trabajo || "-"}</td>
+                                                                <td className="acciones-col">
+                                                                    {subcategoria === "intervencion" ? (
+                                                                        <>
+                                                                            <button className="btn btn-sm btn-outline-primary mr-2" onClick={() => handleEditarPermiso(permiso)}>
+                                                                                <i className="fas fa-folder-open mr-1" />
+                                                                                Abrir
+                                                                            </button>
+                                                                            <button className="btn btn-sm btn-outline-secondary mr-2" onClick={() => verPermisoPdf(permiso)}>
+                                                                                <i className="fas fa-file-pdf mr-1" />
+                                                                                Permiso
+                                                                            </button>
+                                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarPermiso(permiso.id_permiso_trabajo)}>
+                                                                                <i className="fas fa-trash-alt" />
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button
+                                                                                className="btn btn-sm btn-outline-secondary mr-2"
+                                                                                onClick={() => verMantencionPdf(permiso)}>
+                                                                                <i className="fas fa-file-pdf mr-1" />
+                                                                                Mantencion
+                                                                            </button>
+                                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarMantencion(permiso.id_mantencion_terreno)}>
+                                                                                <i className="fas fa-trash-alt" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                            {mostrarDetallePermiso ? (
+                                                                <tr className="informes-detalle-row">
+                                                                    <td colSpan={13}>
+                                                                        <div className="informes-detalle-panel">
+                                                                            {detallePermisoTab === "gps" ? (
+                                                                                <div className="informes-detalle-grid">
+                                                                                    <div className="informes-detalle-full"><small>Puntos GPS</small><strong>{permiso.puntos_gps || "-"}</strong></div>
+                                                                                </div>
+                                                                            ) : null}
+                                                                            {detallePermisoTab === "energia" ? (
+                                                                                <div className="informes-detalle-grid">
+                                                                                    <div><small>Fase / Neutro</small><strong>{formatMeasureWithUnit(permiso.medicion_fase_neutro, "V")}</strong></div>
+                                                                                    <div><small>Neutro / Tierra</small><strong>{formatMeasureWithUnit(permiso.medicion_neutro_tierra, "V")}</strong></div>
+                                                                                    <div><small>Hertz</small><strong>{formatMeasureWithUnit(permiso.hertz, "Hz")}</strong></div>
+                                                                                </div>
+                                                                            ) : null}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ) : null}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
