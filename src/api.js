@@ -1775,3 +1775,34 @@ export const obtenerCambiosEquipoMantencion = async (idMantencionTerreno) => {
         throw error;
     }
 };
+
+// ===================== RETIROS TERRENO =====================
+export const obtenerRetirosTerreno = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/retiros_terreno/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener retiros en terreno:", error);
+        throw error;
+    }
+};
+
+export const recepcionarRetiroEnBodega = async (idRetiroTerreno, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/recepcionar_bodega`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al recepcionar retiro en bodega:", error);
+        throw error;
+    }
+};
+
+export const eliminarRetiroTerreno = async (idRetiroTerreno) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar retiro en terreno:", error);
+        throw error;
+    }
+};

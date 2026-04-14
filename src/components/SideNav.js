@@ -48,6 +48,13 @@ const navItems = [
   },
   {
     section: "OPERACIONES",
+    label: "Bodega retiros",
+    to: "/bodega-retiros",
+    icon: "fas fa-warehouse",
+    roles: ["admin", "operaciones"],
+  },
+  {
+    section: "OPERACIONES",
     label: "Armado técnico",
     to: "/armados",
     icon: "fas fa-tools",

@@ -10,11 +10,13 @@ import {
     obtenerMaterialesArmado,
     obtenerPermisosTrabajo,
     obtenerMantencionesTerreno,
+    obtenerRetirosTerreno,
     obtenerCambiosEquipoMantencion,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
     eliminarPermisoTrabajo,
-    eliminarMantencionTerreno
+    eliminarMantencionTerreno,
+    eliminarRetiroTerreno
 } from "../api";
 import "./InformesCentros.css";
 
@@ -425,13 +427,17 @@ function InformesCentros() {
                 if (clientePermiso !== normalizeText(filtroCliente)) return false;
             }
             if (filtroCentroId && String(permiso.centro_id || "") !== String(filtroCentroId)) return false;
-            const fecha = toInputDate(permiso.fecha_ingreso);
+            const fecha = toInputDate(
+                subcategoria === "retiro" ? permiso.fecha_retiro : permiso.fecha_ingreso
+            );
             if (filtroFechaDesde && (!fecha || fecha < filtroFechaDesde)) return false;
             if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
             if (correlativoFiltro) {
                 const correlativoActual = subcategoria === "mantencion"
                     ? String(permiso.id_mantencion_terreno || "")
-                    : String(permiso.id_permiso_trabajo || "");
+                    : subcategoria === "retiro"
+                        ? String(permiso.id_retiro_terreno || "")
+                        : String(permiso.id_permiso_trabajo || "");
                 if (!correlativoActual.includes(correlativoFiltro)) return false;
             }
             return true;
@@ -639,10 +645,15 @@ function InformesCentros() {
     };
 
     const cargarPermisos = async () => {
-        if (!["intervencion", "mantencion"].includes(subcategoria)) return;
+        if (!["intervencion", "mantencion", "retiro"].includes(subcategoria)) return;
         setLoadingActas(true);
         try {
-            const fetcher = subcategoria === "mantencion" ? obtenerMantencionesTerreno : obtenerPermisosTrabajo;
+            const fetcher =
+                subcategoria === "mantencion"
+                    ? obtenerMantencionesTerreno
+                    : subcategoria === "retiro"
+                        ? obtenerRetirosTerreno
+                        : obtenerPermisosTrabajo;
             const data = await fetcher({
                 centro_id: filtroCentroId || undefined,
                 fecha_desde: filtroFechaDesde || undefined,
@@ -676,7 +687,7 @@ function InformesCentros() {
     useEffect(() => {
         if (subcategoria === "acta_entrega") {
             cargarActas();
-        } else if (subcategoria === "intervencion" || subcategoria === "mantencion") {
+        } else if (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") {
             cargarPermisos();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -896,6 +907,17 @@ function InformesCentros() {
         } catch (error) {
             console.error("Error al eliminar mantencion en terreno:", error);
             alert("No se pudo eliminar la mantencion en terreno.");
+        }
+    };
+
+    const handleEliminarRetiro = async (id) => {
+        if (!window.confirm("Quieres eliminar este retiro en terreno?")) return;
+        try {
+            await eliminarRetiroTerreno(id);
+            await cargarPermisos();
+        } catch (error) {
+            console.error("Error al eliminar retiro en terreno:", error);
+            alert("No se pudo eliminar el retiro en terreno.");
         }
     };
 
@@ -1259,6 +1281,33 @@ function InformesCentros() {
         );
     };
 
+    const verRetiroPdf = (retiro) => {
+        const retiroAsPermiso = {
+            ...retiro,
+            fecha_ingreso: retiro.fecha_retiro || retiro.fecha_ingreso,
+            fecha_salida: null,
+            descripcion_trabajo: retiro.observacion || retiro.descripcion_trabajo || "",
+            puntos_gps: retiro.puntos_gps || "",
+            medicion_fase_neutro: retiro.medicion_fase_neutro || "",
+            medicion_neutro_tierra: retiro.medicion_neutro_tierra || "",
+            hertz: retiro.hertz || "",
+            tecnico_1: retiro.tecnico_1 || "",
+            tecnico_2: retiro.tecnico_2 || "",
+            recepciona_nombre: retiro.recepciona_nombre || "",
+            recepciona_rut: retiro.recepciona_rut || "",
+            firma_tecnico_1: retiro.firma_tecnico_1 || "",
+            firma_tecnico_2: retiro.firma_tecnico_2 || "",
+            firma_recepciona: retiro.firma_recepciona || "",
+            tipo_retiro: retiro.tipo_retiro || "",
+            estado_logistico: retiro.estado_logistico || "",
+        };
+        verPermisoPdf(retiroAsPermiso, {
+            idField: "id_retiro_terreno",
+            tituloDocumento: "Retiro en Terreno - Informe",
+            incluirResponsabilidad: false
+        });
+    };
+
     const verArmadoDesdeActa = async (acta) => {
         const centroId = Number(acta?.centro_id || 0);
         if (!centroId) {
@@ -1435,7 +1484,7 @@ function InformesCentros() {
                         <label>Fecha hasta</label>
                         <input className="form-control" type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
                     </div>
-                    {(subcategoria === "intervencion" || subcategoria === "mantencion") ? (
+                    {(subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") ? (
                         <div>
                             <label>Correlativo</label>
                             <input
@@ -1735,24 +1784,35 @@ function InformesCentros() {
                         </div>
                     ) : null}
                 </>
-            ) : (subcategoria === "intervencion" || subcategoria === "mantencion") ? (
+            ) : (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") ? (
                 <>
                     <div className="card informes-centros-tabla">
                         <div className="card-body">
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <div>
-                                    <h5 className="mb-1">{subcategoria === "mantencion" ? "Mantenciones en terreno" : "Permisos de trabajo"}</h5>
+                                    <h5 className="mb-1">
+                                        {subcategoria === "mantencion"
+                                            ? "Mantenciones en terreno"
+                                            : subcategoria === "retiro"
+                                                ? "Retiros en terreno"
+                                                : "Permisos de trabajo"}
+                                    </h5>
                                     <p className="text-muted mb-0">
-                                        {subcategoria === "mantencion" ? "Registros creados desde mobile en mantenciones de terreno." : "Registros creados desde mobile y web."}
+                                        {subcategoria === "mantencion"
+                                            ? "Registros creados desde mobile en mantenciones de terreno."
+                                            : subcategoria === "retiro"
+                                                ? "Registros de retiro creados desde mobile."
+                                                : "Registros creados desde mobile y web."}
                                     </p>
-                                    <div className="informes-detalle-toolbar mt-2">
-                                        <button
-                                            className={`btn btn-sm ${mostrarDetallePermiso ? "btn-primary" : "btn-outline-primary"}`}
-                                            onClick={() => setMostrarDetallePermiso((v) => !v)}>
-                                            <i className="fas fa-layer-group mr-1" />
-                                            {mostrarDetallePermiso ? "Ocultar detalle" : "Detalle"}
-                                        </button>
-                                        {mostrarDetallePermiso ? (
+                                    {subcategoria !== "retiro" ? (
+                                        <div className="informes-detalle-toolbar mt-2">
+                                            <button
+                                                className={`btn btn-sm ${mostrarDetallePermiso ? "btn-primary" : "btn-outline-primary"}`}
+                                                onClick={() => setMostrarDetallePermiso((v) => !v)}>
+                                                <i className="fas fa-layer-group mr-1" />
+                                                {mostrarDetallePermiso ? "Ocultar detalle" : "Detalle"}
+                                            </button>
+                                            {mostrarDetallePermiso ? (
                                             <>
                                                 <button
                                                     className={`btn btn-sm ${detallePermisoTab === "gps" ? "btn-primary" : "btn-outline-primary"}`}
@@ -1765,8 +1825,9 @@ function InformesCentros() {
                                                     Energia
                                                 </button>
                                             </>
-                                        ) : null}
-                                    </div>
+                                            ) : null}
+                                        </div>
+                                    ) : null}
                                 </div>
                                 {subcategoria === "intervencion" ? (
                                     <button className="btn btn-primary" onClick={abrirNuevoPermiso}>
@@ -1781,6 +1842,8 @@ function InformesCentros() {
                                 <div className="informes-empty">
                                     {subcategoria === "mantencion"
                                         ? "No hay mantenciones en terreno para los filtros seleccionados."
+                                        : subcategoria === "retiro"
+                                            ? "No hay retiros en terreno para los filtros seleccionados."
                                         : "No hay permisos de trabajo para los filtros seleccionados."}
                                 </div>
                             ) : (
@@ -1806,7 +1869,7 @@ function InformesCentros() {
                                             </thead>
                                             <tbody>
                                                 {permisosPaginados.map((permiso, index) => {
-                                                    const rowKey = permiso.id_permiso_trabajo || permiso.id_mantencion_terreno;
+                                                    const rowKey = permiso.id_permiso_trabajo || permiso.id_mantencion_terreno || permiso.id_retiro_terreno;
                                                     return (
                                                         <React.Fragment key={`${subcategoria}-${rowKey || index}`}>
                                                             <tr>
@@ -1814,12 +1877,14 @@ function InformesCentros() {
                                                                 <td>
                                                                     {subcategoria === "mantencion"
                                                                         ? `N${permiso.id_mantencion_terreno || "-"}`
+                                                                        : subcategoria === "retiro"
+                                                                            ? `N${permiso.id_retiro_terreno || "-"}`
                                                                         : `N${permiso.id_permiso_trabajo || "-"}`}
                                                                 </td>
                                                                 <td>{permiso.empresa || permiso.cliente || "-"}</td>
                                                                 <td>{permiso.centro || "-"}</td>
                                                                 <td>{permiso.codigo_ponton || "-"}</td>
-                                                                <td>{toDisplayDate(permiso.fecha_ingreso)}</td>
+                                                                <td>{toDisplayDate(subcategoria === "retiro" ? permiso.fecha_retiro : permiso.fecha_ingreso)}</td>
                                                                 <td>{toDisplayDate(permiso.fecha_salida)}</td>
                                                                 <td>
                                                                     <div>{permiso.region || "-"}</div>
@@ -1846,20 +1911,38 @@ function InformesCentros() {
                                                                         </>
                                                                     ) : (
                                                                         <>
-                                                                            <button
-                                                                                className="btn btn-sm btn-outline-secondary mr-2"
-                                                                                onClick={() => verMantencionPdf(permiso)}>
-                                                                                <i className="fas fa-file-pdf mr-1" />
-                                                                                Mantencion
-                                                                            </button>
-                                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarMantencion(permiso.id_mantencion_terreno)}>
-                                                                                <i className="fas fa-trash-alt" />
-                                                                            </button>
+                                                                            {subcategoria === "mantencion" ? (
+                                                                                <>
+                                                                                    <button
+                                                                                        className="btn btn-sm btn-outline-secondary mr-2"
+                                                                                        onClick={() => verMantencionPdf(permiso)}>
+                                                                                        <i className="fas fa-file-pdf mr-1" />
+                                                                                        Mantencion
+                                                                                    </button>
+                                                                                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleEliminarMantencion(permiso.id_mantencion_terreno)}>
+                                                                                        <i className="fas fa-trash-alt" />
+                                                                                    </button>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        className="btn btn-sm btn-outline-secondary mr-2"
+                                                                                        onClick={() => verRetiroPdf(permiso)}>
+                                                                                        <i className="fas fa-file-pdf mr-1" />
+                                                                                        Retiro
+                                                                                    </button>
+                                                                                    <button
+                                                                                        className="btn btn-sm btn-outline-danger"
+                                                                                        onClick={() => handleEliminarRetiro(permiso.id_retiro_terreno)}>
+                                                                                        <i className="fas fa-trash-alt" />
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                         </>
                                                                     )}
                                                                 </td>
                                                             </tr>
-                                                            {mostrarDetallePermiso ? (
+                                                            {mostrarDetallePermiso && subcategoria !== "retiro" ? (
                                                                 <tr className="informes-detalle-row">
                                                                     <td colSpan={13}>
                                                                         <div className="informes-detalle-panel">
