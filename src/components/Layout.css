@@ -150,6 +150,10 @@ body.sidenav-expanded .app-header {
     background: #f0fdf4;
 }
 
+.notif-item.actividad {
+    background: #fff7ed;
+}
+
 .notif-text {
     color: #0f172a;
     font-size: 0.86rem;

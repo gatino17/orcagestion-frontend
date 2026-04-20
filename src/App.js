@@ -73,7 +73,7 @@ function App() {
                         <Route
                             path="/"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
+                              <PrivateRoute requiredPage="inicio" allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
                                     <Home />
                                 </PrivateRoute>
                             }
@@ -82,7 +82,7 @@ function App() {
                         <Route
                             path="/soporte"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                              <PrivateRoute requiredPage="soporte" allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <Soporte />
                                 </PrivateRoute>
                             }
@@ -90,7 +90,7 @@ function App() {
                         <Route
                             path="/soporte/detalle"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                              <PrivateRoute requiredPage="soporte_detalle" allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <SoporteDetalle />
                                 </PrivateRoute>
                             }
@@ -98,7 +98,7 @@ function App() {
                         <Route
                             path="/mantencion-preventiva"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                              <PrivateRoute requiredPage="mantencion_preventiva" allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <MantencionPreventiva />
                                 </PrivateRoute>
                             }
@@ -106,7 +106,7 @@ function App() {
                         <Route
                             path="/informes-centros"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'soporte', 'operaciones']}>
+                              <PrivateRoute requiredPage="informes_centros" allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <InformesCentros />
                                 </PrivateRoute>
                             }
@@ -114,7 +114,7 @@ function App() {
                         <Route
                             path="/bodega-retiros"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                              <PrivateRoute requiredPage="bodega_retiros" allowedRoles={['admin', 'operaciones']}>
                                     <BodegaRetiros />
                                 </PrivateRoute>
                             }
@@ -122,7 +122,7 @@ function App() {
                         <Route
                             path="/clientes"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                              <PrivateRoute requiredPage="clientes" allowedRoles={['admin', 'operaciones']}>
                                     <Clientes />
                                 </PrivateRoute>
                             }
@@ -130,7 +130,7 @@ function App() {
                         <Route
                             path="/calendario"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                              <PrivateRoute requiredPage="calendario" allowedRoles={['admin', 'operaciones', 'soporte']}>
                                     <Calendario />
                                 </PrivateRoute>
                             }
@@ -138,7 +138,7 @@ function App() {
                         <Route
                             path="/historial-trabajos"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                              <PrivateRoute requiredPage="historial_trabajos" allowedRoles={['admin', 'operaciones', 'soporte']}>
                                     <HistorialTrabajos />
                                 </PrivateRoute>
                             }
@@ -146,7 +146,7 @@ function App() {
                         <Route
                             path="/historial-centro"
                             element={
-                              <PrivateRoute allowedRoles={['admin','finanzas', 'operaciones']}>
+                              <PrivateRoute requiredPage="historial_centro" allowedRoles={['admin','finanzas', 'operaciones']}>
                                     <HistorialCentros />
                                 </PrivateRoute>
                             }
@@ -154,7 +154,7 @@ function App() {
                         <Route
                             path="/datos-ip"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'soporte']}>
+                              <PrivateRoute requiredPage="datos_ip" allowedRoles={['admin', 'operaciones', 'soporte']}>
                                     <DatosIP />
                                 </PrivateRoute>
                             }
@@ -162,7 +162,7 @@ function App() {
                         <Route
                             path="/consulta-centro"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
+                              <PrivateRoute requiredPage="consulta_centro" allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
                                     <ConsultaCentro />
                                 </PrivateRoute>
                             }
@@ -170,7 +170,7 @@ function App() {
                         <Route
                             path="/usuarios"
                             element={
-                              <PrivateRoute allowedRoles={['admin']}>
+                              <PrivateRoute requiredPage="usuarios" allowedRoles={['admin']}>
                                     <Usuarios />
                                 </PrivateRoute>
                             }
@@ -178,7 +178,7 @@ function App() {
                         <Route
                             path="/centros"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                              <PrivateRoute requiredPage="centros" allowedRoles={['admin', 'operaciones']}>
                                     <Centros />
                                 </PrivateRoute>
                             }
@@ -186,7 +186,7 @@ function App() {
                         <Route
                             path="/tecnicos"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                              <PrivateRoute requiredPage="tecnicos" allowedRoles={['admin', 'operaciones']}>
                                     <Tecnicos />
                                 </PrivateRoute>
                             }
@@ -194,7 +194,7 @@ function App() {
                         <Route
                             path="/registrosdocumentos"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones']}>
+                              <PrivateRoute requiredPage="registrosdocumentos" allowedRoles={['admin', 'operaciones']}>
                                     <RegistrosDocumentos />
                                 </PrivateRoute>
                             }
@@ -202,7 +202,7 @@ function App() {
                         <Route
                             path="/armados"
                             element={
-                              <PrivateRoute allowedRoles={['admin', 'operaciones', 'tecnico']}>
+                              <PrivateRoute requiredPage="armados" allowedRoles={['admin', 'operaciones', 'tecnico']}>
                                     <ArmadoTecnico />
                                 </PrivateRoute>
                             }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useState, useEffect, useMemo } from "react";
 import DataTable from "react-data-table-component";
 import { useNavigate } from "react-router-dom";
 import {
@@ -71,6 +71,78 @@ const parseFechaLocal = (valor, finDeDia = false) => {
     return fecha;
 };
 
+const formatearEtiquetaCentro = (centro) => {
+    if (!centro) return "";
+    const estado = String(centro.estado || "").trim();
+    return `${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}${estado ? ` · ${estado}` : ""}`;
+};
+
+const normalizarEstadoCentro = (estado) =>
+    String(estado || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-");
+
+const normalizarListaDetalles = (cantidad, detalles = []) => {
+    const cant = Number(cantidad || 0);
+    if (!cant || cant < 1) return [];
+    const listaBase = Array.isArray(detalles) ? detalles : [];
+    return Array.from({ length: cant }, (_, index) =>
+        String(listaBase[index] || "").trim().toUpperCase()
+    );
+};
+
+const construirDetalleCambioEquipo = (cantidad, detalles = []) => {
+    const cant = Number(cantidad || 0);
+    const lista = normalizarListaDetalles(cant, detalles);
+    if (!cant || !lista.length) return "";
+    return `TOTAL:${cant} | ITEMS:${lista.join(" || ")}`;
+};
+
+const parsearDetalleCambioEquipo = (texto) => {
+    const raw = String(texto || "").trim();
+    const matchItems = /^TOTAL:\s*(\d+)\s*\|\s*ITEMS:\s*(.+)$/i.exec(raw);
+    if (matchItems) {
+        const cantidad = Number(matchItems[1] || 0);
+        const detalles = String(matchItems[2] || "")
+            .split("||")
+            .map((item) => String(item || "").trim().toUpperCase());
+        return {
+            cantidad,
+            detalles: normalizarListaDetalles(cantidad, detalles)
+        };
+    }
+
+    const match = /^TOTAL:\s*(\d+)\s*\|\s*DETALLE:\s*(.+)$/i.exec(raw);
+    if (match) {
+        const cantidad = Number(match[1] || 0);
+        const detalleTexto = String(match[2] || "").trim().toUpperCase();
+        return {
+            cantidad,
+            detalles: normalizarListaDetalles(
+                cantidad,
+                cantidad > 1 ? Array.from({ length: cantidad }, () => detalleTexto) : [detalleTexto]
+            )
+        };
+    }
+    const detallesFallback = raw ? [raw.toUpperCase()] : [];
+    return { cantidad: detallesFallback.length ? 1 : "", detalles: detallesFallback };
+};
+
+const obtenerCantidadCambioSoporte = (soporte) => {
+    if (!soporte?.cambio_equipo) return 0;
+    const parsed = parsearDetalleCambioEquipo(soporte?.equipo_cambiado);
+    const cantidad = Number(parsed?.cantidad || 0);
+    return cantidad > 0 ? cantidad : 1;
+};
+
+const obtenerNombresCambioSoporte = (soporte) => {
+    if (!soporte?.cambio_equipo) return "-";
+    const parsed = parsearDetalleCambioEquipo(soporte?.equipo_cambiado);
+    if (parsed?.detalles?.length) return parsed.detalles.join(", ");
+    return String(soporte?.equipo_cambiado || "-");
+};
+
 const Soporte = () => {
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
@@ -80,14 +152,17 @@ const Soporte = () => {
     // Estados del formulario
     const [centroId, setCentroId] = useState("");
     const [centroBusqueda, setCentroBusqueda] = useState("");
+    const [mostrarSugerenciasCentro, setMostrarSugerenciasCentro] = useState(false);
     const [problema, setProblema] = useState("");
     const [tipo, setTipo] = useState("");
+    const [origen, setOrigen] = useState("cliente");
     const [fechaSoporte, setFechaSoporte] = useState("");
     const [solucion, setSolucion] = useState("");
     const [categoriaFalla, setCategoriaFalla] = useState("");
     const [categoriaFallaOtra, setCategoriaFallaOtra] = useState("");
     const [cambioEquipo, setCambioEquipo] = useState(false);
-    const [equipoCambiado, setEquipoCambiado] = useState("");
+    const [cantidadEquiposCambiados, setCantidadEquiposCambiados] = useState("");
+    const [detalleEquiposCambiadosLista, setDetalleEquiposCambiadosLista] = useState([]);
     const [estado, setEstado] = useState("pendiente");
     const [fechaCierre, setFechaCierre] = useState("");
     const [errorFechaCierre, setErrorFechaCierre] = useState("");
@@ -122,11 +197,28 @@ const Soporte = () => {
         if (!centroId || !centros.length) return;
         const match = centros.find((centro) => String(centro.id) === String(centroId));
         if (match) {
-            setCentroBusqueda(
-                `${match.id} - ${match.nombre}${match.cliente ? ` (${match.cliente})` : ""}`
-            );
+            setCentroBusqueda(formatearEtiquetaCentro(match));
         }
     }, [centroId, centros]);
+
+    const centroSeleccionado = useMemo(
+        () => centros.find((centro) => String(centro.id) === String(centroId)) || null,
+        [centros, centroId]
+    );
+    const claseEstadoCentroInput = centroSeleccionado
+        ? `centro-input-estado-${normalizarEstadoCentro(centroSeleccionado.estado) || "sin-estado"}`
+        : "";
+
+    const centrosSugeridos = useMemo(() => {
+        const texto = String(centroBusqueda || "").trim().toLowerCase();
+        if (!texto) return centros.slice(0, 8);
+        return centros
+            .filter((centro) => {
+                const etiqueta = formatearEtiquetaCentro(centro).toLowerCase();
+                return etiqueta.includes(texto);
+            })
+            .slice(0, 8);
+    }, [centros, centroBusqueda]);
 
     const rangoFechas = useMemo(() => {
         const hoy = new Date();
@@ -246,11 +338,19 @@ const Soporte = () => {
     const totalSoportesGeneral = soportes.length;
     const totalSoportesPeriodo = soportesFiltrados.length;
     const totalCambiosEquiposPeriodo = useMemo(
-        () => soportesFiltrados.filter((soporte) => soporte.cambio_equipo).length,
+        () =>
+            soportesFiltrados.reduce(
+                (acc, soporte) => acc + obtenerCantidadCambioSoporte(soporte),
+                0
+            ),
         [soportesFiltrados]
     );
     const totalCambiosEquiposGeneral = useMemo(
-        () => soportes.filter((soporte) => soporte.cambio_equipo).length,
+        () =>
+            soportes.reduce(
+                (acc, soporte) => acc + obtenerCantidadCambioSoporte(soporte),
+                0
+            ),
         [soportes]
     );
     const totalClientesGeneral = useMemo(
@@ -275,12 +375,14 @@ const Soporte = () => {
         setCentroBusqueda("");
         setProblema("");
         setTipo("");
+        setOrigen("cliente");
         setFechaSoporte("");
         setSolucion("");
         setCategoriaFalla("");
         setCategoriaFallaOtra("");
         setCambioEquipo(false);
-        setEquipoCambiado("");
+        setCantidadEquiposCambiados("");
+        setDetalleEquiposCambiadosLista([]);
         setEditarSoporte(null);
         setEstado("pendiente");
         setFechaCierre("");
@@ -297,29 +399,55 @@ const Soporte = () => {
         const match = centros.find((centro) => String(centro.id) === posibleId);
         if (match) {
             setCentroId(String(match.id));
-            setCentroBusqueda(
-                `${match.id} - ${match.nombre}${match.cliente ? ` (${match.cliente})` : ""}`
-            );
+            setCentroBusqueda(formatearEtiquetaCentro(match));
         } else {
             setCentroId("");
         }
     };
 
+    const handleSeleccionarCentroSugerido = (centro) => {
+        setCentroId(String(centro.id));
+        setCentroBusqueda(formatearEtiquetaCentro(centro));
+        setMostrarSugerenciasCentro(false);
+    };
+
     const handleGuardarSoporte = async () => {
+        if (!origen) {
+            alert("Selecciona el origen del soporte.");
+            return;
+        }
+
         const categoriaNormalizada =
             categoriaFalla === CATEGORIA_OTRA
                 ? categoriaFallaOtra.trim().toUpperCase()
                 : categoriaFalla;
 
+        if (cambioEquipo) {
+            const cantidad = Number(cantidadEquiposCambiados || 0);
+            if (!cantidad || cantidad < 1) {
+                alert("Indica una cantidad valida de equipos cambiados.");
+                return;
+            }
+            const listaDetalles = normalizarListaDetalles(cantidad, detalleEquiposCambiadosLista);
+            const faltanDetalles = listaDetalles.some((item) => !item);
+            if (faltanDetalles) {
+                alert("Completa el detalle de cada equipo reemplazado.");
+                return;
+            }
+        }
+
         const soporteData = {
             centro_id: parseInt(centroId, 10),
             problema,
             tipo,
+            origen,
             fecha_soporte: fechaSoporte,
             solucion,
             categoria_falla: categoriaNormalizada,
             cambio_equipo: cambioEquipo,
-            equipo_cambiado: equipoCambiado,
+            equipo_cambiado: cambioEquipo
+                ? construirDetalleCambioEquipo(cantidadEquiposCambiados, detalleEquiposCambiadosLista)
+                : null,
             estado,
             fecha_cierre: fechaCierre || null
         };
@@ -351,12 +479,16 @@ const Soporte = () => {
         setEditarSoporte(soporte);
         setCentroId(soporte.centro.id_centro);
         setCentroBusqueda(
-            `${soporte.centro.id_centro} - ${soporte.centro.nombre || "Centro"}${
-                soporte.centro.cliente ? ` (${soporte.centro.cliente})` : ""
-            }`
+            formatearEtiquetaCentro({
+                id: soporte.centro.id_centro,
+                nombre: soporte.centro.nombre || "Centro",
+                cliente: soporte.centro.cliente,
+                estado: soporte.centro.estado
+            })
         );
         setProblema(soporte.problema);
         setTipo(soporte.tipo);
+        setOrigen((soporte.origen || "cliente").toLowerCase());
         const fechaSoporteNormalizada = formatearParaInputFecha(soporte.fecha_soporte);
         const fechaCierreNormalizada = formatearParaInputFecha(soporte.fecha_cierre);
         setFechaSoporte(fechaSoporteNormalizada);
@@ -366,11 +498,13 @@ const Soporte = () => {
             setCategoriaFalla(CATEGORIA_OTRA);
             setCategoriaFallaOtra(categoriaActual);
         } else {
-            setCategoriaFalla(categoriaActual);
-            setCategoriaFallaOtra("");
+        setCategoriaFalla(categoriaActual);
+        setCategoriaFallaOtra("");
         }
         setCambioEquipo(soporte.cambio_equipo);
-        setEquipoCambiado(soporte.equipo_cambiado ? soporte.equipo_cambiado.toUpperCase() : "");
+        const detalleCambio = parsearDetalleCambioEquipo(soporte.equipo_cambiado);
+        setCantidadEquiposCambiados(detalleCambio.cantidad || "");
+        setDetalleEquiposCambiadosLista(detalleCambio.detalles || []);
         const errorFechas = validarRelacionFechas(fechaSoporteNormalizada, fechaCierreNormalizada);
         setErrorFechaCierre(errorFechas);
         if (!errorFechas && fechaCierreNormalizada) {
@@ -470,17 +604,18 @@ const Soporte = () => {
         const baseClass = "d-inline-flex align-items-center px-2 py-1 rounded-pill font-weight-semibold";
         const variantes = {
             pendiente: { clase: `${baseClass} bg-danger text-white`, icono: "fas fa-exclamation-circle" },
-            en_proceso: { clase: `${baseClass} bg-warning text-dark`, icono: "fas fa-tools" },
+            en_proceso: { clase: `${baseClass} bg-warning text-dark`, icono: "fas fa-exclamation-triangle", label: "Alerta" },
             resuelto: { clase: `${baseClass} bg-success text-white`, icono: "fas fa-check-circle" }
         };
         const { clase, icono } = {
             ...variantes.pendiente,
             ...variantes[estadoNormalizado]
         };
+        const label = variantes[estadoNormalizado]?.label || estadoNormalizado.replace("_", " ");
         return (
             <span className={clase}>
                 <i className={`${icono} mr-2`}></i>
-                {estadoNormalizado.replace("_", " ")}
+                {label}
             </span>
         );
     };
@@ -509,9 +644,9 @@ const Soporte = () => {
             },
             en_proceso: {
                 key: "en_proceso",
-                label: "En proceso",
+                label: "Alerta",
                 accent: "bg-soft-warning text-warning",
-                icon: "fas fa-tools",
+                icon: "fas fa-exclamation-triangle",
                 count: 0,
                 totalDias: 0
             },
@@ -554,6 +689,20 @@ const Soporte = () => {
     }, [soportesFiltrados]);
 
     const totalPendientesAbiertos = pendientesAbiertos.length;
+    const totalPendientesPrioritarios = useMemo(
+        () =>
+            pendientesAbiertos.filter(
+                (soporte) => String(soporte.estado || "pendiente").toLowerCase() === "pendiente"
+            ).length,
+        [pendientesAbiertos]
+    );
+    const totalAlertasPrioritarias = useMemo(
+        () =>
+            pendientesAbiertos.filter(
+                (soporte) => String(soporte.estado || "").toLowerCase() === "en_proceso"
+            ).length,
+        [pendientesAbiertos]
+    );
     const pendientesCriticos = useMemo(
         () => pendientesAbiertos.slice(0, 4),
         [pendientesAbiertos]
@@ -571,6 +720,21 @@ const Soporte = () => {
         { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, grow: 1.0 },
         { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, grow: 1.5 },
         { name: "Tipo", selector: (row) => row.tipo, sortable: true, width: "110px" },
+        {
+            name: "Origen",
+            selector: (row) => row.origen || "cliente",
+            sortable: true,
+            width: "110px",
+            cell: (row) => {
+                const valor = String(row.origen || "cliente").toLowerCase();
+                const esOrca = valor === "orca";
+                return (
+                    <span className={`badge badge-pill ${esOrca ? "badge-info" : "badge-secondary"}`}>
+                        {esOrca ? "Orca" : "Cliente"}
+                    </span>
+                );
+            }
+        },
         {
             id: "fechaSoporte",
             name: "Fecha",
@@ -590,7 +754,7 @@ const Soporte = () => {
             cell: (row) =>
                 row.fecha_cierre
                     ? `${calcularDiasAbiertos(row)} d\u00edas`
-                    : "En proceso"
+                    : "Alerta"
         },
         {
             name: "Estado",
@@ -616,7 +780,24 @@ const Soporte = () => {
                 </span>
             )
         },
-        { name: "Equipo cambiado", selector: (row) => row.equipo_cambiado || "-", sortable: true, wrap: true },
+        {
+            name: "Equipo cambiado",
+            selector: (row) => obtenerNombresCambioSoporte(row),
+            sortable: true,
+            wrap: true,
+            minWidth: "240px",
+            cell: (row) => {
+                if (!row.cambio_equipo) return "-";
+                const cantidad = obtenerCantidadCambioSoporte(row);
+                const nombres = obtenerNombresCambioSoporte(row);
+                return (
+                    <div className="d-flex align-items-center flex-wrap" title={nombres}>
+                        <span className="badge badge-primary mr-2">{cantidad}</span>
+                        <span className="text-uppercase">{nombres}</span>
+                    </div>
+                );
+            }
+        },
         {
             name: "Acciones",
             cell: (row) => (
@@ -839,9 +1020,17 @@ const Soporte = () => {
                                     <h5 className="text-uppercase text-muted mb-1">Pendientes prioritarios</h5>
                                     <small className="text-secondary">Casos mas antiguos sin cierre</small>
                                 </div>
-                                <span className="badge badge-pill badge-danger">
-                                    {totalPendientesAbiertos}
-                                </span>
+                                <div className="d-flex align-items-center">
+                                    <span className="badge badge-pill badge-danger mr-2" title="Pendientes">
+                                        Pendientes: {totalPendientesPrioritarios}
+                                    </span>
+                                    <span className="badge badge-pill badge-warning text-dark mr-2" title="Alertas">
+                                        Alertas: {totalAlertasPrioritarias}
+                                    </span>
+                                    <span className="badge badge-pill badge-secondary" title="Total abiertos">
+                                        Total: {totalPendientesAbiertos}
+                                    </span>
+                                </div>
                             </div>
                             {pendientesCriticos.length ? (
                                 <ul className="list-unstyled mb-0">
@@ -933,7 +1122,7 @@ const Soporte = () => {
             {/* Modal */}
             {showModal && (
                 <div className="modal show" style={{ display: "block" }}>
-                    <div className="modal-dialog modal-lg">
+                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
                         <div className="modal-content soporte-modal shadow-lg border-0">
                             <div className="modal-header">
                                 <h5>{editarSoporte ? "Editar Soporte" : "Crear Soporte"}</h5>
@@ -944,22 +1133,41 @@ const Soporte = () => {
                             <div className="modal-body soporte-form-body">
                                 <div className="form-group">
                                     <label className="text-muted small font-weight-semibold">Centro</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        list="lista-centros-soporte"
-                                        placeholder="ID - Centro (Cliente)"
-                                        value={centroBusqueda}
-                                        onChange={(e) => handleCentroBusquedaChange(e.target.value)}
-                                    />
-                                    <datalist id="lista-centros-soporte">
-                                        {centros.map((centro) => (
-                                            <option
-                                                key={centro.id}
-                                                value={`${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}`}
-                                            />
-                                        ))}
-                                    </datalist>
+                                    <div className="centro-sugerencia-wrap">
+                                        <input
+                                            type="text"
+                                            className={`form-control ${claseEstadoCentroInput}`}
+                                            placeholder="ID - Centro (Cliente) · Estado"
+                                            value={centroBusqueda}
+                                            onFocus={() => setMostrarSugerenciasCentro(true)}
+                                            onBlur={() => setTimeout(() => setMostrarSugerenciasCentro(false), 120)}
+                                            onChange={(e) => handleCentroBusquedaChange(e.target.value)}
+                                        />
+                                        {mostrarSugerenciasCentro && !!centrosSugeridos.length && (
+                                            <div className="centro-sugerencias-list">
+                                                {centrosSugeridos.map((centro) => {
+                                                    const estado = String(centro.estado || "sin estado");
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={centro.id}
+                                                            className="centro-sugerencia-item"
+                                                            onMouseDown={(e) => e.preventDefault()}
+                                                            onClick={() => handleSeleccionarCentroSugerido(centro)}
+                                                        >
+                                                            <span className="centro-sugerencia-main">
+                                                                {centro.id} - {centro.nombre}
+                                                                {centro.cliente ? ` (${centro.cliente})` : ""}
+                                                            </span>
+                                                            <span className={`centro-sugerencia-estado estado-${normalizarEstadoCentro(estado) || "sin-estado"}`}>
+                                                                {estado}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                     {!centroId && (
                                         <small className="text-muted">Escribe para buscar y selecciona una opción.</small>
                                     )}
@@ -997,6 +1205,21 @@ const Soporte = () => {
                                             onChange={(e) => handleFechaSoporteChange(e.target.value)}
                                             className="form-control"
                                         />
+                                    </div>
+                                </div>
+
+                                <div className="form-row">
+                                    <div className="form-group col-md-6">
+                                        <label className="text-muted small font-weight-semibold">Origen</label>
+                                        <select
+                                            value={origen}
+                                            onChange={(e) => setOrigen(e.target.value)}
+                                            className="form-control"
+                                            required
+                                        >
+                                            <option value="cliente">Cliente</option>
+                                            <option value="orca">Orca</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -1045,7 +1268,7 @@ const Soporte = () => {
                                             className="form-control"
                                         >
                                             <option value="pendiente">Pendiente</option>
-                                            <option value="en_proceso">En Proceso</option>
+                                            <option value="en_proceso">Alerta</option>
                                             <option value="resuelto">Resuelto</option>
                                         </select>
                                         <div className="estado-preview mt-2">
@@ -1082,20 +1305,75 @@ const Soporte = () => {
                                             type="checkbox"
                                             className="mr-2"
                                             checked={cambioEquipo}
-                                            onChange={(e) => setCambioEquipo(e.target.checked)}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setCambioEquipo(checked);
+                                                if (!checked) {
+                                                    setCantidadEquiposCambiados("");
+                                                    setDetalleEquiposCambiadosLista([]);
+                                                }
+                                            }}
                                             id="cambio-equipo"
                                         />
                                         <label htmlFor="cambio-equipo" className="mb-0">¿Cambio de equipo?</label>
                                     </div>
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">Equipo reemplazado</label>
+                                        <label className="text-muted small font-weight-semibold">Cantidad de equipos</label>
                                         <input
-                                            placeholder="MODELO, SERIE U OBSERVACION"
-                                            value={equipoCambiado}
-                                            onChange={(e) => setEquipoCambiado(e.target.value.toUpperCase())}
-                                            className="form-control text-uppercase"
+                                            type="number"
+                                            min="1"
+                                            placeholder="Ej: 2"
+                                            value={cantidadEquiposCambiados}
+                                            onChange={(e) => {
+                                                const raw = e.target.value;
+                                                setCantidadEquiposCambiados(raw);
+                                                const cantidad = Number(raw || 0);
+                                                setDetalleEquiposCambiadosLista((prev) =>
+                                                    normalizarListaDetalles(cantidad, prev)
+                                                );
+                                            }}
+                                            className="form-control"
+                                            disabled={!cambioEquipo}
                                         />
                                     </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="text-muted small font-weight-semibold">Detalle equipo reemplazado</label>
+                                    {!cambioEquipo && (
+                                        <input
+                                            placeholder="Activa 'Cambio de equipo' para completar detalle"
+                                            className="form-control"
+                                            disabled
+                                        />
+                                    )}
+                                    {cambioEquipo &&
+                                        normalizarListaDetalles(
+                                            Number(cantidadEquiposCambiados || 0),
+                                            detalleEquiposCambiadosLista
+                                        ).map((detalle, index) => (
+                                            <div key={`detalle-equipo-${index}`} className="mb-2">
+                                                <small className="text-muted d-block mb-1">Equipo {index + 1}</small>
+                                                <input
+                                                    placeholder={`Detalle equipo ${index + 1} (ej: BATERIA / ROUTER)`}
+                                                    value={detalle}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.toUpperCase();
+                                                        setDetalleEquiposCambiadosLista((prev) => {
+                                                            const cantidad = Number(cantidadEquiposCambiados || 0);
+                                                            const lista = normalizarListaDetalles(cantidad, prev);
+                                                            lista[index] = value;
+                                                            return lista;
+                                                        });
+                                                    }}
+                                                    className="form-control text-uppercase"
+                                                />
+                                            </div>
+                                        ))}
+                                    {cambioEquipo && Number(cantidadEquiposCambiados || 0) > 0 && (
+                                        <small className="text-muted">
+                                            Completa un detalle por cada equipo reemplazado.
+                                        </small>
+                                    )}
                                 </div>
                             </div>
                             <div className="modal-footer">

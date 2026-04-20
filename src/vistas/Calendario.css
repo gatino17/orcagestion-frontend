@@ -104,6 +104,20 @@
   color: #94a3b8;
 }
 
+.scheduler-tech-table thead th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  border-top: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.scheduler-tech-table tbody td {
+  vertical-align: middle;
+  border-color: #edf2f7;
+}
+
 .scheduler-hours {
   list-style: none;
   padding: 0;
@@ -177,4 +191,43 @@
 
 .scheduler-modal .badge-cancelado {
   border: 2px solid #f87171;
+}
+
+.date-quick-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.soporte-pendientes-card {
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.soporte-pendiente-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-weight: 700;
+}
+
+.soporte-status-pendiente {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.soporte-status-en_proceso {
+  background: #f59e0b;
+  color: #111827;
+}
+
+.soporte-status-finalizado {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.soporte-status-cancelado {
+  background: #6b7280;
+  color: #ffffff;
 }

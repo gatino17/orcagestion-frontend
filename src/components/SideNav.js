@@ -4,130 +4,29 @@ import { jwtDecode } from "jwt-decode";
 import "./Layout.css";
 
 const navItems = [
-  {
-    section: "GENERAL",
-    label: "Inicio",
-    to: "/",
-    icon: "fas fa-home",
-    roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"],
-  },
-  {
-    section: "GENERAL",
-    label: "Consulta de centros",
-    to: "/consulta-centro",
-    icon: "fas fa-search",
-    roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Soporte",
-    to: "/soporte",
-    icon: "fas fa-headset",
-    roles: ["admin", "soporte", "operaciones"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Detalle de soporte",
-    to: "/soporte/detalle",
-    icon: "fas fa-clipboard-list",
-    roles: ["admin", "soporte", "operaciones"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Mantencion preventiva",
-    to: "/mantencion-preventiva",
-    icon: "fas fa-clipboard-check",
-    roles: ["admin", "soporte", "operaciones"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Informes centros",
-    to: "/informes-centros",
-    icon: "fas fa-chart-bar",
-    roles: ["admin", "soporte", "operaciones"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Bodega retiros",
-    to: "/bodega-retiros",
-    icon: "fas fa-warehouse",
-    roles: ["admin", "operaciones"],
-  },
-  {
-    section: "OPERACIONES",
-    label: "Armado técnico",
-    to: "/armados",
-    icon: "fas fa-tools",
-    roles: ["admin", "operaciones", "tecnico"],
-  },
-  {
-    section: "PLANIFICACION",
-    label: "Calendario",
-    to: "/calendario",
-    icon: "far fa-calendar-alt",
-    roles: ["admin", "operaciones", "soporte"],
-  },
-  {
-    section: "PLANIFICACION",
-    label: "Historial de trabajos",
-    to: "/historial-trabajos",
-    icon: "fas fa-history",
-    roles: ["admin", "operaciones", "soporte"],
-  },
-  {
-    section: "ANALITICA",
-    label: "Historial por centro",
-    to: "/historial-centro",
-    icon: "far fa-list-alt",
-    roles: ["admin", "finanzas", "operaciones"],
-  },
-  {
-    section: "REGISTROS",
-    label: "Datos IP",
-    to: "/datos-ip",
-    icon: "fas fa-network-wired",
-    roles: ["admin", "operaciones", "soporte"],
-  },
-  {
-    section: "REGISTROS",
-    label: "Clientes",
-    to: "/clientes",
-    icon: "fas fa-user-plus",
-    roles: ["admin", "operaciones"],
-  },
-  {
-    section: "REGISTROS",
-    label: "Centros",
-    to: "/centros",
-    icon: "fas fa-folder-plus",
-    roles: ["admin", "operaciones"],
-  },
-  {
-    section: "REGISTROS",
-    label: "Registro de actas",
-    to: "/registrosdocumentos",
-    icon: "fas fa-folder-open",
-    roles: ["admin", "operaciones"],
-  },
-  {
-    section: "EQUIPO",
-    label: "Usuarios",
-    to: "/usuarios",
-    icon: "fas fa-users",
-    roles: ["admin"],
-  },
-  {
-    section: "EQUIPO",
-    label: "Tecnicos",
-    to: "/tecnicos",
-    icon: "fas fa-address-book",
-    roles: ["admin", "operaciones"],
-  },
+  { section: "GENERAL", label: "Inicio", to: "/", pageKey: "inicio", icon: "fas fa-home", roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"] },
+  { section: "GENERAL", label: "Consulta de centros", to: "/consulta-centro", pageKey: "consulta_centro", icon: "fas fa-search", roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"] },
+  { section: "OPERACIONES", label: "Soporte", to: "/soporte", pageKey: "soporte", icon: "fas fa-headset", roles: ["admin", "soporte", "operaciones"] },
+  { section: "OPERACIONES", label: "Detalle de soporte", to: "/soporte/detalle", pageKey: "soporte_detalle", icon: "fas fa-clipboard-list", roles: ["admin", "soporte", "operaciones"] },
+  { section: "OPERACIONES", label: "Mantencion preventiva", to: "/mantencion-preventiva", pageKey: "mantencion_preventiva", icon: "fas fa-clipboard-check", roles: ["admin", "soporte", "operaciones"] },
+  { section: "OPERACIONES", label: "Informes centros", to: "/informes-centros", pageKey: "informes_centros", icon: "fas fa-chart-bar", roles: ["admin", "soporte", "operaciones"] },
+  { section: "OPERACIONES", label: "Bodega retiros", to: "/bodega-retiros", pageKey: "bodega_retiros", icon: "fas fa-warehouse", roles: ["admin", "operaciones"] },
+  { section: "OPERACIONES", label: "Armado tecnico", to: "/armados", pageKey: "armados", icon: "fas fa-tools", roles: ["admin", "operaciones", "tecnico"] },
+  { section: "PLANIFICACION", label: "Calendario", to: "/calendario", pageKey: "calendario", icon: "far fa-calendar-alt", roles: ["admin", "operaciones", "soporte"] },
+  { section: "PLANIFICACION", label: "Historial de trabajos", to: "/historial-trabajos", pageKey: "historial_trabajos", icon: "fas fa-history", roles: ["admin", "operaciones", "soporte"] },
+  { section: "ANALITICA", label: "Historial por centro", to: "/historial-centro", pageKey: "historial_centro", icon: "far fa-list-alt", roles: ["admin", "finanzas", "operaciones"] },
+  { section: "REGISTROS", label: "Datos IP", to: "/datos-ip", pageKey: "datos_ip", icon: "fas fa-network-wired", roles: ["admin", "operaciones", "soporte"] },
+  { section: "REGISTROS", label: "Clientes", to: "/clientes", pageKey: "clientes", icon: "fas fa-user-plus", roles: ["admin", "operaciones"] },
+  { section: "REGISTROS", label: "Centros", to: "/centros", pageKey: "centros", icon: "fas fa-folder-plus", roles: ["admin", "operaciones"] },
+  { section: "REGISTROS", label: "Registro de actas", to: "/registrosdocumentos", pageKey: "registrosdocumentos", icon: "fas fa-folder-open", roles: ["admin", "operaciones"] },
+  { section: "EQUIPO", label: "Usuarios", to: "/usuarios", pageKey: "usuarios", icon: "fas fa-users", roles: ["admin"] },
+  { section: "EQUIPO", label: "Tecnicos", to: "/tecnicos", pageKey: "tecnicos", icon: "fas fa-address-book", roles: ["admin", "operaciones"] },
 ];
 
 function SideNav() {
   const [usuario, setUsuario] = useState("Usuario");
   const [rol, setRol] = useState("");
+  const [paginasPermitidas, setPaginasPermitidas] = useState([]);
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
@@ -138,6 +37,7 @@ function SideNav() {
       const decodedToken = jwtDecode(token);
       setUsuario(decodedToken.name || "Usuario");
       setRol(decodedToken.rol || "");
+      setPaginasPermitidas(Array.isArray(decodedToken.paginas) ? decodedToken.paginas : []);
     } catch (error) {
       console.error("Error al decodificar el token:", error);
     }
@@ -168,23 +68,16 @@ function SideNav() {
     const removeClass = collapsed ? "sidenav-expanded" : "sidenav-collapsed";
     document.body.classList.add(addClass);
     document.body.classList.remove(removeClass);
-    if (collapsed) {
-      document.body.classList.add("sidenav-collapsed");
-      document.body.classList.remove("sidenav-expanded");
-    } else {
-      document.body.classList.add("sidenav-expanded");
-      document.body.classList.remove("sidenav-collapsed");
-    }
-
-    return () => {
-      document.body.classList.remove("sidenav-collapsed", "sidenav-expanded");
-    };
+    return () => document.body.classList.remove("sidenav-collapsed", "sidenav-expanded");
   }, [collapsed]);
 
   const itemsFiltrados = useMemo(() => {
     if (!rol) return [];
+    if (paginasPermitidas.length) {
+      return navItems.filter((item) => paginasPermitidas.includes(item.pageKey));
+    }
     return navItems.filter((item) => item.roles.includes(rol));
-  }, [rol]);
+  }, [rol, paginasPermitidas]);
 
   let ultimoTitulo = null;
 
@@ -209,17 +102,9 @@ function SideNav() {
               ultimoTitulo = item.section;
               return (
                 <React.Fragment key={item.to}>
-                  {item.section && mostrarTitulo && (
-                    <li className="sidenav-section-title">{item.section}</li>
-                  )}
+                  {item.section && mostrarTitulo && <li className="sidenav-section-title">{item.section}</li>}
                   <li>
-                    <Link
-                      to={item.to}
-                      className={`sidenav-link ${
-                        location.pathname === item.to ? "active" : ""
-                      }`}
-                      title={item.label}
-                    >
+                    <Link to={item.to} className={`sidenav-link ${location.pathname === item.to ? "active" : ""}`} title={item.label}>
                       <i className={item.icon} />
                       <span>{item.label}</span>
                     </Link>
@@ -239,4 +124,3 @@ function SideNav() {
 }
 
 export default SideNav;
-

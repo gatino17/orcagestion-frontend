@@ -22,6 +22,7 @@ import "./InformesCentros.css";
 
 const SUBCATEGORIAS = [
     { value: "acta_entrega", label: "Actas de entrega" },
+    { value: "reapuntamiento", label: "Reapuntamiento" },
     { value: "intervencion", label: "Permisos de trabajo" },
     { value: "mantencion", label: "Mantenciones" },
     { value: "retiro", label: "Retiros" }
@@ -407,6 +408,9 @@ function InformesCentros() {
 
     const actasFiltradas = useMemo(() => {
         return actasEntrega.filter((acta) => {
+            const tipoActa = String(acta.tipo_instalacion || "instalacion").toLowerCase();
+            if (subcategoria === "acta_entrega" && tipoActa !== "instalacion") return false;
+            if (subcategoria === "reapuntamiento" && tipoActa !== "reapuntamiento") return false;
             if (filtroCliente !== "all") {
                 const clienteActa = normalizeText(acta.cliente || acta.empresa || "");
                 if (clienteActa !== normalizeText(filtroCliente)) return false;
@@ -417,7 +421,7 @@ function InformesCentros() {
             if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
             return true;
         });
-    }, [actasEntrega, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
+    }, [actasEntrega, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, subcategoria]);
 
     const permisosFiltrados = useMemo(() => {
         const correlativoFiltro = normalizeCorrelativoSearch(filtroCorrelativo);
@@ -627,13 +631,15 @@ function InformesCentros() {
     }, [permisoClienteIdForm, permisoCentroIdForm, centros]);
 
     const cargarActas = async () => {
-        if (subcategoria !== "acta_entrega") return;
+        if (!["acta_entrega", "reapuntamiento"].includes(subcategoria)) return;
         setLoadingActas(true);
         try {
             const data = await obtenerActasEntrega({
                 centro_id: filtroCentroId || undefined,
                 fecha_desde: filtroFechaDesde || undefined,
-                fecha_hasta: filtroFechaHasta || undefined
+                fecha_hasta: filtroFechaHasta || undefined,
+                tipo_instalacion:
+                    subcategoria === "reapuntamiento" ? "reapuntamiento" : "instalacion"
             });
             setActasEntrega(Array.isArray(data) ? data : []);
         } catch (error) {
@@ -685,7 +691,7 @@ function InformesCentros() {
     }, []);
 
     useEffect(() => {
-        if (subcategoria === "acta_entrega") {
+        if (subcategoria === "acta_entrega" || subcategoria === "reapuntamiento") {
             cargarActas();
         } else if (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") {
             cargarPermisos();
@@ -710,7 +716,8 @@ function InformesCentros() {
             recepciona_nombre: recepcionaNombre,
             firma_recepciona: firmaRecepciona,
             equipos_considerados: equiposConsiderados,
-            centro_origen_traslado: centroOrigenTraslado
+            centro_origen_traslado: centroOrigenTraslado,
+            tipo_instalacion: subcategoria === "reapuntamiento" ? "reapuntamiento" : "instalacion"
         };
 
         setSavingActa(true);
@@ -1498,17 +1505,21 @@ function InformesCentros() {
                 </div>
             </div>
 
-            {subcategoria === "acta_entrega" ? (
+            {(subcategoria === "acta_entrega" || subcategoria === "reapuntamiento") ? (
                 <>
                     <div className="card informes-centros-filtros mb-3">
                         <div className="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
-                                <h5 className="mb-1">Actas de entrega</h5>
-                                <p className="text-muted mb-0">Selecciona una fila para abrir el informe y completar datos.</p>
+                                <h5 className="mb-1">
+                                    {subcategoria === "reapuntamiento" ? "Reapuntamiento" : "Actas de entrega"}
+                                </h5>
+                                <p className="text-muted mb-0">
+                                    Selecciona una fila para abrir el informe y completar datos.
+                                </p>
                             </div>
                             <button className="btn btn-primary" onClick={abrirNuevaActa}>
                                 <i className="fas fa-plus mr-2" />
-                                Nueva acta
+                                {subcategoria === "reapuntamiento" ? "Nuevo reapuntamiento" : "Nueva acta"}
                             </button>
                         </div>
                     </div>
@@ -1518,7 +1529,11 @@ function InformesCentros() {
                             {loadingCentros || loadingActas ? (
                                 <div className="informes-empty">Cargando informacion...</div>
                             ) : !actasFiltradas.length ? (
-                                <div className="informes-empty">No hay actas de entrega para los filtros seleccionados.</div>
+                                <div className="informes-empty">
+                                    {subcategoria === "reapuntamiento"
+                                        ? "No hay reapuntamientos para los filtros seleccionados."
+                                        : "No hay actas de entrega para los filtros seleccionados."}
+                                </div>
                             ) : (
                                 <>
                                     <div className="table-responsive">

@@ -289,6 +289,26 @@ export const actualizarEquipo = async (id_equipo, equipoData) => {
     }
 };
 
+export const obtenerRoles = async () => {
+    const response = await axios.get(`${BASE_URL}/roles/`);
+    return response.data;
+};
+
+export const obtenerPaginasRol = async () => {
+    const response = await axios.get(`${BASE_URL}/roles/pages`);
+    return response.data;
+};
+
+export const crearRol = async (payload) => {
+    const response = await axios.post(`${BASE_URL}/roles/`, payload);
+    return response.data;
+};
+
+export const actualizarRol = async (idRole, payload) => {
+    const response = await axios.put(`${BASE_URL}/roles/${idRole}`, payload);
+    return response.data;
+};
+
 export const validarSerieEquipo = async (numero_serie, params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/equipos/validar-serie`, {

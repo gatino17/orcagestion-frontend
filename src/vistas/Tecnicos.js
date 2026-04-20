@@ -103,9 +103,6 @@ function Tecnicos() {
                             <p className="tecnicos-hero-subtitle">Controla disponibilidad, habilidades y licencias del personal.</p>
                         </div>
                     </div>
-                    <button className="btn btn-primary" onClick={() => abrirModal('crear')}>
-                        <i className="fas fa-user-plus" /> Nuevo tecnico
-                    </button>
                 </div>
 
                 <div className="tecnicos-metrics">
@@ -133,9 +130,6 @@ function Tecnicos() {
                                 <small>Contactos y especialidades</small>
                             </div>
                         </div>
-                        <button className="btn btn-outline-primary btn-sm" onClick={() => abrirModal('crear')}>
-                            <i className="fas fa-plus" /> Crear tecnico
-                        </button>
                     </div>
                     <div className="card-body table-responsive">
                         <table className="table tecnicos-table">

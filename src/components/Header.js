@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import "./Layout.css";
 
 function Header({ onLogout }) {
@@ -10,6 +11,12 @@ function Header({ onLogout }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "/api";
+  const normalizeText = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
   const formatNotifDate = (value) => {
     if (!value) return "-";
     const d = new Date(value);
@@ -53,12 +60,12 @@ function Header({ onLogout }) {
 
   useEffect(() => {
     let mounted = true;
-    const cursorKey = "orcagest_notif_cursor_v2";
+    const cursorKey = "orcagest_notif_cursor_v3";
     const armadoEstadoMapKey = "orcagest_notif_armado_estado_v1";
-    const baselineKey = "orcagest_notif_baseline_done_v1";
+    const baselineKey = "orcagest_notif_baseline_done_v2";
     const rawCursor = localStorage.getItem(cursorKey);
     const rawArmadoEstadoMap = localStorage.getItem(armadoEstadoMapKey);
-    let cursor = { armadoFinalizadoId: 0, mantencionId: 0 };
+    let cursor = { armadoFinalizadoId: 0, mantencionId: 0, actividadAsignadaId: 0 };
     let armadoEstadoMap = {};
     try {
       if (rawCursor) cursor = { ...cursor, ...JSON.parse(rawCursor) };
@@ -69,9 +76,10 @@ function Header({ onLogout }) {
 
     const pollEventos = async () => {
       try {
-        const [armadosRes, mantRes] = await Promise.allSettled([
+        const [armadosRes, mantRes, actividadesRes] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/armados`),
           axios.get(`${API_BASE_URL}/mantenciones_terreno/`),
+          axios.get(`${API_BASE_URL}/actividades/`),
         ]);
         const armados = armadosRes.status === "fulfilled" && Array.isArray(armadosRes.value?.data)
           ? armadosRes.value.data
@@ -79,6 +87,44 @@ function Header({ onLogout }) {
         const mantenciones = mantRes.status === "fulfilled" && Array.isArray(mantRes.value?.data)
           ? mantRes.value.data
           : [];
+        const actividadesList = actividadesRes?.status === "fulfilled" && Array.isArray(actividadesRes.value?.data)
+          ? actividadesRes.value.data
+          : [];
+
+        const token = localStorage.getItem("token");
+        let nombreUsuario = "";
+        try {
+          if (token) {
+            const decoded = jwtDecode(token);
+            nombreUsuario = normalizeText(decoded?.name || decoded?.nombre || decoded?.username || "");
+          }
+        } catch (_) {
+          nombreUsuario = "";
+        }
+
+        const isAreaInstalacion = (value) => {
+          const area = normalizeText(value);
+          return area.startsWith("instal") || area.startsWith("reap");
+        };
+        const nombrePrincipal = (a) => normalizeText(a?.encargado_principal?.nombre_encargado || "");
+        const nombreAyudante = (a) => normalizeText(a?.encargado_ayudante?.nombre_encargado || "");
+        const coincideUsuario = (a) => {
+          if (!nombreUsuario) return false;
+          const p = nombrePrincipal(a);
+          const y = nombreAyudante(a);
+          return (
+            (p && (p.includes(nombreUsuario) || nombreUsuario.includes(p))) ||
+            (y && (y.includes(nombreUsuario) || nombreUsuario.includes(y)))
+          );
+        };
+
+        const actividadesAsignadas = actividadesList.filter(
+          (a) =>
+            isAreaInstalacion(a?.area) &&
+            String(a?.estado || "").toLowerCase() !== "finalizado" &&
+            String(a?.estado || "").toLowerCase() !== "cancelado" &&
+            coincideUsuario(a)
+        );
 
         const armadosFinalizados = armados.filter((a) => String(a?.estado || "").toLowerCase() === "finalizado");
         const estadoMapActual = {};
@@ -95,12 +141,16 @@ function Header({ onLogout }) {
           (max, m) => Math.max(max, Number(m?.id_mantencion_terreno || 0)),
           cursor.mantencionId || 0
         );
+        const maxActividad = actividadesAsignadas.reduce(
+          (max, a) => Math.max(max, Number(a?.id_actividad || 0)),
+          cursor.actividadAsignadaId || 0
+        );
 
         const baselineDone = localStorage.getItem(baselineKey) === "1";
         if (!baselineDone) {
           armadoEstadoMap = estadoMapActual;
           localStorage.setItem(armadoEstadoMapKey, JSON.stringify(armadoEstadoMap));
-          cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant };
+          cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant, actividadAsignadaId: maxActividad };
           localStorage.setItem(cursorKey, JSON.stringify(cursor));
           localStorage.setItem(baselineKey, "1");
           return;
@@ -131,8 +181,20 @@ function Header({ onLogout }) {
             });
           });
 
+        actividadesAsignadas
+          .filter((a) => Number(a?.id_actividad || 0) > (cursor.actividadAsignadaId || 0))
+          .forEach((a) => {
+            const tipo = normalizeText(a?.area).startsWith("reap") ? "reapuntamiento" : "instalacion";
+            nuevas.push({
+              id: `act-${a.id_actividad}`,
+              fecha: new Date().toISOString(),
+              texto: `Tienes asignado ${tipo} en ${a?.centro?.nombre || "centro"}`,
+              tipo: "actividad",
+            });
+          });
+
         if (!mounted || !nuevas.length) {
-          cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant };
+          cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant, actividadAsignadaId: maxActividad };
           localStorage.setItem(cursorKey, JSON.stringify(cursor));
           localStorage.setItem(armadoEstadoMapKey, JSON.stringify(estadoMapActual));
           return;
@@ -142,7 +204,7 @@ function Header({ onLogout }) {
         setNotificaciones((prev) => [...nuevas, ...prev].slice(0, 20));
         setUnreadCount((c) => c + nuevas.length);
 
-        cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant };
+        cursor = { armadoFinalizadoId: maxArmado, mantencionId: maxMant, actividadAsignadaId: maxActividad };
         localStorage.setItem(cursorKey, JSON.stringify(cursor));
         localStorage.setItem(armadoEstadoMapKey, JSON.stringify(estadoMapActual));
       } catch (_error) {
