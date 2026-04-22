@@ -7,6 +7,7 @@ import {
     modificarSoporte,
     borrarSoporte
 } from "../controllers/soporteControllers";
+import { obtenerCasosIsmael } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import "./Soporte.css";
 
@@ -147,6 +148,7 @@ const Soporte = () => {
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [casosIsmael, setCasosIsmael] = useState([]);
     const navigate = useNavigate();
 
     // Estados del formulario
@@ -164,6 +166,8 @@ const Soporte = () => {
     const [cantidadEquiposCambiados, setCantidadEquiposCambiados] = useState("");
     const [detalleEquiposCambiadosLista, setDetalleEquiposCambiadosLista] = useState([]);
     const [estado, setEstado] = useState("pendiente");
+    const [caseCode, setCaseCode] = useState("");
+    const [ismaelIdOrigen, setIsmaelIdOrigen] = useState("");
     const [fechaCierre, setFechaCierre] = useState("");
     const [errorFechaCierre, setErrorFechaCierre] = useState("");
     const [editarSoporte, setEditarSoporte] = useState(null);
@@ -176,10 +180,17 @@ const Soporte = () => {
     const [filtroNombre, setFiltroNombre] = useState("");
     const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
     const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
+    const [ismaelSeleccionado, setIsmaelSeleccionado] = useState(null);
 
     const refrescarSoportes = async () => {
         setLoading(true);
         await cargarSoportes(setSoportes);
+        try {
+            const casos = await obtenerCasosIsmael({ limit: 40 });
+            setCasosIsmael(Array.isArray(casos) ? casos : []);
+        } catch {
+            setCasosIsmael([]);
+        }
         setLoading(false);
     };
 
@@ -385,6 +396,8 @@ const Soporte = () => {
         setDetalleEquiposCambiadosLista([]);
         setEditarSoporte(null);
         setEstado("pendiente");
+        setCaseCode("");
+        setIsmaelIdOrigen("");
         setFechaCierre("");
         setErrorFechaCierre("");
     };
@@ -409,6 +422,32 @@ const Soporte = () => {
         setCentroId(String(centro.id));
         setCentroBusqueda(formatearEtiquetaCentro(centro));
         setMostrarSugerenciasCentro(false);
+    };
+
+    const abrirAtajoSoporteDesdeIsmael = (row) => {
+        setIsmaelSeleccionado(null);
+        resetForm();
+        setEditarSoporte(null);
+        setProblema(String(row?.correo || row?.asunto || "").trim());
+        setTipo("remoto");
+        setCaseCode(String(row?.case_code || "").trim());
+        setIsmaelIdOrigen(String(row?.id || "").trim());
+        const fechaBase = row?.created_at || row?.hora_llegada || new Date().toISOString();
+        setFechaSoporte(formatearParaInputFecha(fechaBase));
+
+        const centroTexto = String(row?.centro || "").trim().toLowerCase();
+        if (centroTexto) {
+            const centroMatch = (Array.isArray(centros) ? centros : []).find((centro) =>
+                String(centro?.nombre || "")
+                    .trim()
+                    .toLowerCase() === centroTexto
+            );
+            if (centroMatch) {
+                setCentroId(String(centroMatch.id));
+                setCentroBusqueda(formatearEtiquetaCentro(centroMatch));
+            }
+        }
+        setShowModal(true);
     };
 
     const handleGuardarSoporte = async () => {
@@ -449,6 +488,8 @@ const Soporte = () => {
                 ? construirDetalleCambioEquipo(cantidadEquiposCambiados, detalleEquiposCambiadosLista)
                 : null,
             estado,
+            case_code: caseCode || null,
+            ismael_id_origen: ismaelIdOrigen || null,
             fecha_cierre: fechaCierre || null
         };
 
@@ -502,6 +543,8 @@ const Soporte = () => {
         setCategoriaFallaOtra("");
         }
         setCambioEquipo(soporte.cambio_equipo);
+        setCaseCode(String(soporte.case_code || ""));
+        setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
         const detalleCambio = parsearDetalleCambioEquipo(soporte.equipo_cambiado);
         setCantidadEquiposCambiados(detalleCambio.cantidad || "");
         setDetalleEquiposCambiadosLista(detalleCambio.detalles || []);
@@ -524,6 +567,18 @@ const Soporte = () => {
         const mes = String(fechaObj.getMonth() + 1).padStart(2, "0");
         const anio = fechaObj.getFullYear();
         return `${dia}/${mes}/${anio}`;
+    };
+
+    const formatearFechaHora = (fecha) => {
+        if (!fecha) return "-";
+        const f = new Date(fecha);
+        if (Number.isNaN(f.getTime())) return "-";
+        const dd = String(f.getDate()).padStart(2, "0");
+        const mm = String(f.getMonth() + 1).padStart(2, "0");
+        const yyyy = f.getFullYear();
+        const hh = String(f.getHours()).padStart(2, "0");
+        const min = String(f.getMinutes()).padStart(2, "0");
+        return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
     };
 
     const formatearParaInputFecha = (fecha) => {
@@ -632,48 +687,14 @@ const Soporte = () => {
         }));
     }, [soportesFiltradosBusqueda]);
 
-    const resumenEstado = useMemo(() => {
-        const base = {
-            pendiente: {
-                key: "pendiente",
-                label: "Pendientes",
-                accent: "bg-soft-danger text-danger",
-                icon: "fas fa-exclamation-circle",
-                count: 0,
-                totalDias: 0
-            },
-            en_proceso: {
-                key: "en_proceso",
-                label: "Alerta",
-                accent: "bg-soft-warning text-warning",
-                icon: "fas fa-exclamation-triangle",
-                count: 0,
-                totalDias: 0
-            },
-            resuelto: {
-                key: "resuelto",
-                label: "Resueltos",
-                accent: "bg-soft-success text-success",
-                icon: "fas fa-check-circle",
-                count: 0,
-                totalDias: 0
-            }
-        };
-
-        soportesFiltrados.forEach((soporte) => {
-            const estado = (soporte.estado || "pendiente").toLowerCase();
-            const dias = calcularDiasAbiertos(soporte);
-            if (base[estado]) {
-                base[estado].count += 1;
-                base[estado].totalDias += dias;
-            }
+    const casosIsmaelOrdenados = useMemo(() => {
+        return [...(Array.isArray(casosIsmael) ? casosIsmael : [])].sort((a, b) => {
+            const fa = new Date(a?.created_at || a?.updated_at || a?.hora_llegada || 0).getTime();
+            const fb = new Date(b?.created_at || b?.updated_at || b?.hora_llegada || 0).getTime();
+            return fb - fa;
         });
-
-        return Object.values(base).map((estado) => ({
-            ...estado,
-            promedio: estado.count ? Math.round(estado.totalDias / estado.count) : 0
-        }));
-    }, [soportesFiltrados]);
+    }, [casosIsmael]);
+    const casosIsmaelPreview = useMemo(() => casosIsmaelOrdenados.slice(0, 4), [casosIsmaelOrdenados]);
 
     const pendientesAbiertos = useMemo(() => {
         return soportesFiltrados
@@ -689,6 +710,14 @@ const Soporte = () => {
     }, [soportesFiltrados]);
 
     const totalPendientesAbiertos = pendientesAbiertos.length;
+    const totalResueltosPeriodo = useMemo(
+        () =>
+            soportesFiltrados.filter((soporte) => {
+                const estado = String(soporte.estado || "").toLowerCase();
+                return estado === "resuelto" || estado === "finalizado";
+            }).length,
+        [soportesFiltrados]
+    );
     const totalPendientesPrioritarios = useMemo(
         () =>
             pendientesAbiertos.filter(
@@ -760,7 +789,14 @@ const Soporte = () => {
             name: "Estado",
             selector: (row) => row.estado || "pendiente",
             sortable: true,
-            cell: (row) => renderEstado(row.estado),
+            cell: (row) => (
+                <div>
+                    {renderEstado(row.estado)}
+                    {!!String(row.case_code || "").trim() && (
+                        <small className="d-block text-muted mt-1">Case: {row.case_code}</small>
+                    )}
+                </div>
+            ),
             width: "128px"
         },
         { name: "Cierre", selector: (row) => (row.fecha_cierre ? formatearFecha(row.fecha_cierre) : "-"), sortable: true, width: "100px" },
@@ -984,30 +1020,62 @@ const Soporte = () => {
 
             <div className="row mb-4">
                 <div className="col-lg-6 mb-3">
-                    <div className="card status-summary-card h-100">
+                    <div className="card status-summary-card h-100 ismael-today-card">
                         <div className="card-body">
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <div>
-                                    <h5 className="text-uppercase text-muted mb-1">Estado de casos</h5>
-                                    <small className="text-secondary">Seguimiento del periodo</small>
+                                    <h5 className="text-uppercase text-muted mb-1">Estado de casos de hoy</h5>
+                                    <small className="text-secondary">Lectura directa tabla ismael</small>
                                 </div>
-                                <i className="fas fa-traffic-light text-secondary"></i>
+                                <span className="badge badge-pill badge-success" title="Resueltos del periodo">
+                                    <i className="fas fa-check-circle mr-1"></i>
+                                    Resueltos: {totalResueltosPeriodo}
+                                </span>
                             </div>
-                            <div className="d-flex flex-wrap">
-                                {resumenEstado.map((estadoCard) => (
-                                    <div key={estadoCard.key} className="status-chip">
-                                        <span className={`badge ${estadoCard.accent}`}>
-                                            <i className={`${estadoCard.icon} mr-1`}></i>
-                                            {estadoCard.label}
-                                        </span>
-                                        <strong className="d-block mt-2">{estadoCard.count}</strong>
-                                        <small className="text-muted">
-                                            {estadoCard.count
-                                                ? `${estadoCard.promedio} ${estadoCard.promedio === 1 ? "dia" : "dias"} promedio`
-                                                : "Sin casos"}
+                            <div className="d-flex align-items-center justify-content-between mb-2">
+                                <span className="badge bg-soft-success text-success">
+                                    <i className="fas fa-database mr-1"></i>
+                                    Registros
+                                </span>
+                                <span className="ismael-total-chip" title="Total de registros en tabla ismael">
+                                    Total: {casosIsmaelOrdenados.length}
+                                </span>
+                            </div>
+                            <div className="ismael-preview-list">
+                                {casosIsmaelPreview.map((row) => (
+                                    <div key={row.id || `${row.case_code}-${row.created_at}`} className="ismael-preview-item">
+                                        <div className="d-flex justify-content-between align-items-center">
+                                            <strong className="text-truncate mr-2">
+                                                {row.case_code || "Sin código"}
+                                            </strong>
+                                            <div className="d-flex align-items-center">
+                                                <button
+                                                    className="btn btn-outline-primary btn-sm mr-1"
+                                                    title="Ver detalle"
+                                                    onClick={() => setIsmaelSeleccionado(row)}
+                                                >
+                                                    <i className="fas fa-eye" />
+                                                </button>
+                                                <button
+                                                    className="btn btn-outline-success btn-sm"
+                                                    title="Crear soporte"
+                                                    onClick={() => abrirAtajoSoporteDesdeIsmael(row)}
+                                                >
+                                                    <i className="fas fa-plus" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <small className="text-muted d-block text-truncate">
+                                            Centro: {row.centro || "-"}
+                                        </small>
+                                        <small className="text-muted d-block text-truncate">
+                                            Problema (correo): {row.correo || "-"}
                                         </small>
                                     </div>
                                 ))}
+                                {!casosIsmaelPreview.length && (
+                                    <small className="text-muted">Sin registros en tabla ismael.</small>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1274,6 +1342,13 @@ const Soporte = () => {
                                         <div className="estado-preview mt-2">
                                             {renderEstado(estado)}
                                         </div>
+                                        <label className="text-muted small font-weight-semibold mt-2">Case code</label>
+                                        <input
+                                            placeholder="Ej: CS-2026-001"
+                                            value={caseCode}
+                                            onChange={(e) => setCaseCode(String(e.target.value || "").trim())}
+                                            className="form-control"
+                                        />
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold d-flex justify-content-between align-items-center">
@@ -1382,6 +1457,39 @@ const Soporte = () => {
                                 </button>
                                 <button className="btn btn-primary" onClick={handleGuardarSoporte}>
                                     Guardar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {ismaelSeleccionado && (
+                <div className="modal show" style={{ display: "block" }}>
+                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div className="modal-content soporte-modal shadow-lg border-0 ismael-modal">
+                            <div className="modal-header ismael-modal-header">
+                                <h5>
+                                    <i className="fas fa-envelope-open-text mr-2"></i>
+                                    Detalle caso ismael
+                                </h5>
+                                <button className="close" onClick={() => setIsmaelSeleccionado(null)}>
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="modal-body soporte-form-body ismael-modal-body">
+                                <div className="row">
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Case code</small><strong>{ismaelSeleccionado.case_code || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
+                                    <div className="col-md-12 mb-2"><div className="ismael-field ismael-field-mail"><small>Correo principal</small><strong>{ismaelSeleccionado.correo || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Hora llegada</small><strong>{formatearFechaHora(ismaelSeleccionado.hora_llegada)}</strong></div></div>
+                                    <div className="col-md-12 mb-2"><div className="ismael-field"><small>Sugerencias</small><strong>{ismaelSeleccionado.sugerencias || "-"}</strong></div></div>
+                                    <div className="col-md-12 mb-2"><div className="ismael-field"><small>Respuesta final</small><strong>{ismaelSeleccionado.respuesta_final || "-"}</strong></div></div>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setIsmaelSeleccionado(null)}>
+                                    Cerrar
                                 </button>
                             </div>
                         </div>

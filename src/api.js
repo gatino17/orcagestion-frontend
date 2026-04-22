@@ -1452,6 +1452,51 @@ export const eliminarSoporte = async (id) => {
     }
 };
 
+export const obtenerCasosIsmael = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/soporte/ismael`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const obtenerBloqueosTecnicos = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/tecnico_bloqueos/`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const crearBloqueoTecnico = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/tecnico_bloqueos/`, payload);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const actualizarBloqueoTecnico = async (id, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/tecnico_bloqueos/${id}`, payload);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const eliminarBloqueoTecnico = async (id) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/tecnico_bloqueos/${id}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 // ===================== ACTAS ENTREGA =====================
 export const obtenerActasEntrega = async (params = {}) => {
     try {
@@ -1823,6 +1868,67 @@ export const eliminarRetiroTerreno = async (idRetiroTerreno) => {
         return response.data;
     } catch (error) {
         console.error("Error al eliminar retiro en terreno:", error);
+        throw error;
+    }
+};
+
+// ===================== REVISION DE EQUIPOS =====================
+export const obtenerOrdenesRevisionEquipos = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/revision_equipos/ordenes`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener ordenes de revision de equipos:", error);
+        throw error;
+    }
+};
+
+export const obtenerOrdenRevisionEquipos = async (idOrden) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/revision_equipos/ordenes/${idOrden}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener orden de revision:", error);
+        throw error;
+    }
+};
+
+export const crearOrdenRevisionEquipos = async (payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/revision_equipos/ordenes`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear orden de revision:", error);
+        throw error;
+    }
+};
+
+export const actualizarOrdenRevisionEquipos = async (idOrden, payload = {}) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/revision_equipos/ordenes/${idOrden}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar orden de revision:", error);
+        throw error;
+    }
+};
+
+export const devolverOperativosRevisionABodega = async (idOrden, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/revision_equipos/ordenes/${idOrden}/devolver_operativos_bodega`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al devolver operativos de revision a bodega:", error);
+        throw error;
+    }
+};
+
+export const eliminarOrdenRevisionEquipos = async (idOrden) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/revision_equipos/ordenes/${idOrden}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar orden de revision:", error);
         throw error;
     }
 };

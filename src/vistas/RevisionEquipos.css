@@ -1,0 +1,325 @@
+.revision-page .card {
+  border-radius: 14px;
+}
+
+.revision-hero {
+  border: 1px solid rgba(30, 58, 138, 0.12);
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 60%);
+}
+
+.revision-kpis-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.revision-kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  line-height: 1.1;
+}
+
+.chip-pendiente {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.chip-proceso {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.chip-ok {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.chip-critico {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.chip-bodega {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border-color: #bae6fd;
+}
+
+.revision-table thead th {
+  white-space: nowrap;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #2f4f88;
+  color: #ffffff;
+  border: 0;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+.revision-table tbody td {
+  vertical-align: middle;
+  border-color: #e2e8f0;
+}
+
+.revision-table tbody tr:nth-child(even) {
+  background: #f5f8fd;
+}
+
+.revision-table tbody tr:hover {
+  background: #eaf1fb;
+}
+
+.revision-estado {
+  text-transform: capitalize;
+  padding: 4px 8px;
+}
+
+.revision-estado-pendiente {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.revision-estado-en_revision {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.revision-estado-diagnosticado {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.revision-estado-cerrado {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.revision-ficha {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.revision-ficha-title {
+  font-weight: 700;
+  color: #1e3a8a;
+  border-bottom: 1px solid #dbeafe;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.revision-ficha-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.revision-page .table thead.thead-light th {
+  background: #eaf2ff;
+  color: #1e3a8a;
+  border-color: #dbeafe;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.revision-page .table tbody td {
+  border-color: #e2e8f0;
+}
+
+.revision-page .table tbody tr:nth-child(even) {
+  background: #f9fbff;
+}
+
+.revision-page .table tbody tr:hover {
+  background: #f1f5ff;
+}
+
+.revision-page .card-header {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.revision-filtros-card {
+  border: 1px solid #dbeafe !important;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 65%);
+}
+
+.revision-filtros-alert {
+  background: #eff6ff;
+  border-color: #bfdbfe !important;
+  color: #1e3a8a;
+}
+
+.revision-filtros-card .form-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.revision-filtros-card .form-control {
+  border-color: #dbeafe;
+  border-radius: 10px;
+}
+
+.revision-filtros-card .form-control:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.12);
+}
+
+.revision-filtros-card .btn {
+  border-radius: 10px;
+}
+
+.revision-card-entregas {
+  border: 2px solid #22c55e !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.revision-card-fallas {
+  border: 2px solid #f59e0b !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.revision-bandeja-header {
+  background: #2f4f88;
+  color: #ffffff;
+  border-bottom: 0;
+}
+
+.revision-bandeja-header i {
+  color: #ffffff;
+}
+
+.revision-bandeja-loading {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+}
+
+.revision-table-entregas {
+  border-top: 2px solid #22c55e;
+}
+
+.revision-table-entregas thead.thead-light th {
+  background: #eaf2ff !important;
+  color: #1e3a8a !important;
+  border-color: #dbeafe !important;
+}
+
+.revision-table-entregas tbody tr:nth-child(even) {
+  background: #f9fbff !important;
+}
+
+.revision-table-entregas tbody tr:hover {
+  background: #ecfdf5 !important;
+}
+
+.revision-table-fallas {
+  border-top: 2px solid #f59e0b;
+}
+
+.revision-table-fallas thead.thead-light th {
+  background: #eaf2ff !important;
+  color: #1e3a8a !important;
+  border-color: #dbeafe !important;
+}
+
+.revision-table-fallas tbody tr:nth-child(even) {
+  background: #f9fbff !important;
+}
+
+.revision-table-fallas tbody tr:hover {
+  background: #fffbeb !important;
+}
+
+.result-row-operativo td {
+  background: #f0fdf4;
+}
+
+.result-row-reparable td {
+  background: #fffbeb;
+}
+
+.result-row-no_operativo td,
+.result-row-no_reparable td,
+.result-row-requiere_repuesto td {
+  background: #fef2f2;
+}
+
+.revision-checklist-title-row td {
+  background: #eef2ff;
+  font-weight: 700;
+}
+
+.revision-estado-correcto {
+  color: #166534 !important;
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+  font-weight: 700;
+}
+
+.revision-estado-incorrecto {
+  color: #991b1b !important;
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  font-weight: 700;
+}
+
+.revision-estado-orden-box {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.revision-estado-orden-label {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.revision-estado-orden-select {
+  border-color: #60a5fa !important;
+  font-weight: 700;
+}
+
+.revision-checklist-type-box {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid #7dd3fc;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.revision-checklist-type-label {
+  color: #0c4a6e;
+  font-weight: 700;
+}
+
+.revision-checklist-type-select {
+  border-color: #38bdf8 !important;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.revision-note-soft {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #7c2d12;
+}

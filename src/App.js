@@ -16,6 +16,7 @@ import SoporteDetalle from "./vistas/SoporteDetalle";
 import MantencionPreventiva from "./vistas/MantencionPreventiva";
 import InformesCentros from "./vistas/InformesCentros";
 import BodegaRetiros from "./vistas/BodegaRetiros";
+import RevisionEquipos from "./vistas/RevisionEquipos";
 import Clientes from "./vistas/Clientes";
 import Calendario from "./vistas/Calendario";
 import HistorialTrabajos from "./vistas/HistorialTrabajos";
@@ -116,6 +117,14 @@ function App() {
                             element={
                               <PrivateRoute requiredPage="bodega_retiros" allowedRoles={['admin', 'operaciones']}>
                                     <BodegaRetiros />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/revision-equipos"
+                            element={
+                              <PrivateRoute requiredPage="revision_equipos" allowedRoles={['admin', 'operaciones', 'soporte']}>
+                                    <RevisionEquipos />
                                 </PrivateRoute>
                             }
                         />

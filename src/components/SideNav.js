@@ -11,6 +11,7 @@ const navItems = [
   { section: "OPERACIONES", label: "Mantencion preventiva", to: "/mantencion-preventiva", pageKey: "mantencion_preventiva", icon: "fas fa-clipboard-check", roles: ["admin", "soporte", "operaciones"] },
   { section: "OPERACIONES", label: "Informes centros", to: "/informes-centros", pageKey: "informes_centros", icon: "fas fa-chart-bar", roles: ["admin", "soporte", "operaciones"] },
   { section: "OPERACIONES", label: "Bodega retiros", to: "/bodega-retiros", pageKey: "bodega_retiros", icon: "fas fa-warehouse", roles: ["admin", "operaciones"] },
+  { section: "OPERACIONES", label: "Revision equipos", to: "/revision-equipos", pageKey: "revision_equipos", icon: "fas fa-stethoscope", roles: ["admin", "soporte", "operaciones"] },
   { section: "OPERACIONES", label: "Armado tecnico", to: "/armados", pageKey: "armados", icon: "fas fa-tools", roles: ["admin", "operaciones", "tecnico"] },
   { section: "PLANIFICACION", label: "Calendario", to: "/calendario", pageKey: "calendario", icon: "far fa-calendar-alt", roles: ["admin", "operaciones", "soporte"] },
   { section: "PLANIFICACION", label: "Historial de trabajos", to: "/historial-trabajos", pageKey: "historial_trabajos", icon: "fas fa-history", roles: ["admin", "operaciones", "soporte"] },

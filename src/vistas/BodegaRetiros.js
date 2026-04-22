@@ -6,6 +6,8 @@ import {
   obtenerRetirosTerreno,
   recepcionarRetiroEnBodega,
   obtenerDetallesCentro,
+  crearOrdenRevisionEquipos,
+  obtenerOrdenesRevisionEquipos,
 } from "../api";
 import "./BodegaRetiros.css";
 
@@ -58,6 +60,17 @@ export default function BodegaRetiros() {
   const [filtroHistorial, setFiltroHistorial] = useState("");
   const [historialCentro, setHistorialCentro] = useState(null);
   const [historialCentroLoading, setHistorialCentroLoading] = useState(false);
+  const [retiroRevision, setRetiroRevision] = useState(null);
+  const [revisionEquiposArea, setRevisionEquiposArea] = useState([]);
+  const [asignandoRevision, setAsignandoRevision] = useState(false);
+  const [ordenesRevision, setOrdenesRevision] = useState([]);
+
+  const normalizeText = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -98,13 +111,18 @@ export default function BodegaRetiros() {
   const cargarRetiros = async () => {
     setLoading(true);
     try {
-      const data = await obtenerRetirosTerreno({
-        cliente_id: clienteId || undefined,
-        centro_id: centroId || undefined,
-      });
+      const [data, ordenes] = await Promise.all([
+        obtenerRetirosTerreno({
+          cliente_id: clienteId || undefined,
+          centro_id: centroId || undefined,
+        }),
+        obtenerOrdenesRevisionEquipos(),
+      ]);
       setRetiros(Array.isArray(data) ? data : []);
+      setOrdenesRevision(Array.isArray(ordenes) ? ordenes : []);
     } catch {
       setRetiros([]);
+      setOrdenesRevision([]);
     } finally {
       setLoading(false);
     }
@@ -131,6 +149,52 @@ export default function BodegaRetiros() {
     () => retiros.filter((r) => String(r.estado_logistico || "") === "en_bodega"),
     [retiros]
   );
+  const revisionResumenPorRetiro = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(ordenesRevision) ? ordenesRevision : []).forEach((o) => {
+      const rid = Number(o?.retiro_terreno_id || 0);
+      if (!rid) return;
+      const prev = map.get(rid) || {
+        enviadoRevision: false,
+        areas: new Set(),
+        disponibles: 0,
+      };
+      prev.enviadoRevision = true;
+      if (o?.area) prev.areas.add(String(o.area));
+      (Array.isArray(o?.detalles) ? o.detalles : []).forEach((d) => {
+        if (d?.disponible_bodega) prev.disponibles += 1;
+      });
+      map.set(rid, prev);
+    });
+    return map;
+  }, [ordenesRevision]);
+  const revisionActivaPorRetiro = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(ordenesRevision) ? ordenesRevision : []).forEach((o) => {
+      if (String(o?.estado || "").toLowerCase() === "cerrado") return;
+      const rid = Number(o?.retiro_terreno_id || 0);
+      if (!rid) return;
+      const areas = map.get(rid) || { porEquipo: new Map(), porArea: new Set() };
+      const area = String(o?.area || "").toLowerCase();
+      if (area) areas.porArea.add(area);
+      (Array.isArray(o?.detalles) ? o.detalles : []).forEach((d) => {
+        if (d?.retiro_equipo_id) {
+          areas.porEquipo.set(Number(d.retiro_equipo_id), area || "");
+        }
+      });
+      map.set(rid, areas);
+    });
+    return map;
+  }, [ordenesRevision]);
+  const enBodegaDisponibles = useMemo(
+    () =>
+      enBodega.filter((r) => {
+        const resumen = revisionResumenPorRetiro.get(Number(r?.id_retiro_terreno || 0));
+        return (resumen?.disponibles || 0) > 0;
+      }).length,
+    [enBodega, revisionResumenPorRetiro]
+  );
+  const enBodegaSinRevision = Math.max(0, enBodega.length - enBodegaDisponibles);
   const recepcionadosHoy = useMemo(
     () => enBodega.filter((r) => isToday(r.fecha_recepcion_bodega)).length,
     [enBodega]
@@ -139,8 +203,51 @@ export default function BodegaRetiros() {
 
   const totalEquiposRetirados = (retiro) =>
     Array.isArray(retiro?.equipos) ? retiro.equipos.filter((e) => !!e.retirado).length : 0;
+  const labelArea = (area) => {
+    const a = String(area || "").toLowerCase();
+    if (a === "camaras") return "Cámaras";
+    if (a === "pc") return "PC";
+    if (a === "energia") return "Energía";
+    return "-";
+  };
 
   const historialLogistico = useMemo(() => {
+    const areaLabel = (area) => {
+      const a = String(area || "").toLowerCase();
+      if (a === "camaras") return "Cámaras";
+      if (a === "pc") return "PC";
+      if (a === "energia") return "Energía";
+      return area || "-";
+    };
+    const flujoRevisionByRetiro = new Map();
+    (Array.isArray(ordenesRevision) ? ordenesRevision : []).forEach((o) => {
+      const rid = Number(o?.retiro_terreno_id || 0);
+      if (!rid) return;
+      const keyBase = `r-${rid}`;
+      const prev = flujoRevisionByRetiro.get(keyBase);
+      const prevTs = prev ? new Date(prev.fecha_asignacion || 0).getTime() : -1;
+      const currTs = new Date(o?.fecha_asignacion || 0).getTime();
+      if (!prev || currTs >= prevTs) {
+        flujoRevisionByRetiro.set(keyBase, {
+          area: areaLabel(o?.area),
+          estado: String(o?.estado || "").toLowerCase(),
+          fecha_asignacion: o?.fecha_asignacion,
+        });
+      }
+      (Array.isArray(o?.detalles) ? o.detalles : []).forEach((d) => {
+        const k = `d-${rid}-${normalizeText(d?.equipo_nombre)}-${normalizeText(d?.numero_serie || "")}-${normalizeText(d?.codigo || "")}`;
+        const p = flujoRevisionByRetiro.get(k);
+        const pTs = p ? new Date(p.fecha_asignacion || 0).getTime() : -1;
+        if (!p || currTs >= pTs) {
+          flujoRevisionByRetiro.set(k, {
+            area: areaLabel(o?.area),
+            estado: String(o?.estado || "").toLowerCase(),
+            fecha_asignacion: o?.fecha_asignacion,
+            disponible_bodega: !!d?.disponible_bodega,
+          });
+        }
+      });
+    });
     const q = String(filtroHistorial || "").trim().toLowerCase();
     const rows = [];
     (retiros || []).forEach((r) => {
@@ -148,7 +255,16 @@ export default function BodegaRetiros() {
       equipos
         .filter((eq) => !!eq.retirado)
         .forEach((eq) => {
-      const row = {
+      const rid = Number(r?.id_retiro_terreno || 0);
+      const keyDet = `d-${rid}-${normalizeText(eq?.equipo_nombre)}-${normalizeText(eq?.numero_serie || "")}-${normalizeText(eq?.codigo || "")}`;
+      const flujoRevision =
+        flujoRevisionByRetiro.get(keyDet) || flujoRevisionByRetiro.get(`r-${rid}`) || null;
+      const flujoTxt = flujoRevision
+        ? flujoRevision.disponible_bodega
+          ? `Bodega -> Revision (${flujoRevision.area}) -> Bodega disponible`
+          : `Bodega -> Revision (${flujoRevision.area})`
+        : "Bodega";
+          const row = {
             id_retiro_terreno: r.id_retiro_terreno,
             centro_id: r.centro_id,
             cliente: r.empresa || r.cliente || "-",
@@ -162,6 +278,8 @@ export default function BodegaRetiros() {
             numero_serie: eq.numero_serie || "-",
             codigo: eq.codigo || "-",
             recibido_bodega: !!eq.recibido_bodega,
+            flujo_revision: flujoTxt,
+            revision_estado: flujoRevision?.estado || null,
           };
           rows.push(row);
         });
@@ -176,6 +294,7 @@ export default function BodegaRetiros() {
             r.equipo_nombre,
             r.numero_serie,
             r.codigo,
+            r.flujo_revision,
             `n${r.id_retiro_terreno || ""}`,
           ]
             .join(" ")
@@ -188,7 +307,7 @@ export default function BodegaRetiros() {
       if (fb !== fa) return fb - fa;
       return Number(b.id_retiro_terreno || 0) - Number(a.id_retiro_terreno || 0);
     });
-  }, [retiros, filtroHistorial]);
+  }, [retiros, filtroHistorial, ordenesRevision]);
 
   const getBadgeEstado = (estado) => {
     const e = String(estado || "");
@@ -196,13 +315,6 @@ export default function BodegaRetiros() {
     if (e === "en_transito") return <span className="badge badge-warning">En transito</span>;
     return <span className="badge badge-secondary">Retirado del centro</span>;
   };
-
-  const normalizeText = (value) =>
-    String(value || "")
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
 
   const confirmarRecepcion = async () => {
     if (!seleccionado?.id_retiro_terreno) return;
@@ -246,6 +358,14 @@ export default function BodegaRetiros() {
             <span className="bodega-kpi-chip bodega-kpi-hoy">
               <i className="fas fa-check-circle" />
               En bodega: {enBodega.length}
+            </span>
+            <span className="bodega-kpi-chip">
+              <i className="fas fa-box-open" />
+              Disponibles: {enBodegaDisponibles}
+            </span>
+            <span className="bodega-kpi-chip">
+              <i className="fas fa-box" />
+              Sin revision: {enBodegaSinRevision}
             </span>
           </div>
         </div>
@@ -394,12 +514,13 @@ export default function BodegaRetiros() {
                   <th>Estado</th>
                   <th>Recepcionado por</th>
                   <th>Fecha recepcion</th>
+                  <th className="text-center">Accion</th>
                 </tr>
               </thead>
               <tbody>
                 {!enBodega.length ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-3 text-muted">
+                    <td colSpan={8} className="text-center py-3 text-muted">
                       Sin retiros recepcionados en bodega.
                     </td>
                   </tr>
@@ -411,10 +532,48 @@ export default function BodegaRetiros() {
                       <td>{formatDate(r.fecha_retiro)}</td>
                       <td>{r.centro || "-"}</td>
                       <td>
-                        <span className="badge badge-success">En bodega</span>
+                        {(() => {
+                          const resumen = revisionResumenPorRetiro.get(Number(r?.id_retiro_terreno || 0));
+                          if ((resumen?.disponibles || 0) > 0) {
+                            return <span className="badge badge-success">Bodega disponible</span>;
+                          }
+                          if (resumen?.enviadoRevision) {
+                            const areas = Array.from(resumen.areas || []).join(", ");
+                            return <span className="badge badge-warning">En revision ({areas || "-"})</span>;
+                          }
+                          return <span className="badge badge-secondary">En bodega (sin revision)</span>;
+                        })()}
                       </td>
                       <td>{r.recepcion_bodega_por || "-"}</td>
                       <td>{formatDate(r.fecha_recepcion_bodega)}</td>
+                      <td className="text-center">
+                        <button
+                          className="btn btn-outline-primary btn-sm"
+                          title="Asignar a revision"
+                          onClick={() => {
+                            const rid = Number(r?.id_retiro_terreno || 0);
+                            const activos = revisionActivaPorRetiro.get(rid);
+                            const equipos = (Array.isArray(r?.equipos) ? r.equipos : [])
+                              .filter((eq) => !!eq?.retirado)
+                              .map((eq) => {
+                                const areaActiva = activos?.porEquipo?.get(Number(eq?.id_retiro_equipo || 0)) || "";
+                                return {
+                                  id_retiro_equipo: eq.id_retiro_equipo,
+                                  equipo_nombre: eq.equipo_nombre || "-",
+                                  numero_serie: eq.numero_serie || "",
+                                  codigo: eq.codigo || "",
+                                  area: areaActiva || "",
+                                  bloqueado: !!areaActiva,
+                                };
+                              });
+                            setRevisionEquiposArea(equipos);
+                            setRetiroRevision(r);
+                          }}
+                        >
+                          <i className="fas fa-stethoscope mr-1" />
+                          Revisar
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -449,13 +608,14 @@ export default function BodegaRetiros() {
                   <th>N serie</th>
                   <th>Centro</th>
                   <th>Técnico</th>
+                  <th>Flujo</th>
                   <th>Accion</th>
                 </tr>
               </thead>
               <tbody>
                 {!historialLogistico.length ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-3 text-muted">
+                    <td colSpan={8} className="text-center py-3 text-muted">
                       Sin movimientos logisticos con los filtros actuales.
                     </td>
                   </tr>
@@ -468,6 +628,9 @@ export default function BodegaRetiros() {
                       <td>{r.numero_serie || "-"}</td>
                       <td>{r.centro}</td>
                       <td>{r.tecnico || "-"}</td>
+                      <td>
+                        <span className="badge badge-light border">{r.flujo_revision || "Bodega"}</span>
+                      </td>
                       <td>
                         <button
                           className="btn btn-outline-primary btn-sm"
@@ -615,6 +778,150 @@ export default function BodegaRetiros() {
                 </button>
                 <button className="btn btn-success" onClick={confirmarRecepcion} disabled={!!savingId}>
                   {savingId ? "Guardando..." : "Confirmar recepcion"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {retiroRevision ? (
+        <div className="modal d-block" tabIndex="-1" role="dialog">
+          <div className="modal-dialog modal-lg" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Asignar a revision</h5>
+                <button type="button" className="close" onClick={() => setRetiroRevision(null)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2">
+                  <strong>{retiroRevision.centro || "-"}</strong> ({retiroRevision.empresa || retiroRevision.cliente || "-"})
+                </p>
+                <p className="text-muted small mb-2">
+                  Selecciona el área por equipo. Se crea una orden por cada área con equipos asignados.
+                </p>
+                <div className="table-responsive border rounded">
+                  <table className="table table-sm mb-0">
+                    <thead className="thead-light">
+                      <tr>
+                        <th>Equipo</th>
+                        <th>N° serie</th>
+                        <th>Código</th>
+                        <th>Área revisión</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!revisionEquiposArea.length ? (
+                        <tr>
+                          <td colSpan={4} className="text-center text-muted py-3">
+                            No hay equipos retirados para asignar.
+                          </td>
+                        </tr>
+                      ) : (
+                        revisionEquiposArea.map((eq) => (
+                          <tr key={eq.id_retiro_equipo || `${eq.equipo_nombre}-${eq.numero_serie}`}>
+                            <td>{eq.equipo_nombre || "-"}</td>
+                            <td>{eq.numero_serie || "-"}</td>
+                            <td>{eq.codigo || "-"}</td>
+                            <td style={{ minWidth: 180 }}>
+                              {eq.bloqueado ? (
+                                <span className="badge badge-warning">
+                                  Ya asignado ({labelArea(eq.area)})
+                                </span>
+                              ) : (
+                                <select
+                                  className="form-control form-control-sm"
+                                  value={eq.area}
+                                  onChange={(e) =>
+                                    setRevisionEquiposArea((prev) =>
+                                      prev.map((row) =>
+                                        row.id_retiro_equipo === eq.id_retiro_equipo
+                                          ? { ...row, area: e.target.value }
+                                          : row
+                                      )
+                                    )
+                                  }
+                                >
+                                  <option value="">Sin asignar</option>
+                                  <option value="camaras">Cámaras</option>
+                                  <option value="pc">PC</option>
+                                  <option value="energia">Energía</option>
+                                </select>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-light" onClick={() => setRetiroRevision(null)}>
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={asignandoRevision}
+                  onClick={async () => {
+                    const retiroId = Number(retiroRevision?.id_retiro_terreno || 0);
+                    if (!retiroId) return;
+                    const activos = revisionActivaPorRetiro.get(retiroId);
+                    const areasActivas = activos?.porArea || new Set();
+                    const pendientesSinArea = revisionEquiposArea.filter(
+                      (eq) => !eq.bloqueado && !["camaras", "pc", "energia"].includes(String(eq.area || "").toLowerCase())
+                    );
+                    if (pendientesSinArea.length) {
+                      const nombres = pendientesSinArea
+                        .slice(0, 4)
+                        .map((eq) => eq.equipo_nombre || "Equipo")
+                        .join(", ");
+                      const extra = pendientesSinArea.length > 4 ? ` y ${pendientesSinArea.length - 4} más` : "";
+                      alert(`Debes asignar área a todos los equipos retirados. Pendientes: ${nombres}${extra}.`);
+                      return;
+                    }
+                    const seleccionados = revisionEquiposArea.filter(
+                      (eq) => !eq.bloqueado && ["camaras", "pc", "energia"].includes(String(eq.area || "").toLowerCase())
+                    );
+                    const grupos = seleccionados.reduce((acc, eq) => {
+                      const area = String(eq.area || "").toLowerCase();
+                      if (!acc[area]) acc[area] = [];
+                      acc[area].push(eq);
+                      return acc;
+                    }, {});
+                    const areasDuplicadas = Object.keys(grupos).filter((a) => areasActivas.has(a));
+                    if (areasDuplicadas.length) {
+                      alert(`Ya existe una orden activa para: ${areasDuplicadas.map(labelArea).join(", ")}.`);
+                      return;
+                    }
+                    try {
+                      setAsignandoRevision(true);
+                      for (const [area, equipos] of Object.entries(grupos)) {
+                        await crearOrdenRevisionEquipos({
+                          retiro_terreno_id: retiroId,
+                          area,
+                          detalles: equipos.map((eq) => ({
+                            retiro_equipo_id: eq.id_retiro_equipo,
+                            equipo_nombre: eq.equipo_nombre,
+                            numero_serie: eq.numero_serie,
+                            codigo: eq.codigo,
+                          })),
+                        });
+                      }
+                      alert("Orden(es) de revision creada(s).");
+                      setRetiroRevision(null);
+                      setRevisionEquiposArea([]);
+                      await cargarRetiros();
+                    } catch (e) {
+                      alert(e?.response?.data?.error || "No se pudo crear la orden de revision.");
+                    } finally {
+                      setAsignandoRevision(false);
+                    }
+                  }}
+                >
+                  {asignandoRevision ? "Asignando..." : "Asignar"}
                 </button>
               </div>
             </div>
