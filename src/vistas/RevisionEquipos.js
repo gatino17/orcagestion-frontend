@@ -35,6 +35,9 @@ const CHECKLIST_TEMPLATE_OPTIONS = [
   { value: "checklist2", label: "Checklist 2 (Inversor cargador)" },
   { value: "checklist3", label: "Checklist 3 (Baterias)" },
 ];
+const CHECKLIST_TEMPLATE_OPTIONS_CAMARAS = [
+  { value: "checklist_camaras", label: "Checklist camaras" },
+];
 
 const CHECKLIST3_CARGA_OPTIONS = [
   { value: "100% Carga: 12.8V - 13.0V o mas.", label: "100% Carga: 12.8V - 13.0V o mas." },
@@ -133,21 +136,58 @@ const CHECKLIST_REVISION_TEMPLATE_3 = [
   { item: "3.6", descripcion: "Temperatura terminales y bateria durante las pruebas" },
 ];
 
+const CHECKLIST_REVISION_TEMPLATE_CAMARAS = [
+  { item: "1", descripcion: "Inspeccion fisica y estructural (camaras)", es_titulo: true },
+  { item: "1.1", descripcion: "Estado fisico de la carcasa/domo (golpes, grietas)" },
+  { item: "1.2", descripcion: "Limpieza de lente o frontal (sin obstrucciones)" },
+  { item: "1.3", descripcion: "Estado de pintura" },
+  { item: "1.4", descripcion: "Estado de soportes y accesorios" },
+  { item: "2", descripcion: "Conectividad y alimentacion", es_titulo: true },
+  { item: "2.1", descripcion: "Tension de alimentacion estable (PoE dependiendo la camara)" },
+  { item: "2.2", descripcion: "Tension de alimentacion estable (con transformador AC o DC)" },
+  { item: "2.3", descripcion: "Estado de conectores y cableado" },
+  { item: "3", descripcion: "Funcionalidad PTZ / bullet", es_titulo: true },
+  { item: "3.1", descripcion: "Movimiento pan/tilt/zoom fluido y sin ruidos" },
+  { item: "3.2", descripcion: "Funcionalidad de preset y ronda" },
+  { item: "3.3", descripcion: "Vision nocturna e iluminadores IR operativos, laser modulo y termal" },
+  { item: "4", descripcion: "Software y gestion", es_titulo: true },
+  { item: "4.1", descripcion: "Grabacion en NVR continua y sin saltos" },
+  { item: "4.2", descripcion: "Grabacion en VMS continua y sin saltos" },
+  { item: "4.3", descripcion: "Grabacion en SD continua y sin saltos" },
+  { item: "4.4", descripcion: "Sincronizacion de hora y firmware actualizado" },
+  { item: "5", descripcion: "Radar de seguridad", es_titulo: true },
+  { item: "5.1", descripcion: "Limpieza (frontal y cuerpo del radar)" },
+  { item: "5.2", descripcion: "Deteccion por utilidad" },
+  { item: "5.3", descripcion: "Sellado (estanqueidad de entradas y juntas)" },
+  { item: "5.4", descripcion: "Estado de conector (RJ45 / alimentacion) y engrace conector" },
+  { item: "5.5", descripcion: "Estado de carcaza (golpes, corrosion o danios)" },
+  { item: "5.6", descripcion: "Verificacion de firmware" },
+  { item: "5.7", descripcion: "Estado de ping (conectividad y latencia)" },
+];
+
 function getChecklistTemplateById(templateId) {
+  if (templateId === "checklist_camaras") return CHECKLIST_REVISION_TEMPLATE_CAMARAS;
   if (templateId === "checklist2") return CHECKLIST_REVISION_TEMPLATE_2;
   if (templateId === "checklist3") return CHECKLIST_REVISION_TEMPLATE_3;
   return CHECKLIST_REVISION_TEMPLATE_1;
 }
 
-function resolveChecklistTemplate(existing = []) {
-  const rows = Array.isArray(existing) ? existing : [];
-  const meta = rows.find((r) => String(r?.item || "") === "__meta_template");
-  const templateId = String(meta?.template_id || "checklist1");
-  return ["checklist1", "checklist2", "checklist3"].includes(templateId) ? templateId : "checklist1";
+function getDefaultTemplateByArea(area) {
+  return isCamarasArea(area) ? "checklist_camaras" : "checklist1";
 }
 
-function buildChecklistDefault(existing = [], forcedTemplateId = null) {
-  const templateId = forcedTemplateId || resolveChecklistTemplate(existing);
+function resolveChecklistTemplate(existing = [], area = "") {
+  if (isCamarasArea(area)) return "checklist_camaras";
+  const rows = Array.isArray(existing) ? existing : [];
+  const meta = rows.find((r) => String(r?.item || "") === "__meta_template");
+  const templateId = String(meta?.template_id || "");
+  const validTemplates = ["checklist1", "checklist2", "checklist3", "checklist_camaras"];
+  if (validTemplates.includes(templateId)) return templateId;
+  return getDefaultTemplateByArea(area);
+}
+
+function buildChecklistDefault(existing = [], forcedTemplateId = null, area = "") {
+  const templateId = forcedTemplateId || resolveChecklistTemplate(existing, area);
   const byItem = new Map(
     (Array.isArray(existing) ? existing : [])
       .filter((r) => String(r?.item || "") !== "__meta_template")
@@ -218,6 +258,14 @@ function isEnergiaArea(area) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
   return normalized.includes("energia");
+}
+
+function isCamarasArea(area) {
+  const normalized = String(area || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return normalized.includes("camara");
 }
 
 function formatEstadoLabel(value) {
@@ -330,7 +378,7 @@ export default function RevisionEquipos() {
   const abrirDetalle = async (idOrden) => {
     try {
       const row = await obtenerOrdenRevisionEquipos(idOrden);
-      const checklistBuilt = buildChecklistDefault(row?.checklist_items || []);
+      const checklistBuilt = buildChecklistDefault(row?.checklist_items || [], null, row?.area || "");
       setOrdenDetalle(
         row
           ? {
@@ -590,6 +638,9 @@ export default function RevisionEquipos() {
   }, [paginaBandeja, totalPaginasBandeja]);
 
   const esAreaEnergia = isEnergiaArea(ordenDetalle?.area);
+  const esAreaCamaras = isCamarasArea(ordenDetalle?.area);
+  const esAreaConChecklist = esAreaEnergia || esAreaCamaras;
+  const checklistTemplateOptions = esAreaCamaras ? CHECKLIST_TEMPLATE_OPTIONS_CAMARAS : CHECKLIST_TEMPLATE_OPTIONS;
   const equipoPrincipalChecklist = (ordenDetalle?.detalles || [])[0] || null;
 
   return (
@@ -950,10 +1001,12 @@ export default function RevisionEquipos() {
                 </div>
 
                 <div className="table-responsive">
-                  {esAreaEnergia && (
+                  {esAreaConChecklist && (
                     <>
                       <div className="d-flex justify-content-between align-items-end mb-2" style={{ gap: 10 }}>
-                        <h6 className="mb-0">Checklist tecnico (solo energia)</h6>
+                        <h6 className="mb-0">
+                          Checklist tecnico ({esAreaCamaras ? "camaras" : "energia"})
+                        </h6>
                         <div className="revision-checklist-type-box" style={{ minWidth: 260 }}>
                           <label className="form-label mb-1 revision-checklist-type-label">
                             <i className="fas fa-list-check mr-1" />
@@ -963,8 +1016,9 @@ export default function RevisionEquipos() {
                             className="form-control form-control-sm revision-checklist-type-select"
                             value={ordenDetalle.checklist_template || "checklist1"}
                             onChange={(e) => cambiarChecklistTemplate(e.target.value)}
+                            disabled={esAreaCamaras}
                           >
-                            {CHECKLIST_TEMPLATE_OPTIONS.map((op) => (
+                            {checklistTemplateOptions.map((op) => (
                               <option key={op.value} value={op.value}>
                                 {op.label}
                               </option>
@@ -1046,9 +1100,9 @@ export default function RevisionEquipos() {
                     </>
                   )}
 
-                  {!esAreaEnergia && (
+                  {!esAreaConChecklist && (
                     <div className="alert alert-secondary py-2 px-3 mb-3">
-                      El checklist tecnico detallado aplica solo al area de energia.
+                      El checklist tecnico detallado aplica a las areas de energia y camaras.
                     </div>
                   )}
 

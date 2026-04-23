@@ -428,7 +428,7 @@ const Soporte = () => {
         setIsmaelSeleccionado(null);
         resetForm();
         setEditarSoporte(null);
-        setProblema(String(row?.correo || row?.asunto || "").trim());
+        setProblema(String(row?.falla_especifica || row?.correo || row?.asunto || "").trim());
         setTipo("remoto");
         setCaseCode(String(row?.case_code || "").trim());
         setIsmaelIdOrigen(String(row?.id || "").trim());
@@ -1069,7 +1069,7 @@ const Soporte = () => {
                                             Centro: {row.centro || "-"}
                                         </small>
                                         <small className="text-muted d-block text-truncate">
-                                            Problema (correo): {row.correo || "-"}
+                                            Problema: {row.falla_especifica || row.correo || row.asunto || "-"}
                                         </small>
                                     </div>
                                 ))}
@@ -1483,7 +1483,17 @@ const Soporte = () => {
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
                                     <div className="col-md-12 mb-2"><div className="ismael-field ismael-field-mail"><small>Correo principal</small><strong>{ismaelSeleccionado.correo || "-"}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Hora llegada</small><strong>{formatearFechaHora(ismaelSeleccionado.hora_llegada)}</strong></div></div>
-                                    <div className="col-md-12 mb-2"><div className="ismael-field"><small>Sugerencias</small><strong>{ismaelSeleccionado.sugerencias || "-"}</strong></div></div>
+                                    <div className="col-md-12 mb-2">
+                                        <div className="ismael-problem-card">
+                                            <div className="ismael-problem-title">
+                                                <i className="fas fa-triangle-exclamation mr-2"></i>
+                                                Resumen del problema
+                                            </div>
+                                            <div className="ismael-problem-body">
+                                                {ismaelSeleccionado.falla_especifica || "Sin falla especifica registrada."}
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="col-md-12 mb-2"><div className="ismael-field"><small>Respuesta final</small><strong>{ismaelSeleccionado.respuesta_final || "-"}</strong></div></div>
                                 </div>
                             </div>
