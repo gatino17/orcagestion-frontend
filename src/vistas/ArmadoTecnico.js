@@ -391,10 +391,160 @@ const MATERIALES_PREDEF = [
     "Perno Pasado"
 ];
 
+const CHECKLIST_ARMADO_SECCIONES = [
+    {
+        titulo: "1. PC/NVR",
+        items: [
+            "PC/NVR funciona",
+            "PC/NVR con planilla de inicio",
+            "Licencia VMS Digifort permanente",
+            "Licencia VMS Digifort demo",
+            "TeamViewer instalado",
+            "Rustdesk instalado",
+            "Reinicio de PC/NVR ante perdida de energia",
+        ],
+    },
+    {
+        titulo: "2. Designio de listado IP",
+        items: ["Designio de listado IP para equipos"],
+    },
+    {
+        titulo: "3. Configuracion en Victron",
+        items: [
+            "Ingreso de codigo de camara",
+            "Creacion de perfiles de visualizacion",
+            "Ingreso de dispositivo / alarmas",
+            "Cresion maps de silos",
+            "Agregar web de radar",
+            "Creacion de matriz local",
+        ],
+    },
+    {
+        titulo: "4. Tablero de camaras",
+        items: [
+            "Configuracion switch mikrotik 1",
+            "Configuracion switch mikrotik 2",
+            "Configuracion switch poe 1",
+            "Configuracion switch poe 2",
+            "Configuracion de netio",
+            "PC/Nuc mass server",
+            "TeamViewer instalado",
+            "Mass server con licencia permanente",
+            "Mass server con licencia demo",
+        ],
+    },
+    {
+        titulo: "5. Tablero alarma",
+        items: [
+            "Configuracion de dispositivo I/O Axis",
+            "Configuracion de alarmas",
+            "Conexion de sensores",
+        ],
+    },
+    {
+        titulo: "6. Prueba 1",
+        items: [
+            "Envio de mail encargado de investigacion y desarrollo",
+            "Verificacion dias de grabacion en cada camara",
+            "Configuracion de Mass server y VMS",
+            "Verificacion de perfiles de visualizacion",
+            "Configuracion de firewall y seguridad en PC/NVR",
+            "Aplicacion estado de centros instalada",
+            "Mail de respuesta a soporte tecnico",
+        ],
+    },
+    {
+        titulo: "7. Prueba 2",
+        items: [
+            "Verificacion de salida alarma y sensores",
+            "Activa / desactiva bocina interior",
+            "Activa / desactiva baliza interior",
+            "Activa / desactiva foco Led",
+            "Activa / desactiva bocina exterior",
+            "Activa / desactiva baliza exterior",
+            "Activa / desactiva sensor 1",
+            "Activa / desactiva sensor 2",
+            "Simulacion perdida suministro de energia",
+            "Retorno todos los equipos correctamente",
+            "Mail de entrega al supervisor de operaciones",
+        ],
+    },
+    {
+        titulo: "8. Equipos de energia",
+        items: [
+            "Inversor nuevo",
+            "Inversor cargador - pruebas realizadas",
+            "Inversor cargador - con mantencion",
+            "Panel Victron nuevo",
+            "Panel Victron - color control GX",
+            "Panel Victron - Cerbo GX",
+            "Entrega panel Victron con fuente energia",
+            "Baterias nuevas",
+            "Baterias - pruebas realizadas",
+            "UPS nueva",
+            "UPS - pruebas realizadas",
+            "UPS - mantencion realizada",
+            "Envio mail a supervisor de operaciones",
+        ],
+    },
+];
+
+const CHECKLIST_ARMADO_ITEMS = CHECKLIST_ARMADO_SECCIONES.flatMap((sec, secIdx) =>
+    sec.items.map((label, itemIdx) => ({
+        key: `s${secIdx + 1}-i${itemIdx + 1}`,
+        seccion: sec.titulo,
+        item: `${secIdx + 1}.${itemIdx + 1}`,
+        label,
+    }))
+);
+
+const CHECKLIST_ARMADO_AREAS = [
+    { key: "pc", label: "PC", secciones: [1, 6] },
+    { key: "camaras", label: "Camaras", secciones: [2, 3, 4, 5, 7] },
+    { key: "energia", label: "Energia", secciones: [8] },
+];
+
+const CHECKLIST_AREA_BY_SECCION = CHECKLIST_ARMADO_AREAS.reduce((acc, area) => {
+    (area.secciones || []).forEach((sec) => {
+        acc[Number(sec)] = area.key;
+    });
+    return acc;
+}, {});
+
+const calcularProgresoChecklistAreas = (checks = {}) => {
+    const areaPorSeccion = CHECKLIST_ARMADO_AREAS.reduce((acc, area) => {
+        (area.secciones || []).forEach((sec) => {
+            acc[Number(sec)] = area.key;
+        });
+        return acc;
+    }, {});
+
+    const base = CHECKLIST_ARMADO_AREAS.reduce((acc, area) => {
+        acc[area.key] = { done: 0, total: 0, pct: 0, label: area.label };
+        return acc;
+    }, {});
+
+    CHECKLIST_ARMADO_ITEMS.forEach((item) => {
+        const secNum = Number(String(item.item || "").split(".")[0] || 0);
+        const areaKey = areaPorSeccion[secNum];
+        if (!areaKey || !base[areaKey]) return;
+        base[areaKey].total += 1;
+        const row = checks?.[item.key];
+        const estado = String(row?.estado || "").trim().toLowerCase();
+        if (estado) base[areaKey].done += 1;
+    });
+
+    Object.values(base).forEach((row) => {
+        row.pct = row.total ? Math.round((row.done / row.total) * 100) : 0;
+    });
+    return base;
+};
+
 const ArmadoTecnico = () => {
     const [rol, setRol] = useState("");
     const [userId, setUserId] = useState(null);
     const [userNombre, setUserNombre] = useState("");
+    const [supervisorAreas, setSupervisorAreas] = useState([]);
     const [armados, setArmados] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -437,6 +587,11 @@ const ArmadoTecnico = () => {
     const [historialLoading, setHistorialLoading] = useState(false);
     const [historialData, setHistorialData] = useState({ armado: null, resumen: [], eventos: [] });
     const [historialTab, setHistorialTab] = useState("resumen");
+    const [checklistOpen, setChecklistOpen] = useState(false);
+    const [checklistArmado, setChecklistArmado] = useState(null);
+    const [checklistEstado, setChecklistEstado] = useState({});
+    const [checklistObs, setChecklistObs] = useState("");
+    const [checklistVersion, setChecklistVersion] = useState(0);
     const lastSeenMovIdRef = useRef(0);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
@@ -632,6 +787,12 @@ const ArmadoTecnico = () => {
             setRol(decoded.rol || "");
             setUserId(decoded.id || decoded.user_id || decoded.sub || null);
             setUserNombre(decoded.name || decoded.nombre || decoded.username || decoded.email || "usuario");
+            const areas = Array.isArray(decoded.supervisor_areas)
+                ? decoded.supervisor_areas
+                      .map((x) => String(x || "").trim().toLowerCase())
+                      .filter((x) => ["camaras", "pc", "energia"].includes(x))
+                : [];
+            setSupervisorAreas(Array.from(new Set(areas)));
         } catch (err) {
             console.error("Error al decodificar token:", err);
         }
@@ -1013,6 +1174,99 @@ const ArmadoTecnico = () => {
         return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
     };
 
+    const checklistStorageKey = useCallback((armadoId) => `orcagest_armado_checklist_v1_${armadoId}`, []);
+
+    const leerChecklistGuardado = useCallback(
+        (armadoId) => {
+            if (!armadoId) return { checks: {}, observacion: "" };
+            try {
+                const raw = localStorage.getItem(checklistStorageKey(armadoId));
+                if (!raw) return { checks: {}, observacion: "" };
+                const parsed = JSON.parse(raw);
+                return {
+                    checks: parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {},
+                    observacion: String(parsed?.observacion || ""),
+                };
+            } catch (err) {
+                console.error("No se pudo leer checklist de armado:", err);
+                return { checks: {}, observacion: "" };
+            }
+        },
+        [checklistStorageKey]
+    );
+
+    const obtenerProgresoChecklist = useCallback(
+        (armadoId) => {
+            const saved = leerChecklistGuardado(armadoId);
+            const done = CHECKLIST_ARMADO_ITEMS.filter((it) => {
+                const row = saved.checks?.[it.key];
+                return !!String(row?.estado || "").trim();
+            }).length;
+            return { done, total: CHECKLIST_ARMADO_ITEMS.length };
+        },
+        [leerChecklistGuardado, checklistVersion]
+    );
+
+    const abrirChecklistArmado = useCallback(
+        (armado) => {
+            const armadoId = Number(armado?.id_armado || armado?.id || 0) || 0;
+            const saved = leerChecklistGuardado(armadoId);
+            setChecklistArmado(armado);
+            setChecklistEstado(saved.checks || {});
+            setChecklistObs(saved.observacion || "");
+            setChecklistOpen(true);
+        },
+        [leerChecklistGuardado]
+    );
+
+    const actualizarChecklistItem = useCallback((itemKey, patch) => {
+        setChecklistEstado((prev) => {
+            const curr = prev?.[itemKey] && typeof prev[itemKey] === "object" ? prev[itemKey] : { estado: "", fecha: "", observacion: "" };
+            return {
+                ...prev,
+                [itemKey]: {
+                    ...curr,
+                    ...patch,
+                },
+            };
+        });
+    }, []);
+
+    const guardarChecklistArmado = useCallback(() => {
+        const armadoId = Number(checklistArmado?.id_armado || checklistArmado?.id || 0) || 0;
+        if (!armadoId) return;
+        try {
+            localStorage.setItem(
+                checklistStorageKey(armadoId),
+                JSON.stringify({
+                    checks: checklistEstado,
+                    observacion: checklistObs,
+                    updated_at: new Date().toISOString(),
+                })
+            );
+            setChecklistVersion((v) => v + 1);
+            alert("Checklist guardado correctamente.");
+        } catch (err) {
+            console.error("No se pudo guardar checklist de armado:", err);
+            alert("No se pudo guardar el checklist.");
+        }
+    }, [checklistArmado, checklistEstado, checklistObs, checklistStorageKey]);
+
+    const progresoChecklistAreas = useMemo(
+        () => calcularProgresoChecklistAreas(checklistEstado || {}),
+        [checklistEstado]
+    );
+
+    const puedeEditarChecklistItem = useCallback(
+        (seccionNumero) => {
+            if (rol !== "supervisor") return true;
+            const area = CHECKLIST_AREA_BY_SECCION[Number(seccionNumero) || 0];
+            if (!area) return false;
+            return (supervisorAreas || []).includes(area);
+        },
+        [rol, supervisorAreas]
+    );
+
     const columnas = [
         {
             name: "Centro",
@@ -1144,16 +1398,62 @@ const ArmadoTecnico = () => {
             cell: (row) => row.total_cajas ?? 0
         },
         {
-            name: "Planilla",
-            grow: 0.4,
-            minWidth: "100px",
+            name: "% Checklist armado",
+            selector: (row) => {
+                const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
+                if (!progreso.total) return 0;
+                return Math.round((progreso.done / progreso.total) * 100);
+            },
+            sortable: true,
+            grow: 0.8,
+            minWidth: "170px",
             wrap: true,
-            cell: (row) => (
-                <button className="btn btn-sm btn-outline-primary" onClick={() => handleAbrirPlanilla(row)}>
-                    <i className="fas fa-list-alt mr-1" />
-                    Abrir
-                </button>
-            )
+            cell: (row) => {
+                const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
+                const pct = progreso.total ? Math.round((progreso.done / progreso.total) * 100) : 0;
+                const color = pct >= 100 ? "#16a34a" : pct >= 60 ? "#f59e0b" : "#dc2626";
+                return (
+                    <div style={{ minWidth: 145 }}>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                            <small>{progreso.done}/{progreso.total || 0}</small>
+                            <strong style={{ color }}>{pct}%</strong>
+                        </div>
+                        <div style={{ height: 8, background: "#e5e7eb", borderRadius: 999 }}>
+                            <div
+                                style={{
+                                    height: "100%",
+                                    width: `${pct}%`,
+                                    background: color,
+                                    borderRadius: 999,
+                                    transition: "width .25s ease"
+                                }}
+                            />
+                        </div>
+                    </div>
+                );
+            }
+        },
+        {
+            name: "Planilla",
+            grow: 0.85,
+            minWidth: "205px",
+            wrap: true,
+            cell: (row) => {
+                const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
+                const listo = progreso.total > 0 && progreso.done === progreso.total;
+                return (
+                    <div className="d-flex align-items-center" style={{ gap: 6, flexWrap: "wrap" }}>
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => handleAbrirPlanilla(row)}>
+                            <i className="fas fa-list-alt mr-1" />
+                            Planilla
+                        </button>
+                        <button className={`btn btn-sm ${listo ? "btn-success" : "btn-outline-secondary"}`} onClick={() => abrirChecklistArmado(row)}>
+                            <i className="fas fa-clipboard-check mr-1" />
+                            Checklist
+                        </button>
+                    </div>
+                );
+            }
         }
     ];
 
@@ -2660,6 +2960,186 @@ const ArmadoTecnico = () => {
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleGuardarAsignacion}>
                                     Guardar asignaciÃ³n
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {checklistOpen && (
+                <div className="modal show d-block" tabIndex="-1" role="dialog">
+                    <div className="modal-dialog modal-xl" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    Checklist de armado · {checklistArmado?.centro?.nombre || checklistArmado?.centro_nombre || "Centro"}
+                                </h5>
+                                <button type="button" className="close" onClick={() => setChecklistOpen(false)}>
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="armado-checklist-head">
+                                    <div>
+                                        <strong>Armado N°:</strong> {checklistArmado?.id_armado || "-"}
+                                    </div>
+                                    <div>
+                                        <strong>Técnico:</strong> {checklistArmado?.tecnico?.nombre || checklistArmado?.tecnico_nombre || "-"}
+                                    </div>
+                                    <div>
+                                        <strong>Progreso:</strong>{" "}
+                                        {(() => {
+                                            const progreso = obtenerProgresoChecklist(checklistArmado?.id_armado || checklistArmado?.id);
+                                            return `${progreso.done}/${progreso.total}`;
+                                        })()}
+                                    </div>
+                                </div>
+
+                                <div className="armado-checklist-areas mb-3">
+                                    {CHECKLIST_ARMADO_AREAS.map((area) => {
+                                        const p = progresoChecklistAreas?.[area.key] || { done: 0, total: 0, pct: 0 };
+                                        const color = p.pct >= 100 ? "#16a34a" : p.pct >= 60 ? "#f59e0b" : "#dc2626";
+                                        return (
+                                            <div key={`area-progress-${area.key}`} className="armado-checklist-area-card">
+                                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                                    <strong>{area.label}</strong>
+                                                    <span style={{ color, fontWeight: 700 }}>{p.pct}%</span>
+                                                </div>
+                                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                                    <small>{p.done}/{p.total}</small>
+                                                    <small className="text-muted">
+                                                        {area.secciones.map((n) => `Sec ${n}`).join(", ")}
+                                                    </small>
+                                                </div>
+                                                <div style={{ height: 7, background: "#e5e7eb", borderRadius: 999 }}>
+                                                    <div
+                                                        style={{
+                                                            height: "100%",
+                                                            width: `${p.pct}%`,
+                                                            background: color,
+                                                            borderRadius: 999,
+                                                            transition: "width .25s ease",
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {rol === "supervisor" && (
+                                    <div className="alert alert-info py-2 px-3 mb-3">
+                                        <i className="fas fa-user-shield mr-2" />
+                                        Editas solo tus areas:{" "}
+                                        <strong>
+                                            {(supervisorAreas || []).length
+                                                ? supervisorAreas.map((a) => a.toUpperCase()).join(", ")
+                                                : "sin area asignada"}
+                                        </strong>
+                                    </div>
+                                )}
+
+                                <div className="table-responsive">
+                                    <table className="table table-sm table-bordered armado-checklist-table mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th style={{ width: 90 }}>Item</th>
+                                                <th>Punto de chequeo</th>
+                                                <th style={{ width: 150 }}>Estado</th>
+                                                <th style={{ width: 155 }}>Fecha</th>
+                                                <th style={{ width: 260 }}>Observación</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {CHECKLIST_ARMADO_SECCIONES.map((sec, secIdx) => (
+                                                <React.Fragment key={`sec-${secIdx}`}>
+                                                    <tr className="armado-checklist-section-row">
+                                                        <td colSpan="5">{sec.titulo}</td>
+                                                    </tr>
+                                                    {sec.items.map((label, itemIdx) => {
+                                                        const itemKey = `s${secIdx + 1}-i${itemIdx + 1}`;
+                                                        const editable = puedeEditarChecklistItem(secIdx + 1);
+                                                        const rowData =
+                                                            checklistEstado?.[itemKey] && typeof checklistEstado[itemKey] === "object"
+                                                                ? checklistEstado[itemKey]
+                                                                : { estado: "", fecha: "", observacion: "" };
+                                                        const estado = String(rowData.estado || "").toLowerCase();
+                                                        return (
+                                                            <tr key={itemKey} className={!editable ? "armado-checklist-row-readonly" : ""}>
+                                                                <td>{`${secIdx + 1}.${itemIdx + 1}`}</td>
+                                                                <td>{label}</td>
+                                                                <td>
+                                                                    <select
+                                                                        className={`form-control form-control-sm armado-check-estado ${
+                                                                            estado === "correcto"
+                                                                                ? "estado-correcto"
+                                                                                : estado === "incorrecto"
+                                                                                ? "estado-incorrecto"
+                                                                                : ""
+                                                                        }`}
+                                                                        value={rowData.estado || ""}
+                                                                        disabled={!editable}
+                                                                        onChange={(e) =>
+                                                                            actualizarChecklistItem(itemKey, {
+                                                                                estado: e.target.value,
+                                                                                fecha:
+                                                                                    rowData.fecha ||
+                                                                                    new Date().toISOString().slice(0, 10),
+                                                                            })
+                                                                        }
+                                                                    >
+                                                                        <option value="">Seleccionar</option>
+                                                                        <option value="correcto">Correcto</option>
+                                                                        <option value="incorrecto">Incorrecto</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        type="date"
+                                                                        className="form-control form-control-sm"
+                                                                        value={rowData.fecha || ""}
+                                                                        disabled={!editable}
+                                                                        onChange={(e) => actualizarChecklistItem(itemKey, { fecha: e.target.value })}
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control form-control-sm"
+                                                                        value={rowData.observacion || ""}
+                                                                        disabled={!editable}
+                                                                        onChange={(e) =>
+                                                                            actualizarChecklistItem(itemKey, { observacion: e.target.value })
+                                                                        }
+                                                                        placeholder="Observación por item..."
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </React.Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="form-group mt-3 mb-0">
+                                    <label>Observación general</label>
+                                    <textarea
+                                        className="form-control"
+                                        rows="3"
+                                        value={checklistObs}
+                                        onChange={(e) => setChecklistObs(e.target.value)}
+                                        placeholder="Notas de cierre del checklist..."
+                                    />
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setChecklistOpen(false)}>
+                                    Cerrar
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={guardarChecklistArmado}>
+                                    Guardar checklist
                                 </button>
                             </div>
                         </div>

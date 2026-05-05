@@ -1452,6 +1452,43 @@ export const eliminarSoporte = async (id) => {
     }
 };
 
+// Bodega: inventario de equipos (JSON)
+export const obtenerInventarioBodegaEquipos = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/inventarios/bodega_equipos`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const crearInventarioBodegaEquipos = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_equipos`, payload);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const actualizarInventarioBodegaEquipo = async (id, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/inventarios/bodega_equipos/${id}`, payload);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const eliminarInventarioBodegaEquipo = async (id) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/inventarios/bodega_equipos/${id}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const obtenerCasosIsmael = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/soporte/ismael`, { params });
@@ -1929,6 +1966,77 @@ export const eliminarOrdenRevisionEquipos = async (idOrden) => {
         return response.data;
     } catch (error) {
         console.error("Error al eliminar orden de revision:", error);
+        throw error;
+    }
+};
+
+// ===================== RENDICIONES =====================
+export const obtenerRendiciones = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rendiciones/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener rendiciones:", error);
+        throw error;
+    }
+};
+
+export const crearRendicion = async (payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rendiciones/`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear rendicion:", error);
+        throw error;
+    }
+};
+
+export const actualizarRendicion = async (idRendicion, payload = {}) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/rendiciones/${idRendicion}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar rendicion:", error);
+        throw error;
+    }
+};
+
+export const enviarRendicion = async (idRendicion) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rendiciones/${idRendicion}/enviar`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al enviar rendicion:", error);
+        throw error;
+    }
+};
+
+export const obtenerAbonosRendicion = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rendiciones/abonos`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener abonos de rendicion:", error);
+        throw error;
+    }
+};
+
+export const crearAbonoRendicion = async (payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rendiciones/abonos`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear abono de rendicion:", error);
+        throw error;
+    }
+};
+
+export const obtenerSaldosRendicion = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/rendiciones/saldos`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener saldos de rendicion:", error);
         throw error;
     }
 };

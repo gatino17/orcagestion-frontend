@@ -3,6 +3,12 @@ import { cargarUsuarios, agregarUsuario, modificarUsuario, borrarUsuario } from 
 import { actualizarRol, crearRol, obtenerPaginasRol, obtenerRoles } from '../api';
 import './Usuarios.css';
 
+const AREAS_SUPERVISOR = [
+    { key: 'camaras', label: 'Camaras' },
+    { key: 'pc', label: 'PC' },
+    { key: 'energia', label: 'Energia' }
+];
+
 function Usuarios() {
     const [usuarios, setUsuarios] = useState([]);
     const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
@@ -52,11 +58,20 @@ function Usuarios() {
         };
         setUsuarioSeleccionado(
             accion === 'crear'
-                ? { name: '', email: '', rol: '', password: '', cambiarPassword: false, tecnico: tecnicoBase }
+                ? {
+                      name: '',
+                      email: '',
+                      rol: '',
+                      password: '',
+                      cambiarPassword: false,
+                      tecnico: tecnicoBase,
+                      supervisor_areas: []
+                  }
                 : {
                       ...usuario,
                       password: '',
                       cambiarPassword: false,
+                      supervisor_areas: Array.isArray(usuario?.supervisor_areas) ? usuario.supervisor_areas : [],
                       tecnico: {
                           ...tecnicoBase,
                           ...(usuario?.tecnico || {}),
@@ -93,6 +108,10 @@ function Usuarios() {
                         nombre_encargado:
                             usuarioSeleccionado?.tecnico?.nombre_encargado || usuarioSeleccionado.name || ''
                     };
+                } else if (usuarioSeleccionado.rol === 'supervisor') {
+                    payload.supervisor_areas = Array.isArray(usuarioSeleccionado?.supervisor_areas)
+                        ? usuarioSeleccionado.supervisor_areas
+                        : [];
                 }
                 await agregarUsuario(payload, () => {
                     cargarUsuarios(setUsuarios);
@@ -110,6 +129,10 @@ function Usuarios() {
                         nombre_encargado:
                             usuarioSeleccionado?.tecnico?.nombre_encargado || usuarioSeleccionado.name || ''
                     };
+                } else if (usuarioSeleccionado.rol === 'supervisor') {
+                    payload.supervisor_areas = Array.isArray(usuarioSeleccionado?.supervisor_areas)
+                        ? usuarioSeleccionado.supervisor_areas
+                        : [];
                 }
 
                 if (usuarioSeleccionado.cambiarPassword && usuarioSeleccionado.password) {
@@ -145,7 +168,7 @@ function Usuarios() {
         const roles = (
             rolesDisponibles.length
                 ? rolesDisponibles
-                : ['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas'].map((nombre, idx) => ({ id_role: `base-${idx}`, nombre }))
+                : ['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas', 'supervisor'].map((nombre, idx) => ({ id_role: `base-${idx}`, nombre }))
         ).map((r) => r.nombre);
         const porRol = roles.map((rol) => ({
             label: `Rol ${rol}`,
@@ -186,7 +209,7 @@ function Usuarios() {
 
     const rolesOpciones = useMemo(() => {
         if (rolesDisponibles.length) return rolesDisponibles;
-        return ['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas'].map((nombre, idx) => ({
+        return ['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas', 'supervisor'].map((nombre, idx) => ({
             id_role: `base-${idx}`,
             nombre,
             paginas: []
@@ -345,6 +368,7 @@ function Usuarios() {
                                     <th>Nombre</th>
                                     <th>Correo</th>
                                     <th>Rol</th>
+                                    <th>Areas</th>
                                     <th className="text-center">Acciones</th>
                                 </tr>
                             </thead>
@@ -358,6 +382,21 @@ function Usuarios() {
                                                 <span className={`role-pill role-${usuario.rol}`}>
                                                     <i className="fas fa-id-badge" /> {usuario.rol}
                                                 </span>
+                                            </td>
+                                            <td>
+                                                {String(usuario.rol || '').toLowerCase() === 'supervisor' ? (
+                                                    (usuario.supervisor_areas || []).length ? (
+                                                        (usuario.supervisor_areas || []).map((area) => (
+                                                            <span key={`sup-area-${usuario.id}-${area}`} className="badge badge-light border mr-1">
+                                                                {String(area || '').toUpperCase()}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-muted">Sin areas</span>
+                                                    )
+                                                ) : (
+                                                    <span className="text-muted">-</span>
+                                                )}
                                             </td>
                                             <td className="text-center">
                                                 <button
@@ -377,7 +416,7 @@ function Usuarios() {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="4">No hay usuarios para los filtros aplicados</td>
+                                        <td colSpan="5">No hay usuarios para los filtros aplicados</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -505,6 +544,44 @@ function Usuarios() {
                                             ))}
                                         </select>
                                     </div>
+                                    {usuarioSeleccionado?.rol === 'supervisor' && (
+                                        <div className="border rounded p-3 mb-3 bg-light">
+                                            <h6 className="mb-3">Areas del supervisor</h6>
+                                            <div className="row">
+                                                {AREAS_SUPERVISOR.map((area) => {
+                                                    const checked = (usuarioSeleccionado?.supervisor_areas || []).includes(area.key);
+                                                    return (
+                                                        <div className="col-md-4" key={`sup-area-opt-${area.key}`}>
+                                                            <div className="form-check mb-2">
+                                                                <input
+                                                                    id={`sup-area-${area.key}`}
+                                                                    type="checkbox"
+                                                                    className="form-check-input"
+                                                                    checked={checked}
+                                                                    onChange={(e) => {
+                                                                        const prev = usuarioSeleccionado?.supervisor_areas || [];
+                                                                        const next = e.target.checked
+                                                                            ? [...prev, area.key]
+                                                                            : prev.filter((x) => x !== area.key);
+                                                                        setUsuarioSeleccionado({
+                                                                            ...usuarioSeleccionado,
+                                                                            supervisor_areas: next
+                                                                        });
+                                                                    }}
+                                                                />
+                                                                <label className="form-check-label" htmlFor={`sup-area-${area.key}`}>
+                                                                    {area.label}
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            <small className="text-muted">
+                                                Puede pertenecer a una o mas areas.
+                                            </small>
+                                        </div>
+                                    )}
                                     {usuarioSeleccionado?.rol === 'tecnico' && (
                                         <div className="border rounded p-3 mb-3 bg-light">
                                             <h6 className="mb-3">Perfil tecnico</h6>

@@ -39,7 +39,39 @@ const prioridadOptions = [
   { label: "Urgente", value: "Urgente" }
 ];
 
-const tipoActividadOptions = ["Mantencion", "Instalacion", "Reapuntamiento", "Retiro"];
+const tipoActividadOptions = ["Mantencion", "Instalacion", "Reapuntamiento", "Retiro", "Levantamiento"];
+const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
+
+const getClientTone = (cliente) => {
+  const value = String(cliente || "").trim().toLowerCase();
+  if (!value) return "disp-client-0";
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) % 997;
+  }
+  return `disp-client-${hash % 6}`;
+};
+
+const calcularPctChecklistArmado = (armadoId) => {
+  const id = Number(armadoId || 0);
+  if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+  try {
+    const raw = localStorage.getItem(`orcagest_armado_checklist_v1_${id}`);
+    if (!raw) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+    const parsed = JSON.parse(raw);
+    const checks = parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {};
+    let done = 0;
+    Object.values(checks).forEach((row) => {
+      const estado = String(row?.estado || "").trim().toLowerCase();
+      if (estado) done += 1;
+    });
+    const total = CHECKLIST_ARMADO_TOTAL_ITEMS;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return { done, total, pct };
+  } catch (e) {
+    return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+  }
+};
 
 function Calendario() {
   const location = useLocation();
@@ -76,6 +108,8 @@ function Calendario() {
   const [bloqueoDesde, setBloqueoDesde] = useState("");
   const [bloqueoHasta, setBloqueoHasta] = useState("");
   const [bloqueoMotivo, setBloqueoMotivo] = useState("");
+  const [bloqueosPage, setBloqueosPage] = useState(1);
+  const [bloqueosPerPage, setBloqueosPerPage] = useState(5);
 
   const [filtroTexto, setFiltroTexto] = useState("");
   const [filtroPrioridad, setFiltroPrioridad] = useState("");
@@ -521,11 +555,11 @@ function Calendario() {
       return diff >= 0 && diff <= 7;
     }).length;
     return [
-      { label: "Actividades activas", value: activas, icon: "fas fa-tasks" },
-      { label: "Finalizadas", value: cerradas, icon: "fas fa-check-circle" },
-      { label: "Atrasadas", value: atrasadas, icon: "fas fa-exclamation-triangle" },
-      { label: "Prioridad urgente", value: urgentes, icon: "fas fa-bolt" },
-      { label: "Próx. 7 días", value: semana, icon: "fas fa-calendar-week" }
+      { label: "Activas", value: activas, icon: "fas fa-tasks", tone: "info", detail: "En curso o pendientes" },
+      { label: "Finalizadas", value: cerradas, icon: "fas fa-check-circle", tone: "success", detail: "Cerradas en calendario" },
+      { label: "Atrasadas", value: atrasadas, icon: "fas fa-exclamation-triangle", tone: "danger", detail: "Fuera de fecha" },
+      { label: "Urgentes", value: urgentes, icon: "fas fa-bolt", tone: "warning", detail: "Prioridad crítica" },
+      { label: "Próx. 7 días", value: semana, icon: "fas fa-calendar-week", tone: "primary", detail: "Carga inmediata" }
     ];
   }, [actividades, hoy]);
 
@@ -551,6 +585,7 @@ function Calendario() {
       instalacion: 0,
       reapuntamiento: 0,
       retiro: 0,
+      levantamiento: 0,
       soporte: 0
     };
     proximasActividades.forEach((act) => {
@@ -559,6 +594,7 @@ function Calendario() {
       else if (tipo.startsWith("instal")) base.instalacion += 1;
       else if (tipo.startsWith("reap")) base.reapuntamiento += 1;
       else if (tipo.startsWith("retir")) base.retiro += 1;
+      else if (tipo.startsWith("levant")) base.levantamiento += 1;
       else if (tipo.startsWith("soport")) base.soporte += 1;
     });
     return base;
@@ -746,7 +782,8 @@ function Calendario() {
         estadoHoyClase,
         proximoHito,
         diasTerreno,
-        diasOficina
+        diasOficina,
+        diasBloqueados
       };
     });
 
@@ -840,11 +877,16 @@ function Calendario() {
           .join("|");
         const detalleActividades = actividadesDia
           .map((a) => {
+            const cliente = String(a?.centro?.cliente || "Sin cliente");
             const centro = String(a?.centro?.nombre || "Sin centro");
             const tipo = String(a?.area || "Sin tipo");
-            return `${centro} - ${tipo}`;
+            return `${cliente} / ${centro} - ${tipo}`;
           })
           .join(" | ");
+        const clientesDia = Array.from(
+          new Set(actividadesDia.map((a) => String(a?.centro?.cliente || "Sin cliente").trim()).filter(Boolean))
+        ).sort();
+        const clienteTone = clientesDia.length === 1 ? getClientTone(clientesDia[0]) : "disp-client-mixed";
         if (bloqueosDia.length) {
           const detalleBloqueos = bloqueosDia
             .map((b) => `${String(b?.tipo || "bloqueo").replace(/_/g, " ")} (${b?.fecha_inicio || "-"} a ${b?.fecha_fin || "-"})`)
@@ -858,7 +900,12 @@ function Calendario() {
           };
         }
         if (actividadesDia.length) {
-          return { estado: "terreno", detalle: `Terreno: ${detalleActividades}`, key: `terreno:${actividadKey}` };
+          return {
+            estado: "terreno",
+            detalle: `Terreno: ${detalleActividades}`,
+            key: `terreno:${actividadKey}`,
+            clienteTone
+          };
         }
         return { estado: "libre", detalle: "Disponible", key: "libre" };
       });
@@ -868,6 +915,25 @@ function Calendario() {
 
     return { dias, rows };
   }, [actividades, bloqueosTecnicos, encargados, hoy]);
+
+  const bloqueosPaginados = useMemo(() => {
+    const total = Array.isArray(bloqueosTecnicos) ? bloqueosTecnicos.length : 0;
+    const totalPages = Math.max(1, Math.ceil(total / bloqueosPerPage));
+    const page = Math.min(Math.max(1, bloqueosPage), totalPages);
+    const start = (page - 1) * bloqueosPerPage;
+    return {
+      page,
+      total,
+      totalPages,
+      data: (bloqueosTecnicos || []).slice(start, start + bloqueosPerPage),
+      start: total ? start + 1 : 0,
+      end: Math.min(start + bloqueosPerPage, total)
+    };
+  }, [bloqueosTecnicos, bloqueosPage, bloqueosPerPage]);
+
+  useEffect(() => {
+    setBloqueosPage(1);
+  }, [bloqueosPerPage, bloqueosTecnicos.length]);
 
   const calendarEvents = useMemo(() => {
     return filteredActividades
@@ -1174,7 +1240,7 @@ function Calendario() {
       )
     },
     {
-      name: "Estado",
+      name: "Armado",
       selector: (row) => row.estado || "pendiente",
       sortable: true,
       width: "108px",
@@ -1185,6 +1251,34 @@ function Calendario() {
           <span className={`pill soporte-status-${normalizado}`}>
             {estado === "en_proceso" ? "En proceso" : estado.charAt(0).toUpperCase() + estado.slice(1)}
           </span>
+        );
+      }
+    },
+    {
+      name: "Revision",
+      selector: (row) => calcularPctChecklistArmado(row.id_armado || row.id).pct,
+      sortable: true,
+      width: "130px",
+      cell: (row) => {
+        const progreso = calcularPctChecklistArmado(row.id_armado || row.id);
+        const color = progreso.pct >= 100 ? "#16a34a" : progreso.pct >= 60 ? "#f59e0b" : "#dc2626";
+        return (
+          <div style={{ minWidth: 115 }}>
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <small>{progreso.done}/{progreso.total}</small>
+              <strong style={{ color }}>{progreso.pct}%</strong>
+            </div>
+            <div style={{ height: 6, background: "#e5e7eb", borderRadius: 999 }}>
+              <div
+                style={{
+                  width: `${progreso.pct}%`,
+                  height: "100%",
+                  background: color,
+                  borderRadius: 999
+                }}
+              />
+            </div>
+          </div>
         );
       }
     }
@@ -1350,13 +1444,17 @@ function Calendario() {
 
       <div className="scheduler-metrics">
         {metricas.map((card) => (
-          <div className="metric-card" key={card.label}>
+          <div className={`metric-card metric-card-${card.tone}`} key={card.label}>
+            <div className="metric-card-accent" />
             <div className="metric-icon">
               <i className={card.icon} />
             </div>
-            <div>
+            <div className="metric-content">
               <span>{card.label}</span>
-              <h3>{card.value}</h3>
+              <div className="metric-value-row">
+                <h3>{card.value}</h3>
+                <small>{card.detail}</small>
+              </div>
             </div>
           </div>
         ))}
@@ -1364,68 +1462,111 @@ function Calendario() {
 
       <div className="scheduler-filters card">
         <div className="card-body">
-          <div className="row g-3">
-            <div className="col-lg-4">
+          <div className="scheduler-filters-head">
+            <div>
+              <h6>
+                <i className="fas fa-filter mr-2" />
+                Filtros de programación
+              </h6>
+              <small>{filteredActividades.length} actividades visibles</small>
+            </div>
+            <button className="btn btn-light btn-sm" onClick={() => {
+              setFiltroTexto("");
+              setFiltroPrioridad("");
+              setFiltroEstado("");
+              setFiltroTipo("");
+              setFiltroTecnico("");
+            }}>
+              <i className="fas fa-eraser mr-1" />
+              Limpiar
+            </button>
+          </div>
+          <div className="row scheduler-filter-row">
+            <div className="col-md-6 col-lg-3">
               <label>Búsqueda rápida</label>
-              <input
-                className="form-control"
-                placeholder="Nombre, cliente o centro"
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-              />
+              <div className="input-group scheduler-filter-control">
+                <div className="input-group-prepend">
+                  <span className="input-group-text">
+                    <i className="fas fa-search" />
+                  </span>
+                </div>
+                <input
+                  className="form-control"
+                  placeholder="Nombre, cliente o centro"
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                />
+              </div>
             </div>
             <div className="col-md-3 col-lg-2">
               <label>Prioridad</label>
-              <select className="form-control" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
-                {prioridadOptions.map((opt) => (
-                  <option key={opt.label} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="input-group scheduler-filter-control">
+                <div className="input-group-prepend">
+                  <span className="input-group-text">
+                    <i className="fas fa-flag" />
+                  </span>
+                </div>
+                <select className="form-control" value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}>
+                  {prioridadOptions.map((opt) => (
+                    <option key={opt.label} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="col-md-3 col-lg-2">
               <label>Estado</label>
-              <select className="form-control" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-                {estadoOptions.map((opt) => (
-                  <option key={opt.label} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="input-group scheduler-filter-control">
+                <div className="input-group-prepend">
+                  <span className="input-group-text">
+                    <i className="fas fa-traffic-light" />
+                  </span>
+                </div>
+                <select className="form-control" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+                  {estadoOptions.map((opt) => (
+                    <option key={opt.label} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="col-md-3 col-lg-2">
               <label>Tipo</label>
-              <select className="form-control" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
-                <option value="">Todos los tipos</option>
-                {tipoActividadOptions.map((tipoItem) => (
-                  <option key={tipoItem} value={tipoItem}>
-                    {tipoItem}
-                  </option>
-                ))}
-              </select>
+              <div className="input-group scheduler-filter-control">
+                <div className="input-group-prepend">
+                  <span className="input-group-text">
+                    <i className="fas fa-layer-group" />
+                  </span>
+                </div>
+                <select className="form-control" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+                  <option value="">Todos los tipos</option>
+                  {tipoActividadOptions.map((tipoItem) => (
+                    <option key={tipoItem} value={tipoItem}>
+                      {tipoItem}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="col-md-6 col-lg-3">
               <label>Tecnico</label>
-              <select className="form-control" value={filtroTecnico} onChange={(e) => setFiltroTecnico(e.target.value)}>
-                <option value="">Todos los tecnicos</option>
-                {encargados.map((enc) => (
-                  <option key={enc.id_encargado} value={enc.nombre_encargado.toLowerCase()}>
-                    {enc.nombre_encargado}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-lg-1 d-flex align-items-end">
-              <button className="btn btn-outline-secondary w-100" onClick={() => {
-                setFiltroTexto("");
-                setFiltroPrioridad("");
-                setFiltroEstado("");
-                setFiltroTipo("");
-                setFiltroTecnico("");
-              }}>
-                Limpiar
-              </button>
+              <div className="input-group scheduler-filter-control">
+                <div className="input-group-prepend">
+                  <span className="input-group-text">
+                    <i className="fas fa-user-hard-hat" />
+                  </span>
+                </div>
+                <select className="form-control" value={filtroTecnico} onChange={(e) => setFiltroTecnico(e.target.value)}>
+                  <option value="">Todos los tecnicos</option>
+                  {encargados.map((enc) => (
+                    <option key={enc.id_encargado} value={enc.nombre_encargado.toLowerCase()}>
+                      {enc.nombre_encargado}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -1550,9 +1691,38 @@ function Calendario() {
                               <span className="small text-muted">{item.proximoHito}</span>
                             </td>
                             <td className="text-center">
-                              <span className="small">
-                                Terreno: <strong>{item.diasTerreno}</strong> | Oficina: <strong>{item.diasOficina}</strong>
-                              </span>
+                              <div
+                                className="week-balance"
+                                title={`Esta semana: ${item.diasTerreno} dias terreno, ${item.diasOficina} dias oficina, ${item.diasBloqueados} dias bloqueado`}
+                              >
+                                <div className="week-balance-chips">
+                                  <span className="week-chip week-chip-terreno">
+                                    Terreno <strong>{item.diasTerreno}d</strong>
+                                  </span>
+                                  <span className="week-chip week-chip-oficina">
+                                    Oficina <strong>{item.diasOficina}d</strong>
+                                  </span>
+                                  {item.diasBloqueados > 0 ? (
+                                    <span className="week-chip week-chip-bloqueado">
+                                      Bloq. <strong>{item.diasBloqueados}d</strong>
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="week-balance-bar">
+                                  <span
+                                    className="week-bar-terreno"
+                                    style={{ flex: Math.max(0, item.diasTerreno) }}
+                                  />
+                                  <span
+                                    className="week-bar-oficina"
+                                    style={{ flex: Math.max(0, item.diasOficina) }}
+                                  />
+                                  <span
+                                    className="week-bar-bloqueado"
+                                    style={{ flex: Math.max(0, item.diasBloqueados) }}
+                                  />
+                                </div>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1566,10 +1736,10 @@ function Calendario() {
               <div className="mt-3">
                 <div className="d-flex align-items-center justify-content-between mb-2">
                   <h6 className="mb-0">Vista 14 dias</h6>
-                  <div className="small text-muted d-flex gap-2">
-                    <span><i className="fas fa-square text-success mr-1" /> Libre</span>
-                    <span><i className="fas fa-square text-info mr-1" /> Terreno</span>
-                    <span><i className="fas fa-square text-secondary mr-1" /> Bloqueado</span>
+                  <div className="availability-legend">
+                    <span><i className="fas fa-square text-success" /> Libre</span>
+                    <span><i className="fas fa-square text-info" /> Terreno</span>
+                    <span><i className="fas fa-square text-secondary" /> Bloqueado</span>
                   </div>
                 </div>
                 <div className="table-responsive">
@@ -1614,7 +1784,7 @@ function Calendario() {
                             return (
                               <td
                                 key={`cell-${row.tecnico}-${idx}`}
-                                className={`text-center disp-cell ${segClass} ${cell.estado === "terreno" ? "disp-cell-terreno" : ""}`}
+                                className={`text-center disp-cell ${segClass} ${cell.estado === "terreno" ? "disp-cell-terreno" : ""} ${cell.clienteTone || ""}`}
                                 title={cell.detalle || ""}
                               >
                                 <span className={`disp-dot disp-${cell.estado}`} />
@@ -1691,7 +1861,7 @@ function Calendario() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bloqueosTecnicos.map((b) => (
+                    {bloqueosPaginados.data.map((b) => (
                       <tr key={b.id_bloqueo}>
                         <td><strong>{b?.tecnico?.nombre_encargado || `Tecnico ${b.tecnico_id}`}</strong></td>
                         <td className="text-capitalize">{b.tipo || "-"}</td>
@@ -1713,6 +1883,42 @@ function Calendario() {
                   </tbody>
                 </table>
               </div>
+              {bloqueosTecnicos.length ? (
+                <div className="bloqueo-pagination">
+                  <div className="small text-muted">
+                    Mostrando {bloqueosPaginados.start}-{bloqueosPaginados.end} de {bloqueosPaginados.total}
+                  </div>
+                  <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                    <select
+                      className="form-control form-control-sm"
+                      value={bloqueosPerPage}
+                      onChange={(e) => setBloqueosPerPage(Number(e.target.value) || 5)}
+                      style={{ width: 86 }}
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                    </select>
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      disabled={bloqueosPaginados.page <= 1}
+                      onClick={() => setBloqueosPage((prev) => Math.max(1, prev - 1))}
+                    >
+                      <i className="fas fa-chevron-left" />
+                    </button>
+                    <span className="small text-muted">
+                      {bloqueosPaginados.page}/{bloqueosPaginados.totalPages}
+                    </span>
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      disabled={bloqueosPaginados.page >= bloqueosPaginados.totalPages}
+                      onClick={() => setBloqueosPage((prev) => Math.min(bloqueosPaginados.totalPages, prev + 1))}
+                    >
+                      <i className="fas fa-chevron-right" />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1744,7 +1950,7 @@ function Calendario() {
               </div>
               {!!resumenProximas14.total && (
                 <p className="table-meta mb-2">
-                  Mantencion: {resumenProximas14.mantencion} | Instalacion: {resumenProximas14.instalacion} | Reapuntamiento: {resumenProximas14.reapuntamiento} | Retiro: {resumenProximas14.retiro} | Soporte: {resumenProximas14.soporte}
+                  Mantencion: {resumenProximas14.mantencion} | Instalacion: {resumenProximas14.instalacion} | Reapuntamiento: {resumenProximas14.reapuntamiento} | Retiro: {resumenProximas14.retiro} | Levantamiento: {resumenProximas14.levantamiento} | Soporte: {resumenProximas14.soporte}
                 </p>
               )}
               {proximasActividades.length ? (

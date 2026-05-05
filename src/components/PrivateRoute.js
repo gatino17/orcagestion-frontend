@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
-const PrivateRoute = ({ children, allowedRoles, requiredPage }) => {
+const PrivateRoute = ({ children, allowedRoles, requiredPage, enforceAllowedRoles = false }) => {
     const token = localStorage.getItem('token');
     if (!token) return <Navigate to="/login" />;
 
@@ -10,6 +10,10 @@ const PrivateRoute = ({ children, allowedRoles, requiredPage }) => {
         const decodedToken = jwtDecode(token);
         const userRole = decodedToken.rol;
         const paginas = Array.isArray(decodedToken.paginas) ? decodedToken.paginas : [];
+
+        if (enforceAllowedRoles && allowedRoles && !allowedRoles.includes(userRole)) {
+            return <Navigate to="/login" />;
+        }
 
         if (requiredPage && paginas.length) {
             if (paginas.includes(requiredPage)) return children;

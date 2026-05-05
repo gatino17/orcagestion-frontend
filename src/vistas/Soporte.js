@@ -181,6 +181,9 @@ const Soporte = () => {
     const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
     const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
     const [ismaelSeleccionado, setIsmaelSeleccionado] = useState(null);
+    const [paginaIsmael, setPaginaIsmael] = useState(1);
+    const [paginaPendientes, setPaginaPendientes] = useState(1);
+    const registrosPorTarjeta = 4;
 
     const refrescarSoportes = async () => {
         setLoading(true);
@@ -694,7 +697,11 @@ const Soporte = () => {
             return fb - fa;
         });
     }, [casosIsmael]);
-    const casosIsmaelPreview = useMemo(() => casosIsmaelOrdenados.slice(0, 4), [casosIsmaelOrdenados]);
+    const totalPaginasIsmael = Math.max(1, Math.ceil(casosIsmaelOrdenados.length / registrosPorTarjeta));
+    const casosIsmaelPreview = useMemo(() => {
+        const inicio = (paginaIsmael - 1) * registrosPorTarjeta;
+        return casosIsmaelOrdenados.slice(inicio, inicio + registrosPorTarjeta);
+    }, [casosIsmaelOrdenados, paginaIsmael]);
 
     const pendientesAbiertos = useMemo(() => {
         return soportesFiltrados
@@ -733,9 +740,21 @@ const Soporte = () => {
         [pendientesAbiertos]
     );
     const pendientesCriticos = useMemo(
-        () => pendientesAbiertos.slice(0, 4),
-        [pendientesAbiertos]
+        () => {
+            const inicio = (paginaPendientes - 1) * registrosPorTarjeta;
+            return pendientesAbiertos.slice(inicio, inicio + registrosPorTarjeta);
+        },
+        [pendientesAbiertos, paginaPendientes]
     );
+    const totalPaginasPendientes = Math.max(1, Math.ceil(pendientesAbiertos.length / registrosPorTarjeta));
+
+    useEffect(() => {
+        setPaginaIsmael((pagina) => Math.min(pagina, totalPaginasIsmael));
+    }, [totalPaginasIsmael]);
+
+    useEffect(() => {
+        setPaginaPendientes((pagina) => Math.min(pagina, totalPaginasPendientes));
+    }, [totalPaginasPendientes]);
 
     const columns = [
         {
@@ -1077,6 +1096,31 @@ const Soporte = () => {
                                     <small className="text-muted">Sin registros en tabla ismael.</small>
                                 )}
                             </div>
+                            {casosIsmaelOrdenados.length > registrosPorTarjeta && (
+                                <div className="card-pagination mt-3">
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm"
+                                        disabled={paginaIsmael <= 1}
+                                        onClick={() => setPaginaIsmael((pagina) => Math.max(1, pagina - 1))}
+                                    >
+                                        <i className="fas fa-chevron-left mr-1"></i>
+                                        Anterior
+                                    </button>
+                                    <span>
+                                        Pagina {paginaIsmael} de {totalPaginasIsmael}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm"
+                                        disabled={paginaIsmael >= totalPaginasIsmael}
+                                        onClick={() => setPaginaIsmael((pagina) => Math.min(totalPaginasIsmael, pagina + 1))}
+                                    >
+                                        Siguiente
+                                        <i className="fas fa-chevron-right ml-1"></i>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1105,7 +1149,7 @@ const Soporte = () => {
                                     {pendientesCriticos.map((soporte) => (
                                         <li
                                             key={soporte.id_soporte}
-                                            className="urgent-item"
+                                            className={`urgent-item ${String(soporte.estado || "").toLowerCase() === "en_proceso" ? "urgent-item-alert" : ""}`}
                                             onClick={() => handleEditarSoporte(soporte)}
                                         >
                                             <div>
@@ -1119,7 +1163,7 @@ const Soporte = () => {
                                                     {soporte.centro?.cliente || "Cliente sin nombre"} · {formatearFecha(soporte.fecha_soporte)}
                                                 </small>
                                             </div>
-                                            <span className="urgent-days">
+                                            <span className={`urgent-days ${String(soporte.estado || "").toLowerCase() === "en_proceso" ? "urgent-days-alert" : ""}`}>
                                                 <i className="fas fa-clock mr-1"></i>
                                                 {formatearDias(soporte.diasAbiertos)}
                                             </span>
@@ -1128,6 +1172,31 @@ const Soporte = () => {
                                 </ul>
                             ) : (
                                 <p className="text-muted mb-0">No hay pendientes en este periodo.</p>
+                            )}
+                            {pendientesAbiertos.length > registrosPorTarjeta && (
+                                <div className="card-pagination mt-3">
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm"
+                                        disabled={paginaPendientes <= 1}
+                                        onClick={() => setPaginaPendientes((pagina) => Math.max(1, pagina - 1))}
+                                    >
+                                        <i className="fas fa-chevron-left mr-1"></i>
+                                        Anterior
+                                    </button>
+                                    <span>
+                                        Pagina {paginaPendientes} de {totalPaginasPendientes}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary btn-sm"
+                                        disabled={paginaPendientes >= totalPaginasPendientes}
+                                        onClick={() => setPaginaPendientes((pagina) => Math.min(totalPaginasPendientes, pagina + 1))}
+                                    >
+                                        Siguiente
+                                        <i className="fas fa-chevron-right ml-1"></i>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
