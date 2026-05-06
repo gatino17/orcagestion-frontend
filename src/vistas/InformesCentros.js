@@ -11,12 +11,14 @@ import {
     obtenerPermisosTrabajo,
     obtenerMantencionesTerreno,
     obtenerRetirosTerreno,
+    obtenerLevantamientosTerreno,
     obtenerCambiosEquipoMantencion,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
     eliminarPermisoTrabajo,
     eliminarMantencionTerreno,
-    eliminarRetiroTerreno
+    eliminarRetiroTerreno,
+    eliminarLevantamientoTerreno
 } from "../api";
 import "./InformesCentros.css";
 
@@ -25,7 +27,8 @@ const SUBCATEGORIAS = [
     { value: "reapuntamiento", label: "Reapuntamiento" },
     { value: "intervencion", label: "Permisos de trabajo" },
     { value: "mantencion", label: "Mantenciones" },
-    { value: "retiro", label: "Retiros" }
+    { value: "retiro", label: "Retiros" },
+    { value: "levantamiento", label: "Levantamientos" }
 ];
 
 
@@ -68,6 +71,17 @@ const formatMeasureWithUnit = (value, unit) => {
     const normalized = raw.toLowerCase();
     if (normalized.includes(unit.toLowerCase())) return raw;
     return `${raw}${unit.toLowerCase()}`;
+};
+
+const getLevantamientoFotos = (value) => {
+    if (Array.isArray(value)) return value;
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
 };
 
 const todayLocalInputDate = () => {
@@ -357,6 +371,7 @@ function InformesCentros() {
     const [permisoPageSize, setPermisoPageSize] = useState(10);
     const [mostrarDetallePermiso, setMostrarDetallePermiso] = useState(false);
     const [detallePermisoTab, setDetallePermisoTab] = useState("gps");
+    const [levantamientoDetalleId, setLevantamientoDetalleId] = useState(null);
 
     const centrosOrdenados = useMemo(
         () => [...centros].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""))),
@@ -432,7 +447,11 @@ function InformesCentros() {
             }
             if (filtroCentroId && String(permiso.centro_id || "") !== String(filtroCentroId)) return false;
             const fecha = toInputDate(
-                subcategoria === "retiro" ? permiso.fecha_retiro : permiso.fecha_ingreso
+                subcategoria === "retiro"
+                    ? permiso.fecha_retiro
+                    : subcategoria === "levantamiento"
+                        ? permiso.fecha_levantamiento
+                        : permiso.fecha_ingreso
             );
             if (filtroFechaDesde && (!fecha || fecha < filtroFechaDesde)) return false;
             if (filtroFechaHasta && (!fecha || fecha > filtroFechaHasta)) return false;
@@ -441,7 +460,9 @@ function InformesCentros() {
                     ? String(permiso.id_mantencion_terreno || "")
                     : subcategoria === "retiro"
                         ? String(permiso.id_retiro_terreno || "")
-                        : String(permiso.id_permiso_trabajo || "");
+                        : subcategoria === "levantamiento"
+                            ? String(permiso.id_levantamiento_terreno || "")
+                            : String(permiso.id_permiso_trabajo || "");
                 if (!correlativoActual.includes(correlativoFiltro)) return false;
             }
             return true;
@@ -478,6 +499,7 @@ function InformesCentros() {
     useEffect(() => {
         setMostrarDetallePermiso(false);
         setDetallePermisoTab("gps");
+        setLevantamientoDetalleId(null);
     }, [subcategoria, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, permisoPage]);
 
     useEffect(() => {
@@ -651,7 +673,7 @@ function InformesCentros() {
     };
 
     const cargarPermisos = async () => {
-        if (!["intervencion", "mantencion", "retiro"].includes(subcategoria)) return;
+        if (!["intervencion", "mantencion", "retiro", "levantamiento"].includes(subcategoria)) return;
         setLoadingActas(true);
         try {
             const fetcher =
@@ -659,6 +681,8 @@ function InformesCentros() {
                     ? obtenerMantencionesTerreno
                     : subcategoria === "retiro"
                         ? obtenerRetirosTerreno
+                        : subcategoria === "levantamiento"
+                            ? obtenerLevantamientosTerreno
                         : obtenerPermisosTrabajo;
             const data = await fetcher({
                 centro_id: filtroCentroId || undefined,
@@ -693,7 +717,7 @@ function InformesCentros() {
     useEffect(() => {
         if (subcategoria === "acta_entrega" || subcategoria === "reapuntamiento") {
             cargarActas();
-        } else if (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") {
+        } else if (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro" || subcategoria === "levantamiento") {
             cargarPermisos();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -925,6 +949,20 @@ function InformesCentros() {
         } catch (error) {
             console.error("Error al eliminar retiro en terreno:", error);
             alert("No se pudo eliminar el retiro en terreno.");
+        }
+    };
+
+    const handleEliminarLevantamiento = async (id) => {
+        if (!window.confirm("Quieres eliminar este levantamiento en terreno?")) return;
+        try {
+            await eliminarLevantamientoTerreno(id);
+            await cargarPermisos();
+            if (String(levantamientoDetalleId || "") === String(id || "")) {
+                setLevantamientoDetalleId(null);
+            }
+        } catch (error) {
+            console.error("Error al eliminar levantamiento en terreno:", error);
+            alert("No se pudo eliminar el levantamiento en terreno.");
         }
     };
 
@@ -1315,6 +1353,73 @@ function InformesCentros() {
         });
     };
 
+    const verLevantamientoPdf = (levantamiento) => {
+        const fotos = getLevantamientoFotos(levantamiento?.fotos);
+        const fotosHtml = fotos.length
+            ? fotos
+                .map((foto, idx) => {
+                    const uri = String(foto?.uri || "").trim();
+                    if (!uri) return "";
+                    const descripcion = esc(foto?.descripcion || `Foto ${idx + 1}`);
+                    return `
+                    <div style="margin-bottom:14px;">
+                      <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">${descripcion}</div>
+                      <img src="${uri}" alt="${descripcion}" style="width:100%;max-height:320px;object-fit:contain;border:1px solid #dbeafe;border-radius:8px;background:#f8fafc;" />
+                    </div>`;
+                })
+                .join("")
+            : `<div class="sig-empty">Sin fotos registradas</div>`;
+
+        const body = `
+        <div class="doc-top">
+          <div class="orca-logo">
+            <div class="orca-row">
+              <div class="orca-cell">O</div>
+              <div class="orca-cell">R</div>
+              <div class="orca-cell">C</div>
+              <div class="orca-cell">A</div>
+            </div>
+            <div class="orca-sub">Tecnologias</div>
+          </div>
+          <div class="doc-meta">
+            <div class="meta-line">N°: ${esc(levantamiento.id_levantamiento_terreno || "-")}</div>
+            <div class="meta-line">Fecha levantamiento: ${esc(toDisplayDate(levantamiento.fecha_levantamiento))}</div>
+            <div class="meta-line">Fecha y hora registro: ${esc(toDisplayDate(levantamiento.created_at))}, ${esc(toDisplayHour(levantamiento.created_at))}</div>
+          </div>
+        </div>
+
+        <div class="sec-title">Datos del centro</div>
+        <div class="grid">
+          <div class="field"><b>Empresa</b>${esc(levantamiento.empresa || levantamiento.cliente || "-")}</div>
+          <div class="field"><b>Centro</b>${esc(levantamiento.centro || "-")}</div>
+          <div class="field"><b>Codigo ponton</b>${esc(levantamiento.codigo_ponton || "-")}</div>
+          <div class="field"><b>Region</b>${esc(levantamiento.region || "-")}</div>
+          <div class="field"><b>Localidad</b>${esc(levantamiento.localidad || "-")}</div>
+          <div class="field"><b>Estado</b>${esc(levantamiento.estado || "-")}</div>
+        </div>
+
+        <div class="sec-title">Levantamiento</div>
+        <div class="grid">
+          <div class="field wide"><b>Resumen</b>${esc(levantamiento.resumen || "-")}</div>
+          <div class="field wide"><b>Observaciones</b>${esc(levantamiento.observaciones || "-")}</div>
+        </div>
+
+        <div class="sec-title">Mediciones de energia</div>
+        <div class="grid">
+          <div class="field"><b>Voltaje</b>${esc(formatMeasureWithUnit(levantamiento.medicion_voltaje, "V"))}</div>
+          <div class="field"><b>Corriente</b>${esc(formatMeasureWithUnit(levantamiento.medicion_corriente, "A"))}</div>
+          <div class="field"><b>Potencia</b>${esc(formatMeasureWithUnit(levantamiento.medicion_potencia, "W"))}</div>
+        </div>
+
+        <div class="sec-title">Evidencia fotografica</div>
+        <div class="grid">
+          <div class="field wide">
+            <div class="evi-box">${fotosHtml}</div>
+          </div>
+        </div>`;
+        openPreviewPdf("Levantamiento en Terreno - Informe", body);
+    };
+
     const verArmadoDesdeActa = async (acta) => {
         const centroId = Number(acta?.centro_id || 0);
         if (!centroId) {
@@ -1491,7 +1596,7 @@ function InformesCentros() {
                         <label>Fecha hasta</label>
                         <input className="form-control" type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} />
                     </div>
-                    {(subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") ? (
+                    {(subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro" || subcategoria === "levantamiento") ? (
                         <div>
                             <label>Correlativo</label>
                             <input
@@ -1799,7 +1904,7 @@ function InformesCentros() {
                         </div>
                     ) : null}
                 </>
-            ) : (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro") ? (
+            ) : (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro" || subcategoria === "levantamiento") ? (
                 <>
                     <div className="card informes-centros-tabla">
                         <div className="card-body">
@@ -1810,6 +1915,8 @@ function InformesCentros() {
                                             ? "Mantenciones en terreno"
                                             : subcategoria === "retiro"
                                                 ? "Retiros en terreno"
+                                                : subcategoria === "levantamiento"
+                                                    ? "Levantamientos en terreno"
                                                 : "Permisos de trabajo"}
                                     </h5>
                                     <p className="text-muted mb-0">
@@ -1817,9 +1924,11 @@ function InformesCentros() {
                                             ? "Registros creados desde mobile en mantenciones de terreno."
                                             : subcategoria === "retiro"
                                                 ? "Registros de retiro creados desde mobile."
+                                                : subcategoria === "levantamiento"
+                                                    ? "Registros de levantamiento creados desde mobile."
                                                 : "Registros creados desde mobile y web."}
                                     </p>
-                                    {subcategoria !== "retiro" ? (
+                                    {subcategoria !== "retiro" && subcategoria !== "levantamiento" ? (
                                         <div className="informes-detalle-toolbar mt-2">
                                             <button
                                                 className={`btn btn-sm ${mostrarDetallePermiso ? "btn-primary" : "btn-outline-primary"}`}
@@ -1859,32 +1968,126 @@ function InformesCentros() {
                                         ? "No hay mantenciones en terreno para los filtros seleccionados."
                                         : subcategoria === "retiro"
                                             ? "No hay retiros en terreno para los filtros seleccionados."
-                                        : "No hay permisos de trabajo para los filtros seleccionados."}
+                                            : subcategoria === "levantamiento"
+                                                ? "No hay levantamientos en terreno para los filtros seleccionados."
+                                            : "No hay permisos de trabajo para los filtros seleccionados."}
                                 </div>
                             ) : (
                                 <>
                                     <div className="table-responsive">
                                         <table className="table table-sm table-hover informes-table mb-0">
                                             <thead>
-                                                <tr>
-                                                    <th>N</th>
-                                                    <th>Correlativo</th>
-                                                    <th>Empresa</th>
-                                                    <th>Centro</th>
-                                                    <th>Codigo Ponton</th>
-                                                    <th>Fecha ingreso</th>
-                                                    <th>Fecha salida</th>
-                                                    <th>Region / Localidad</th>
-                                                    <th>Tecnico 1</th>
-                                                    <th>Tecnico 2</th>
-                                                    <th>Recepciona</th>
-                                                    <th>Descripcion</th>
-                                                    <th>Acciones</th>
-                                                </tr>
+                                                {subcategoria === "levantamiento" ? (
+                                                    <tr>
+                                                        <th>N</th>
+                                                        <th>Correlativo</th>
+                                                        <th>Empresa</th>
+                                                        <th>Centro</th>
+                                                        <th>Codigo Ponton</th>
+                                                        <th>Fecha</th>
+                                                        <th>Region / Localidad</th>
+                                                        <th>Mediciones</th>
+                                                        <th>Resumen</th>
+                                                        <th>Fotos</th>
+                                                        <th>Acciones</th>
+                                                    </tr>
+                                                ) : (
+                                                    <tr>
+                                                        <th>N</th>
+                                                        <th>Correlativo</th>
+                                                        <th>Empresa</th>
+                                                        <th>Centro</th>
+                                                        <th>Codigo Ponton</th>
+                                                        <th>Fecha ingreso</th>
+                                                        <th>Fecha salida</th>
+                                                        <th>Region / Localidad</th>
+                                                        <th>Tecnico 1</th>
+                                                        <th>Tecnico 2</th>
+                                                        <th>Recepciona</th>
+                                                        <th>Descripcion</th>
+                                                        <th>Acciones</th>
+                                                    </tr>
+                                                )}
                                             </thead>
                                             <tbody>
                                                 {permisosPaginados.map((permiso, index) => {
                                                     const rowKey = permiso.id_permiso_trabajo || permiso.id_mantencion_terreno || permiso.id_retiro_terreno;
+                                                    if (subcategoria === "levantamiento") {
+                                                        const levantamientoId = permiso.id_levantamiento_terreno || rowKey || index;
+                                                        const fotos = getLevantamientoFotos(permiso.fotos);
+                                                        const detalleAbierto = String(levantamientoDetalleId) === String(levantamientoId);
+                                                        return (
+                                                            <React.Fragment key={`levantamiento-${levantamientoId}`}>
+                                                                <tr>
+                                                                    <td>{(permisoPage - 1) * permisoPageSize + index + 1}</td>
+                                                                    <td>{`N${permiso.id_levantamiento_terreno || "-"}`}</td>
+                                                                    <td>{permiso.empresa || permiso.cliente || "-"}</td>
+                                                                    <td>{permiso.centro || "-"}</td>
+                                                                    <td>{permiso.codigo_ponton || "-"}</td>
+                                                                    <td>{toDisplayDate(permiso.fecha_levantamiento)}</td>
+                                                                    <td>
+                                                                        <div>{permiso.region || "-"}</div>
+                                                                        <small className="text-muted">{permiso.localidad || "-"}</small>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div className="informes-mediciones-mini">
+                                                                            <span>V: {formatMeasureWithUnit(permiso.medicion_voltaje, "V")}</span>
+                                                                            <span>A: {formatMeasureWithUnit(permiso.medicion_corriente, "A")}</span>
+                                                                            <span>W: {formatMeasureWithUnit(permiso.medicion_potencia, "W")}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="equipos-col">{permiso.resumen || permiso.observaciones || "-"}</td>
+                                                                    <td>
+                                                                        <span className="badge badge-info">{fotos.length}</span>
+                                                                    </td>
+                                                                    <td className="acciones-col">
+                                                                        <button
+                                                                            className={`btn btn-sm ${detalleAbierto ? "btn-primary" : "btn-outline-primary"}`}
+                                                                            onClick={() => setLevantamientoDetalleId(detalleAbierto ? null : levantamientoId)}>
+                                                                            <i className="fas fa-eye mr-1" />
+                                                                            Detalle
+                                                                        </button>
+                                                                        <button
+                                                                            className="btn btn-sm btn-outline-secondary"
+                                                                            onClick={() => verLevantamientoPdf(permiso)}>
+                                                                            <i className="fas fa-file-pdf mr-1" />
+                                                                            Vista previa
+                                                                        </button>
+                                                                        <button
+                                                                            className="btn btn-sm btn-outline-danger"
+                                                                            onClick={() => handleEliminarLevantamiento(permiso.id_levantamiento_terreno)}>
+                                                                            <i className="fas fa-trash-alt" />
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                                {detalleAbierto ? (
+                                                                    <tr className="informes-detalle-row">
+                                                                        <td colSpan={11}>
+                                                                            <div className="informes-detalle-panel">
+                                                                                <div className="informes-detalle-grid">
+                                                                                    <div className="informes-detalle-full"><small>Resumen</small><strong>{permiso.resumen || "-"}</strong></div>
+                                                                                    <div className="informes-detalle-full"><small>Observaciones</small><strong>{permiso.observaciones || "-"}</strong></div>
+                                                                                    <div><small>Voltaje</small><strong>{formatMeasureWithUnit(permiso.medicion_voltaje, "V")}</strong></div>
+                                                                                    <div><small>Corriente</small><strong>{formatMeasureWithUnit(permiso.medicion_corriente, "A")}</strong></div>
+                                                                                    <div><small>Potencia</small><strong>{formatMeasureWithUnit(permiso.medicion_potencia, "W")}</strong></div>
+                                                                                </div>
+                                                                                {fotos.length ? (
+                                                                                    <div className="informes-levantamiento-fotos">
+                                                                                        {fotos.map((foto, fotoIndex) => (
+                                                                                            <div className="informes-levantamiento-foto" key={`${levantamientoId}-foto-${fotoIndex}`}>
+                                                                                                <img src={foto.uri} alt={`Levantamiento ${fotoIndex + 1}`} />
+                                                                                                <span>{foto.descripcion || `Foto ${fotoIndex + 1}`}</span>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                ) : null}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ) : null}
+                                                            </React.Fragment>
+                                                        );
+                                                    }
                                                     return (
                                                         <React.Fragment key={`${subcategoria}-${rowKey || index}`}>
                                                             <tr>

@@ -1889,6 +1889,27 @@ export const obtenerRetirosTerreno = async (params = {}) => {
     }
 };
 
+// ===================== LEVANTAMIENTOS TERRENO =====================
+export const obtenerLevantamientosTerreno = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/levantamientos_terreno/`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener levantamientos en terreno:", error);
+        throw error;
+    }
+};
+
+export const eliminarLevantamientoTerreno = async (idLevantamientoTerreno) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/levantamientos_terreno/${idLevantamientoTerreno}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar levantamiento en terreno:", error);
+        throw error;
+    }
+};
+
 export const recepcionarRetiroEnBodega = async (idRetiroTerreno, payload = {}) => {
     try {
         const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/recepcionar_bodega`, payload);
