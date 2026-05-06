@@ -8,19 +8,23 @@ const PrivateRoute = ({ children, allowedRoles, requiredPage, enforceAllowedRole
 
     try {
         const decodedToken = jwtDecode(token);
-        const userRole = decodedToken.rol;
+        const userRole = String(decodedToken.rol || '').trim().toLowerCase();
         const paginas = Array.isArray(decodedToken.paginas) ? decodedToken.paginas : [];
+        const allowedRolesNorm = Array.isArray(allowedRoles)
+            ? allowedRoles.map((r) => String(r || '').trim().toLowerCase())
+            : [];
 
-        if (enforceAllowedRoles && allowedRoles && !allowedRoles.includes(userRole)) {
+        if (enforceAllowedRoles && allowedRolesNorm.length && !allowedRolesNorm.includes(userRole)) {
             return <Navigate to="/login" />;
         }
 
         if (requiredPage && paginas.length) {
             if (paginas.includes(requiredPage)) return children;
+            if (allowedRolesNorm.length && allowedRolesNorm.includes(userRole)) return children;
             return <Navigate to="/login" />;
         }
 
-        if (!allowedRoles || allowedRoles.includes(userRole)) {
+        if (!allowedRolesNorm.length || allowedRolesNorm.includes(userRole)) {
             return children;
         }
         return <Navigate to="/login" />;

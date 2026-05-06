@@ -38,7 +38,7 @@ function SideNav() {
     try {
       const decodedToken = jwtDecode(token);
       setUsuario(decodedToken.name || "Usuario");
-      setRol(decodedToken.rol || "");
+      setRol(String(decodedToken.rol || "").trim().toLowerCase());
       setPaginasPermitidas(Array.isArray(decodedToken.paginas) ? decodedToken.paginas : []);
     } catch (error) {
       console.error("Error al decodificar el token:", error);
@@ -76,7 +76,7 @@ function SideNav() {
   const itemsFiltrados = useMemo(() => {
     if (!rol) return [];
     if (paginasPermitidas.length) {
-      return navItems.filter((item) => paginasPermitidas.includes(item.pageKey));
+      return navItems.filter((item) => paginasPermitidas.includes(item.pageKey) || item.roles.includes(rol));
     }
     return navItems.filter((item) => item.roles.includes(rol));
   }, [rol, paginasPermitidas]);
