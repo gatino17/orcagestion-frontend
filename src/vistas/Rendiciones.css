@@ -49,6 +49,35 @@
   border-color: #dbe5f1;
 }
 
+.alertas-card {
+  border: 1px solid #dbeafe !important;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 45%),
+    linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+}
+
+.alertas-card .card-body {
+  padding: 0.8rem 0.95rem;
+}
+
+.alertas-card h6 {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.alertas-card .resumen-line {
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+  border-radius: 9px;
+  border: 1px solid #dbeafe;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.alertas-card .resumen-line strong {
+  font-size: 0.87rem;
+}
+
 .abono-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -109,8 +138,74 @@
   border-color: #bfdbfe;
 }
 
+.abono-action-btn {
+  border: 1px solid #1d4ed8;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.28);
+  transition: all 0.16s ease;
+}
+
+.abono-action-btn:hover,
+.abono-action-btn:focus {
+  color: #fff;
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+  border-color: #1e3a8a;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(29, 78, 216, 0.3);
+}
+
+.abonos-total-premium {
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 48%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  padding: 10px 12px;
+}
+
+.abonos-total-label {
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.abonos-total-value {
+  color: #1e3a8a;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.abonos-total-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.abonos-total-meta span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 .abonos-modal {
   width: min(980px, 100%);
+}
+
+.abono-form-modal {
+  width: min(700px, 100%);
 }
 
 .abonos-page-size {
@@ -301,6 +396,51 @@
 .kpi-card-green .kpi-title,
 .kpi-card-green .kpi-value {
   color: #065f46;
+}
+
+.kpi-card-amber {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.kpi-card-amber .kpi-icon {
+  background: #d97706;
+  color: #fff;
+}
+
+.kpi-card-amber .kpi-title,
+.kpi-card-amber .kpi-value {
+  color: #92400e;
+}
+
+.kpi-card-cyan {
+  background: #cffafe;
+  border-color: #67e8f9;
+}
+
+.kpi-card-cyan .kpi-icon {
+  background: #0891b2;
+  color: #fff;
+}
+
+.kpi-card-cyan .kpi-title,
+.kpi-card-cyan .kpi-value {
+  color: #155e75;
+}
+
+.kpi-card-slate {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.kpi-card-slate .kpi-icon {
+  background: #334155;
+  color: #fff;
+}
+
+.kpi-card-slate .kpi-title,
+.kpi-card-slate .kpi-value {
+  color: #0f172a;
 }
 
 .actividad-chip {

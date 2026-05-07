@@ -2022,6 +2022,36 @@ export const actualizarRendicion = async (idRendicion, payload = {}) => {
     }
 };
 
+export const eliminarRendicion = async (idRendicion) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/rendiciones/${idRendicion}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar rendicion:", error);
+        throw error;
+    }
+};
+
+export const solicitarEdicionRendicion = async (idRendicion, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rendiciones/${idRendicion}/solicitar_edicion`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al solicitar edicion de rendicion:", error);
+        throw error;
+    }
+};
+
+export const resolverEdicionRendicion = async (idRendicion, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/rendiciones/${idRendicion}/resolver_edicion`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al resolver solicitud de edicion:", error);
+        throw error;
+    }
+};
+
 export const enviarRendicion = async (idRendicion) => {
     try {
         const response = await axios.post(`${BASE_URL}/rendiciones/${idRendicion}/enviar`);

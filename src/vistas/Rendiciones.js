@@ -1,12 +1,14 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   crearAbonoRendicion,
+  eliminarRendicion,
   obtenerActasEntrega,
   obtenerAbonosRendicion,
   obtenerCentros,
   obtenerClientes,
   obtenerMantencionesTerreno,
   obtenerSaldosRendicion,
+  resolverEdicionRendicion,
   obtenerRendiciones,
   obtenerRetirosTerreno,
 } from "../api";
@@ -195,6 +197,13 @@ const toIsoDate = (d) => {
   return `${y}-${m}-${day}`;
 };
 
+const getMontoSeguro = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  return parseMontoTexto(value);
+};
+
+const calcularSaldoTecnico = (s) => getMontoSeguro(s?.total_abonos) - getMontoSeguro(s?.total_rendido);
+
 const getPeriodRange = (periodo, fechaDesdeCustom, fechaHastaCustom) => {
   const now = new Date();
   const year = now.getFullYear();
@@ -232,6 +241,7 @@ const getPeriodRange = (periodo, fechaDesdeCustom, fechaHastaCustom) => {
 export default function Rendiciones() {
   const [loading, setLoading] = useState(false);
   const [rendiciones, setRendiciones] = useState([]);
+  const [rendicionesBase, setRendicionesBase] = useState([]);
   const [abonos, setAbonos] = useState([]);
   const [saldosTecnico, setSaldosTecnico] = useState([]);
   const [guardandoAbono, setGuardandoAbono] = useState(false);
@@ -254,12 +264,32 @@ export default function Rendiciones() {
   const [fechaHasta, setFechaHasta] = useState("");
   const [buscarTecnicoAbono, setBuscarTecnicoAbono] = useState("");
   const [showAbonosModal, setShowAbonosModal] = useState(false);
+  const [showAbonoFormModal, setShowAbonoFormModal] = useState(false);
   const [abonosPageSize, setAbonosPageSize] = useState(10);
   const [abonosPage, setAbonosPage] = useState(1);
   const [abonoTecnico, setAbonoTecnico] = useState("");
   const [abonoFecha, setAbonoFecha] = useState(toIsoDate(new Date()));
   const [abonoMonto, setAbonoMonto] = useState("");
   const [abonoTransferidoPor, setAbonoTransferidoPor] = useState("");
+  const [solicitudesEdicionPendientes, setSolicitudesEdicionPendientes] = useState(0);
+
+  const saldosTecnicoAgrupados = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(saldosTecnico) ? saldosTecnico : []).forEach((s) => {
+      const nombre = String(s?.tecnico_nombre || "").trim();
+      if (!nombre) return;
+      const key = normalizeText(nombre);
+      const prev = map.get(key) || {
+        tecnico_nombre: nombre,
+        total_abonos: 0,
+        total_rendido: 0,
+      };
+      prev.total_abonos += getMontoSeguro(s?.total_abonos);
+      prev.total_rendido += getMontoSeguro(s?.total_rendido);
+      map.set(key, prev);
+    });
+    return Array.from(map.values());
+  }, [saldosTecnico]);
 
   const cargarBase = async () => {
     try {
@@ -275,21 +305,41 @@ export default function Rendiciones() {
     setLoading(true);
     try {
       const rango = getPeriodRange(periodo, fechaDesde, fechaHasta);
-      const data = await obtenerRendiciones({
-        ...(clienteId ? { cliente_id: Number(clienteId) } : {}),
-        ...(centroId ? { centro_id: Number(centroId) } : {}),
-        ...(estado ? { estado } : {}),
-        ...(rango.desde ? { fecha_desde: rango.desde } : {}),
-        ...(rango.hasta ? { fecha_hasta: rango.hasta } : {}),
-        top: 1000,
-      });
+      const [data, dataBase] = await Promise.all([
+        obtenerRendiciones({
+          ...(clienteId ? { cliente_id: Number(clienteId) } : {}),
+          ...(centroId ? { centro_id: Number(centroId) } : {}),
+          ...(estado ? { estado } : {}),
+          ...(rango.desde ? { fecha_desde: rango.desde } : {}),
+          ...(rango.hasta ? { fecha_hasta: rango.hasta } : {}),
+          top: 1000,
+        }),
+        obtenerRendiciones({ top: 2000 }),
+      ]);
       setRendiciones(Array.isArray(data) ? data : []);
+      setRendicionesBase(Array.isArray(dataBase) ? dataBase : []);
     } catch (error) {
       console.error(error);
       setRendiciones([]);
+      setRendicionesBase([]);
       alert("No se pudieron cargar las rendiciones.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarSolicitudesEdicionPendientes = async () => {
+    try {
+      const data = await obtenerRendiciones({ top: 2000 });
+      const all = Array.isArray(data) ? data : [];
+      const enProceso = all.filter((r) => {
+        const e = String(r?.estado || "").toLowerCase();
+        return e === "edicion_solicitada" || e === "edicion_autorizada";
+      });
+      setSolicitudesEdicionPendientes(enProceso.length);
+    } catch (error) {
+      console.error(error);
+      setSolicitudesEdicionPendientes(0);
     }
   };
 
@@ -304,6 +354,7 @@ export default function Rendiciones() {
         ...(Array.isArray(actas) ? actas : []).map((x) => ({
           tipo: normalizarTipo(x?.tipo_instalacion || "instalacion"),
           record_id: Number(x?.id_acta_entrega || 0) || 0,
+          centro_id: Number(x?.centro_id || 0) || 0,
           cliente_id: Number(x?.cliente_id || 0) || 0,
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
@@ -312,6 +363,7 @@ export default function Rendiciones() {
         ...(Array.isArray(mants) ? mants : []).map((x) => ({
           tipo: "mantencion",
           record_id: Number(x?.id_mantencion_terreno || 0) || 0,
+          centro_id: Number(x?.centro_id || 0) || 0,
           cliente_id: Number(x?.cliente_id || 0) || 0,
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
@@ -320,6 +372,7 @@ export default function Rendiciones() {
         ...(Array.isArray(rets) ? rets : []).map((x) => ({
           tipo: "retiro",
           record_id: Number(x?.id_retiro_terreno || 0) || 0,
+          centro_id: Number(x?.centro_id || 0) || 0,
           cliente_id: Number(x?.cliente_id || 0) || 0,
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
@@ -327,20 +380,28 @@ export default function Rendiciones() {
         })),
       ].filter((t) => t.record_id > 0 && !!t.tipo);
 
-      const rendidas = new Set(
-        (Array.isArray(rendiciones) ? rendiciones : []).map(
-          (r) => `${normalizarTipo(r?.actividad_tipo)}-${Number(r?.actividad_id || 0) || 0}`
-        )
-      );
+      const rendidas = new Set();
+      const rendidasCentro = new Set();
+      (Array.isArray(rendicionesBase) ? rendicionesBase : []).forEach((r) => {
+        const tipo = normalizarTipo(r?.actividad_tipo);
+        if (!tipo) return;
+        const actividadId = Number(r?.actividad_id || 0) || 0;
+        const centroId = Number(r?.centro_id || 0) || 0;
+        if (actividadId > 0) rendidas.add(`${tipo}-${actividadId}`);
+        if (centroId > 0) rendidasCentro.add(`${tipo}-centro-${centroId}`);
+      });
 
       const unique = new Map();
       trabajos.forEach((t) => {
         const k = `${t.tipo}-${t.record_id}`;
         if (!unique.has(k)) unique.set(k, t);
       });
-      const pendientes = Array.from(unique.values()).filter(
-        (t) => !rendidas.has(`${t.tipo}-${t.record_id}`)
-      );
+      const pendientes = Array.from(unique.values()).filter((t) => {
+        if (rendidas.has(`${t.tipo}-${t.record_id}`)) return false;
+        const centroId = Number(t?.centro_id || 0) || 0;
+        if (centroId > 0 && rendidasCentro.has(`${t.tipo}-centro-${centroId}`)) return false;
+        return true;
+      });
       setTrabajosPendientes(pendientes);
     } catch (error) {
       console.error(error);
@@ -350,18 +411,20 @@ export default function Rendiciones() {
 
   useEffect(() => {
     cargarBase();
+    cargarSolicitudesEdicionPendientes();
   }, []);
 
   useEffect(() => {
     cargarRendiciones();
     cargarAbonosYSaldos();
+    cargarSolicitudesEdicionPendientes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId, centroId, estado, periodo, fechaDesde, fechaHasta]);
 
   useEffect(() => {
     cargarTrabajosPendientes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rendiciones]);
+  }, [rendicionesBase]);
 
   const centrosFiltrados = useMemo(() => {
     if (!clienteId) return centros;
@@ -409,13 +472,42 @@ export default function Rendiciones() {
     () => (Array.isArray(abonos) ? abonos : []).reduce((acc, a) => acc + Number(a?.monto || 0), 0),
     [abonos]
   );
+  const totalTransferenciasPeriodo = useMemo(
+    () => (Array.isArray(abonos) ? abonos : []).length,
+    [abonos]
+  );
+  const ultimaTransferenciaPeriodo = useMemo(() => {
+    const lista = Array.isArray(abonos) ? abonos : [];
+    if (!lista.length) return null;
+    return [...lista].sort(
+      (a, b) => new Date(b?.created_at || b?.fecha_abono || 0) - new Date(a?.created_at || a?.fecha_abono || 0)
+    )[0];
+  }, [abonos]);
   const saldoGlobalTecnicos = useMemo(
-    () => (Array.isArray(saldosTecnico) ? saldosTecnico : []).reduce((acc, s) => acc + Number(s?.saldo || 0), 0),
-    [saldosTecnico]
+    () => (Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : []).reduce((acc, s) => acc + calcularSaldoTecnico(s), 0),
+    [saldosTecnicoAgrupados]
   );
   const tecnicosConSaldoNegativo = useMemo(
-    () => (Array.isArray(saldosTecnico) ? saldosTecnico : []).filter((s) => Number(s?.saldo || 0) < 0).length,
-    [saldosTecnico]
+    () => (Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : []).filter((s) => calcularSaldoTecnico(s) < 0).length,
+    [saldosTecnicoAgrupados]
+  );
+  const tecnicosConPendiente = useMemo(
+    () => (Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : []).filter((s) => calcularSaldoTecnico(s) > 0).length,
+    [saldosTecnicoAgrupados]
+  );
+  const rendidoPeriodo = useMemo(
+    () => (Array.isArray(rendicionesFiltradas) ? rendicionesFiltradas : []).reduce((acc, r) => acc + Number(r?.monto || 0), 0),
+    [rendicionesFiltradas]
+  );
+  const diferenciaConciliacion = useMemo(() => kpiAbonosPeriodo - rendidoPeriodo, [kpiAbonosPeriodo, rendidoPeriodo]);
+  const saldosTecnicoOrdenados = useMemo(
+    () =>
+      [...(Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : [])].sort((a, b) => {
+        const saldoDiff = calcularSaldoTecnico(b) - calcularSaldoTecnico(a);
+        if (saldoDiff !== 0) return saldoDiff;
+        return normalizeText(a?.tecnico_nombre).localeCompare(normalizeText(b?.tecnico_nombre));
+      }),
+    [saldosTecnicoAgrupados]
   );
 
   const resumenClientes = useMemo(() => {
@@ -465,17 +557,22 @@ export default function Rendiciones() {
     );
   }, [clienteDetalle, trabajosPendientes]);
 
-  const hoy = useMemo(() => new Date(), []);
-  const totalMesActual = useMemo(() => {
-    const y = hoy.getFullYear();
-    const m = hoy.getMonth();
-    return rendiciones.reduce((acc, r) => {
-      const d = new Date(r?.fecha_gasto || r?.created_at || 0);
-      if (Number.isNaN(d.getTime())) return acc;
-      if (d.getFullYear() === y && d.getMonth() === m) return acc + Number(r?.monto || 0);
-      return acc;
-    }, 0);
-  }, [rendiciones, hoy]);
+  const totalGastoPeriodo = useMemo(
+    () =>
+      (Array.isArray(rendicionesFiltradas) ? rendicionesFiltradas : []).reduce(
+        (acc, r) => acc + getMontoSeguro(r?.monto),
+        0
+      ),
+    [rendicionesFiltradas]
+  );
+
+  const tituloGastoPeriodo = useMemo(() => {
+    if (periodo === "mes_actual") return "Gasto mes actual";
+    if (periodo === "mes_anterior") return "Gasto mes anterior";
+    if (periodo === "anio_actual") return "Gasto terreno";
+    if (periodo === "anio_anterior") return "Gasto anio anterior";
+    return "Gasto periodo";
+  }, [periodo]);
 
   const clientesSinRendicion = useMemo(
     () => resumenClientes.filter((c) => c.pendientes > 0).length,
@@ -484,10 +581,11 @@ export default function Rendiciones() {
 
   const rendicionesRecientes = useMemo(
     () =>
-      [...rendicionesFiltradas]
+      [...(Array.isArray(rendicionesBase) ? rendicionesBase : [])]
+        .filter((r) => String(r?.estado || "").toLowerCase() === "enviado")
         .sort((a, b) => new Date(b?.created_at || b?.fecha_gasto || 0) - new Date(a?.created_at || a?.fecha_gasto || 0))
         .slice(0, 8),
-    [rendicionesFiltradas]
+    [rendicionesBase]
   );
 
   const abonosFiltradosTecnico = useMemo(() => {
@@ -759,19 +857,6 @@ export default function Rendiciones() {
       .filter((x) => x && x.url);
   }, [rendicionDetalle, descripcionDetalleRows]);
 
-  const saldoTecnicoDetalle = useMemo(() => {
-    if (!rendicionDetalle) return null;
-    const byId = (Array.isArray(saldosTecnico) ? saldosTecnico : []).find(
-      (s) => Number(s?.tecnico_user_id || 0) > 0 && Number(s?.tecnico_user_id || 0) === Number(rendicionDetalle?.tecnico_user_id || 0)
-    );
-    if (byId) return byId;
-    const nom = normalizeText(rendicionDetalle?.tecnico_nombre);
-    if (!nom) return null;
-    return (Array.isArray(saldosTecnico) ? saldosTecnico : []).find(
-      (s) => normalizeText(s?.tecnico_nombre) === nom
-    ) || null;
-  }, [rendicionDetalle, saldosTecnico]);
-
   const registrarAbono = async (e) => {
     e.preventDefault();
     const tecnicoNombre = String(abonoTecnico || "").trim();
@@ -803,6 +888,7 @@ export default function Rendiciones() {
       });
       setAbonoMonto("");
       setAbonoTransferidoPor("");
+      setShowAbonoFormModal(false);
       await cargarAbonosYSaldos();
       alert("Abono registrado correctamente.");
     } catch (error) {
@@ -813,124 +899,121 @@ export default function Rendiciones() {
     }
   };
 
+  const eliminarGasto = async (rendicion) => {
+    const id = Number(rendicion?.id_rendicion || 0);
+    if (!(id > 0)) return;
+    const ok = window.confirm(`Se eliminara el gasto #${id}. Deseas continuar?`);
+    if (!ok) return;
+    try {
+      await eliminarRendicion(id);
+      if (Number(rendicionDetalle?.id_rendicion || 0) === id) {
+        setRendicionDetalle(null);
+      }
+      await Promise.all([cargarRendiciones(), cargarAbonosYSaldos()]);
+      alert("Gasto eliminado correctamente.");
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo eliminar el gasto.");
+    }
+  };
+
+  const resolverSolicitudEdicion = async (rendicion, accion) => {
+    const id = Number(rendicion?.id_rendicion || 0);
+    if (!(id > 0)) return;
+    const txt = accion === "aprobar" ? "aprobar" : "rechazar";
+    const ok = window.confirm(`Vas a ${txt} la solicitud de edicion del gasto #${id}. Continuar?`);
+    if (!ok) return;
+    try {
+      await resolverEdicionRendicion(id, { accion });
+      await cargarRendiciones();
+      alert(`Solicitud ${accion === "aprobar" ? "aprobada" : "rechazada"} correctamente.`);
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo resolver la solicitud.");
+    }
+  };
+
   return (
     <div className="container-fluid py-3 rendiciones-page">
-      <div className="card border-0 shadow-sm mb-3">
-        <div className="card-body d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
-          <div>
-            <h4 className="mb-1">Rendiciones</h4>
-            <p className="mb-0 text-muted">Gastos registrados desde mobile.</p>
+      <div className="row g-3 mb-3">
+        <div className="col-xl-8">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+              <div>
+                <h4 className="mb-1">Rendiciones</h4>
+                <p className="mb-0 text-muted">Gastos registrados desde mobile.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-4">
+          <div className="card border-0 shadow-sm h-100 alertas-card">
+            <div className="card-body">
+              <h6 className="mb-2">Alertas operativas</h6>
+              <div className={`resumen-line ${trabajosPendientes.length > 0 ? "" : "resumen-line-ok"}`}>
+                Trabajos pendientes de rendicion: <strong>{trabajosPendientes.length}</strong>
+              </div>
+              <div className={`resumen-line ${tecnicosConPendiente > 0 ? "" : "resumen-line-ok"}`}>
+                Tecnicos con saldo pendiente: <strong>{tecnicosConPendiente}</strong>
+              </div>
+              <div className={`resumen-line ${diferenciaConciliacion === 0 ? "resumen-line-ok" : ""}`}>
+                Diferencia conciliacion periodo: <strong>{formatMoney(diferenciaConciliacion)}</strong>
+                {diferenciaConciliacion < 0 && (
+                  <span className="ml-2 text-danger font-weight-bold">Transferir a tecnicos</span>
+                )}
+                {diferenciaConciliacion > 0 && (
+                  <span className="ml-2 text-success font-weight-bold">Transferir a ORCA</span>
+                )}
+              </div>
+              <div className={`resumen-line ${solicitudesEdicionPendientes > 0 ? "" : "resumen-line-ok"}`}>
+                Solicitudes de edicion en proceso: <strong>{solicitudesEdicionPendientes}</strong>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="row g-3 mb-3">
-        <div className="col-xl-5">
-          <div className="card border-0 shadow-sm h-100 abono-card">
-            <div className="card-body">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h6 className="mb-0">
-                  <i className="fas fa-wallet mr-2" />
-                  Abono a tecnico
-                </h6>
-                <span className="badge badge-primary">Caja tecnica</span>
+        <div className="col-md-6 col-xl-3">
+          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-indigo">
+            <div className="card-body d-flex align-items-center">
+              <span className="kpi-icon">ABO</span>
+              <div>
+                <div className="kpi-title">Abonos periodo</div>
+                <div className="kpi-value">{formatMoney(kpiAbonosPeriodo)}</div>
               </div>
-              <form className="abono-form-grid" onSubmit={registrarAbono}>
-                <div>
-                  <label className="form-label mb-1">Tecnico</label>
-                  <select
-                    className="form-control"
-                    value={abonoTecnico}
-                    onChange={(e) => setAbonoTecnico(e.target.value)}
-                  >
-                    <option value="">Seleccionar tecnico</option>
-                    {tecnicosDisponibles.map((nombre) => (
-                      <option key={`tec-abono-${nombre}`} value={nombre}>
-                        {nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label mb-1">Fecha abono</label>
-                  <input
-                    className="form-control"
-                    type="date"
-                    value={abonoFecha}
-                    onChange={(e) => setAbonoFecha(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="form-label mb-1">Monto</label>
-                  <input
-                    className="form-control"
-                    value={abonoMonto}
-                    onChange={(e) => setAbonoMonto(e.target.value)}
-                    placeholder="100000"
-                  />
-                </div>
-                <div>
-                  <label className="form-label mb-1">Transferido por</label>
-                  <input
-                    className="form-control"
-                    value={abonoTransferidoPor}
-                    onChange={(e) => setAbonoTransferidoPor(e.target.value)}
-                    placeholder="Nombre responsable"
-                  />
-                </div>
-                <div className="abono-form-actions">
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={guardandoAbono}>
-                    {guardandoAbono ? "Guardando..." : "Registrar abono"}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         </div>
-        <div className="col-xl-7">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h6 className="mb-0">Historial de transferencias / abonos</h6>
-                <div className="d-flex align-items-center" style={{ gap: 8 }}>
-                  <input
-                    className="form-control form-control-sm abono-search-input"
-                    placeholder="Buscar tecnico..."
-                    value={buscarTecnicoAbono}
-                    onChange={(e) => setBuscarTecnicoAbono(e.target.value)}
-                  />
-                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowAbonosModal(true)}>
-                    Expandir
-                  </button>
-                  <span className="badge badge-primary">{abonosFiltradosTecnico.length}</span>
-                </div>
+        <div className="col-md-6 col-xl-3">
+          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-blue">
+            <div className="card-body d-flex align-items-center">
+              <span className="kpi-icon">CLP</span>
+              <div>
+                <div className="kpi-title">{tituloGastoPeriodo}</div>
+                <div className="kpi-value">{formatMoney(totalGastoPeriodo)}</div>
               </div>
-              <div className="table-responsive">
-                <table className="table table-sm mb-0 abonos-historial-table">
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Tecnico</th>
-                      <th>Transferido por</th>
-                      <th>Monto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {!abonosPreview.length && (
-                      <tr>
-                        <td colSpan={4} className="text-center text-muted py-3">Sin abonos registrados para el periodo.</td>
-                      </tr>
-                    )}
-                    {abonosPreview.map((a) => (
-                      <tr key={`abono-hist-${a.id_abono}`}>
-                        <td>{formatDateTime(a.created_at || a.fecha_abono)}</td>
-                        <td>{a.tecnico_nombre || "-"}</td>
-                        <td>{a.transferido_por || "-"}</td>
-                        <td>{formatMoney(a.monto)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-6 col-xl-3">
+          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-green">
+            <div className="card-body d-flex align-items-center">
+              <span className="kpi-icon">SAL</span>
+              <div>
+                <div className="kpi-title">Diferencia saldo</div>
+                <div className="kpi-value">{formatMoney(saldoGlobalTecnicos)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-6 col-xl-3">
+          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-red">
+            <div className="card-body d-flex align-items-center">
+              <span className="kpi-icon">NEG</span>
+              <div>
+                <div className="kpi-title">Tecnicos en negativo</div>
+                <div className="kpi-value">{tecnicosConSaldoNegativo}</div>
               </div>
             </div>
           </div>
@@ -1011,46 +1094,110 @@ export default function Rendiciones() {
       </div>
 
       <div className="row g-3 mb-3">
-        <div className="col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-blue">
-            <div className="card-body d-flex align-items-center">
-              <span className="kpi-icon">CLP</span>
-              <div>
-                <div className="kpi-title">Gasto mes actual</div>
-                <div className="kpi-value">{formatMoney(totalMesActual)}</div>
+        <div className="col-xl-5">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="mb-0">Total por rendir por tecnico</h6>
+                <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                  <span className="badge badge-warning">Pendientes: {tecnicosConPendiente}</span>
+                  <span className="badge badge-danger">Negativos: {tecnicosConSaldoNegativo}</span>
+                </div>
+              </div>
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 abonos-saldo-table">
+                  <thead>
+                    <tr>
+                      <th>Tecnico</th>
+                      <th>Abonos</th>
+                      <th>Rendido</th>
+                      <th>Diferencia (A - R)</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!saldosTecnicoOrdenados.length && (
+                      <tr>
+                        <td colSpan={5} className="text-center text-muted py-3">Sin datos de saldo por tecnico.</td>
+                      </tr>
+                    )}
+                    {saldosTecnicoOrdenados.slice(0, 10).map((s) => {
+                      const totalAbonos = getMontoSeguro(s?.total_abonos);
+                      const totalRendido = getMontoSeguro(s?.total_rendido);
+                      const saldo = calcularSaldoTecnico(s);
+                      const estadoLabel = saldo > 0 ? "Devolver a ORCA" : saldo < 0 ? "Devolver a tecnico" : "Cuadrado";
+                      const estadoClass = saldo > 0 ? "badge-warning" : saldo < 0 ? "badge-danger" : "badge-success";
+                      return (
+                        <tr key={`saldo-tec-${s.tecnico_user_id || s.tecnico_nombre}`}>
+                          <td>{s.tecnico_nombre || "-"}</td>
+                          <td>{formatMoney(totalAbonos)}</td>
+                          <td>{formatMoney(totalRendido)}</td>
+                          <td className={saldo < 0 ? "text-danger font-weight-bold" : ""}>{formatMoney(saldo)}</td>
+                          <td><span className={`badge ${estadoClass}`}>{estadoLabel}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
-        <div className="col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-indigo">
-            <div className="card-body d-flex align-items-center">
-              <span className="kpi-icon">ABO</span>
-              <div>
-                <div className="kpi-title">Abonos periodo</div>
-                <div className="kpi-value">{formatMoney(kpiAbonosPeriodo)}</div>
+        <div className="col-xl-7">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="mb-0">Historial de transferencias / abonos</h6>
+                <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                  <input
+                    className="form-control form-control-sm abono-search-input"
+                    placeholder="Buscar tecnico..."
+                    value={buscarTecnicoAbono}
+                    onChange={(e) => setBuscarTecnicoAbono(e.target.value)}
+                  />
+                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setShowAbonosModal(true)}>
+                    Expandir
+                  </button>
+                  <button type="button" className="btn btn-sm abono-action-btn" onClick={() => setShowAbonoFormModal(true)}>
+                    <i className="fas fa-plus-circle mr-1" />
+                    Abono
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-red">
-            <div className="card-body d-flex align-items-center">
-              <span className="kpi-icon">NEG</span>
-              <div>
-                <div className="kpi-title">Tecnicos en negativo</div>
-                <div className="kpi-value">{tecnicosConSaldoNegativo}</div>
+              <div className="abonos-total-premium mb-2">
+                <div className="abonos-total-label">Total transferido en periodo</div>
+                <div className="abonos-total-value">{formatMoney(kpiAbonosPeriodo)}</div>
+                <div className="abonos-total-meta">
+                  <span>{totalTransferenciasPeriodo} movimientos</span>
+                  <span>{ultimaTransferenciaPeriodo ? `Ultima ${formatDateTime(ultimaTransferenciaPeriodo.created_at || ultimaTransferenciaPeriodo.fecha_abono)}` : "Sin ultima transferencia"}</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100 kpi-card kpi-card-green">
-            <div className="card-body d-flex align-items-center">
-              <span className="kpi-icon">SAL</span>
-              <div>
-                <div className="kpi-title">Saldo global tecnicos</div>
-                <div className="kpi-value">{formatMoney(saldoGlobalTecnicos)}</div>
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 abonos-historial-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tecnico</th>
+                      <th>Transferido por</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!abonosPreview.length && (
+                      <tr>
+                        <td colSpan={4} className="text-center text-muted py-3">Sin abonos registrados para el periodo.</td>
+                      </tr>
+                    )}
+                    {abonosPreview.map((a) => (
+                      <tr key={`abono-hist-${a.id_abono}`}>
+                        <td>{formatDateTime(a.created_at || a.fecha_abono)}</td>
+                        <td>{a.tecnico_nombre || "-"}</td>
+                        <td>{a.transferido_por || "-"}</td>
+                        <td>{formatMoney(a.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1158,12 +1305,25 @@ export default function Rendiciones() {
                         <td className="text-truncate" style={{ maxWidth: 220 }}>{r.descripcion || "-"}</td>
                         <td>{formatMoney(r.monto)}</td>
                         <td>
-                          <span className={`badge ${String(r.estado) === "enviado" ? "badge-success" : "badge-secondary"}`}>
+                          <span
+                            className={`badge ${
+                              String(r.estado) === "enviado"
+                                ? "badge-success"
+                                : String(r.estado) === "edicion_solicitada"
+                                  ? "badge-warning"
+                                  : String(r.estado) === "edicion_autorizada"
+                                    ? "badge-info"
+                                    : String(r.estado) === "edicion_rechazada"
+                                      ? "badge-danger"
+                                      : "badge-secondary"
+                            }`}
+                          >
                             {r.estado || "-"}
                           </span>
                         </td>
                         <td>{Array.isArray(r.adjuntos) ? r.adjuntos.length : 0}</td>
                         <td>
+                          <div className="d-flex align-items-center" style={{ gap: 6 }}>
                           <button
                             type="button"
                             className={`btn btn-sm ${rendicionDetalle?.id_rendicion === r.id_rendicion ? "btn-primary" : "btn-outline-primary"}`}
@@ -1179,6 +1339,35 @@ export default function Rendiciones() {
                           >
                             Ver detalle
                           </button>
+                          {String(r.estado || "") === "edicion_solicitada" && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-success"
+                                onClick={() => resolverSolicitudEdicion(r, "aprobar")}
+                                title="Aprobar edicion"
+                              >
+                                <i className="fas fa-check" />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-warning"
+                                onClick={() => resolverSolicitudEdicion(r, "rechazar")}
+                                title="Rechazar edicion"
+                              >
+                                <i className="fas fa-times" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => eliminarGasto(r)}
+                            title="Eliminar gasto"
+                          >
+                            <i className="fas fa-trash-alt" />
+                          </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1230,17 +1419,6 @@ export default function Rendiciones() {
                     <div><strong>Estado</strong><span>{rendicionDetalle.estado || "-"}</span></div>
                     <div><strong>Monto</strong><span>{formatMoney(rendicionDetalle.monto)}</span></div>
                   </div>
-                  {!!saldoTecnicoDetalle && (
-                    <div className="detalle-box mb-2 detalle-box-saldo">
-                      <div className="detalle-box-title">Saldo tecnico</div>
-                      <div className="saldo-tecnico-grid">
-                        <div><strong>Total abonos</strong><span>{formatMoney(saldoTecnicoDetalle.total_abonos)}</span></div>
-                        <div><strong>Total rendido</strong><span>{formatMoney(saldoTecnicoDetalle.total_rendido)}</span></div>
-                        <div><strong>Saldo actual</strong><span>{formatMoney(saldoTecnicoDetalle.saldo)}</span></div>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="detalle-box mb-2">
                     <div className="detalle-box-title">Tecnicos asociados</div>
                     {!!tecnicosAsociadosDetalle.length ? (
@@ -1374,6 +1552,71 @@ export default function Rendiciones() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAbonoFormModal && (
+        <div className="rendiciones-overlay" onClick={() => setShowAbonoFormModal(false)}>
+          <div className="rendiciones-modal abono-form-modal abono-card" onClick={(e) => e.stopPropagation()}>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h6 className="mb-0">
+                <i className="fas fa-wallet mr-2" />
+                Abono a tecnico
+              </h6>
+              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowAbonoFormModal(false)}>
+                Cerrar
+              </button>
+            </div>
+            <form className="abono-form-grid" onSubmit={registrarAbono}>
+              <div>
+                <label className="form-label mb-1">Tecnico</label>
+                <select
+                  className="form-control"
+                  value={abonoTecnico}
+                  onChange={(e) => setAbonoTecnico(e.target.value)}
+                >
+                  <option value="">Seleccionar tecnico</option>
+                  {tecnicosDisponibles.map((nombre) => (
+                    <option key={`tec-abono-${nombre}`} value={nombre}>
+                      {nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label mb-1">Fecha abono</label>
+                <input
+                  className="form-control"
+                  type="date"
+                  value={abonoFecha}
+                  onChange={(e) => setAbonoFecha(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label mb-1">Monto</label>
+                <input
+                  className="form-control"
+                  value={abonoMonto}
+                  onChange={(e) => setAbonoMonto(e.target.value)}
+                  placeholder="100000"
+                />
+              </div>
+              <div>
+                <label className="form-label mb-1">Transferido por</label>
+                <input
+                  className="form-control"
+                  value={abonoTransferidoPor}
+                  onChange={(e) => setAbonoTransferidoPor(e.target.value)}
+                  placeholder="Nombre responsable"
+                />
+              </div>
+              <div className="abono-form-actions">
+                <button type="submit" className="btn btn-primary btn-sm" disabled={guardandoAbono}>
+                  {guardandoAbono ? "Guardando..." : "Registrar abono"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
