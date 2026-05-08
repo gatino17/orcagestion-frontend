@@ -7,6 +7,7 @@ import {
   obtenerActividades,
   obtenerCentros,
   obtenerClientes,
+  obtenerLevantamientosTerreno,
   obtenerMantencionesTerreno,
   obtenerSaldosRendicion,
   resolverEdicionRendicion,
@@ -241,6 +242,7 @@ const normalizarTipo = (v) => {
   if (s.startsWith("instal")) return "instalacion";
   if (s.startsWith("manten")) return "mantencion";
   if (s.startsWith("retir")) return "retiro";
+  if (s.startsWith("levant")) return "levantamiento";
   return s;
 };
 
@@ -408,10 +410,11 @@ export default function Rendiciones() {
 
   const cargarTrabajosPendientes = async () => {
     try {
-      const [actas, mants, rets] = await Promise.all([
+      const [actas, mants, rets, levs] = await Promise.all([
         obtenerActasEntrega().catch(() => []),
         obtenerMantencionesTerreno().catch(() => []),
         obtenerRetirosTerreno().catch(() => []),
+        obtenerLevantamientosTerreno().catch(() => []),
       ]);
       const parseFirmasAdicionales = (raw) => {
         if (!Array.isArray(raw)) return [];
@@ -432,6 +435,18 @@ export default function Rendiciones() {
         const adicionales = parseFirmasAdicionales(x?.firmas_tecnicos_adicionales);
         return Array.from(new Set([principal, ayudante, ...adicionales].filter(Boolean)));
       };
+
+      const actividadTecnicos = new Map();
+      (Array.isArray(actividades) ? actividades : []).forEach((a) => {
+        const aid = Number(a?.id_actividad || 0) || 0;
+        if (!(aid > 0)) return;
+        const principal = String(a?.encargado_principal?.nombre_encargado || "").trim();
+        const ayudante = String(a?.encargado_ayudante?.nombre_encargado || "").trim();
+        const adicionales = Array.isArray(a?.tecnicos_asignados)
+          ? a.tecnicos_asignados.map((t) => String(t?.nombre_encargado || "").trim()).filter(Boolean)
+          : [];
+        actividadTecnicos.set(aid, Array.from(new Set([principal, ayudante, ...adicionales].filter(Boolean))));
+      });
 
       const trabajos = [
         ...(Array.isArray(actas) ? actas : []).map((x) => ({
@@ -463,6 +478,18 @@ export default function Rendiciones() {
           centro_nombre: x?.centro || "",
           fecha: x?.fecha_retiro || x?.created_at || null,
           tecnicos: buildTecnicos(x),
+        })),
+        ...(Array.isArray(levs) ? levs : []).map((x) => ({
+          tipo: "levantamiento",
+          record_id: Number(x?.id_levantamiento_terreno || 0) || 0,
+          centro_id: Number(x?.centro_id || 0) || 0,
+          cliente_id: Number(x?.cliente_id || 0) || 0,
+          cliente_nombre: x?.cliente || x?.empresa || "",
+          centro_nombre: x?.centro || "",
+          fecha: x?.fecha_levantamiento || x?.created_at || null,
+          tecnicos: Array.isArray(actividadTecnicos.get(Number(x?.actividad_id || 0) || 0))
+            ? actividadTecnicos.get(Number(x?.actividad_id || 0) || 0)
+            : [],
         })),
       ].filter((t) => t.record_id > 0 && !!t.tipo);
 
@@ -516,7 +543,7 @@ export default function Rendiciones() {
   useEffect(() => {
     cargarTrabajosPendientes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rendicionesBase]);
+  }, [rendicionesBase, actividades]);
 
   const centrosFiltrados = useMemo(() => {
     if (!clienteId) return centros;

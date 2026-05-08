@@ -12,6 +12,8 @@ import {
     obtenerMantencionesTerreno,
     obtenerRetirosTerreno,
     obtenerLevantamientosTerreno,
+    resolverEdicionLevantamientoTerreno,
+    resolverEdicionRetiroTerreno,
     obtenerCambiosEquipoMantencion,
     crearPermisoTrabajo,
     actualizarPermisoTrabajo,
@@ -82,6 +84,17 @@ const getLevantamientoFotos = (value) => {
     } catch (error) {
         return [];
     }
+};
+
+const normalizeLevantamientoEstado = (value) => String(value || "").trim().toLowerCase();
+
+const renderLevantamientoEstadoBadge = (estadoRaw) => {
+    const estado = normalizeLevantamientoEstado(estadoRaw);
+    if (estado === "edicion_solicitada") return <span className="badge badge-warning">Edicion solicitada</span>;
+    if (estado === "edicion_autorizada") return <span className="badge badge-info">Edicion autorizada</span>;
+    if (estado === "edicion_rechazada") return <span className="badge badge-danger">Edicion rechazada</span>;
+    if (estado === "finalizado") return <span className="badge badge-success">Finalizado</span>;
+    return <span className="badge badge-secondary">{estadoRaw || "-"}</span>;
 };
 
 const todayLocalInputDate = () => {
@@ -672,9 +685,10 @@ function InformesCentros() {
         }
     };
 
-    const cargarPermisos = async () => {
+    const cargarPermisos = async (opts = {}) => {
+        const silent = Boolean(opts?.silent);
         if (!["intervencion", "mantencion", "retiro", "levantamiento"].includes(subcategoria)) return;
-        setLoadingActas(true);
+        if (!silent) setLoadingActas(true);
         try {
             const fetcher =
                 subcategoria === "mantencion"
@@ -692,9 +706,9 @@ function InformesCentros() {
             setPermisosTrabajo(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Error al cargar registros:", error);
-            setPermisosTrabajo([]);
+            if (!silent) setPermisosTrabajo([]);
         } finally {
-            setLoadingActas(false);
+            if (!silent) setLoadingActas(false);
         }
     };
 
@@ -720,6 +734,15 @@ function InformesCentros() {
         } else if (subcategoria === "intervencion" || subcategoria === "mantencion" || subcategoria === "retiro" || subcategoria === "levantamiento") {
             cargarPermisos();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subcategoria, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
+
+    useEffect(() => {
+        if (subcategoria !== "levantamiento") return undefined;
+        const timer = setInterval(() => {
+            cargarPermisos({ silent: true });
+        }, 10000);
+        return () => clearInterval(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [subcategoria, filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
 
@@ -963,6 +986,30 @@ function InformesCentros() {
         } catch (error) {
             console.error("Error al eliminar levantamiento en terreno:", error);
             alert("No se pudo eliminar el levantamiento en terreno.");
+        }
+    };
+
+    const handleResolverEdicionLevantamiento = async (id, aprobar) => {
+        const txt = aprobar ? "aprobar" : "rechazar";
+        if (!window.confirm(`Vas a ${txt} esta solicitud de edicion. Continuar?`)) return;
+        try {
+            await resolverEdicionLevantamientoTerreno(id, { aprobar });
+            await cargarPermisos();
+        } catch (error) {
+            console.error("Error al resolver solicitud de edicion:", error);
+            alert("No se pudo resolver la solicitud.");
+        }
+    };
+
+    const handleResolverEdicionRetiro = async (id, aprobar) => {
+        const txt = aprobar ? "aprobar" : "rechazar";
+        if (!window.confirm(`Vas a ${txt} esta solicitud de edicion. Continuar?`)) return;
+        try {
+            await resolverEdicionRetiroTerreno(id, { aprobar });
+            await cargarPermisos();
+        } catch (error) {
+            console.error("Error al resolver solicitud de edicion del retiro:", error);
+            alert("No se pudo resolver la solicitud.");
         }
     };
 
@@ -1919,15 +1966,15 @@ function InformesCentros() {
                                                     ? "Levantamientos en terreno"
                                                 : "Permisos de trabajo"}
                                     </h5>
-                                    <p className="text-muted mb-0">
-                                        {subcategoria === "mantencion"
-                                            ? "Registros creados desde mobile en mantenciones de terreno."
-                                            : subcategoria === "retiro"
-                                                ? "Registros de retiro creados desde mobile."
-                                                : subcategoria === "levantamiento"
-                                                    ? "Registros de levantamiento creados desde mobile."
-                                                : "Registros creados desde mobile y web."}
-                                    </p>
+                                    {subcategoria !== "levantamiento" && (
+                                        <p className="text-muted mb-0">
+                                            {subcategoria === "mantencion"
+                                                ? "Registros creados desde mobile en mantenciones de terreno."
+                                                : subcategoria === "retiro"
+                                                    ? "Registros de retiro creados desde mobile."
+                                                    : "Registros creados desde mobile y web."}
+                                        </p>
+                                    )}
                                     {subcategoria !== "retiro" && subcategoria !== "levantamiento" ? (
                                         <div className="informes-detalle-toolbar mt-2">
                                             <button
@@ -1989,6 +2036,7 @@ function InformesCentros() {
                                                         <th>Mediciones</th>
                                                         <th>Resumen</th>
                                                         <th>Fotos</th>
+                                                        <th>Estado</th>
                                                         <th>Acciones</th>
                                                     </tr>
                                                 ) : (
@@ -2040,6 +2088,7 @@ function InformesCentros() {
                                                                     <td>
                                                                         <span className="badge badge-info">{fotos.length}</span>
                                                                     </td>
+                                                                    <td>{renderLevantamientoEstadoBadge(permiso.estado)}</td>
                                                                     <td className="acciones-col">
                                                                         <button
                                                                             className={`btn btn-sm ${detalleAbierto ? "btn-primary" : "btn-outline-primary"}`}
@@ -2053,6 +2102,24 @@ function InformesCentros() {
                                                                             <i className="fas fa-file-pdf mr-1" />
                                                                             Vista previa
                                                                         </button>
+                                                                        {normalizeLevantamientoEstado(permiso.estado) === "edicion_solicitada" && (
+                                                                            <>
+                                                                                <button
+                                                                                    className="btn btn-sm btn-outline-success"
+                                                                                    onClick={() => handleResolverEdicionLevantamiento(permiso.id_levantamiento_terreno, true)}
+                                                                                    title="Aprobar edicion">
+                                                                                    <i className="fas fa-check mr-1" />
+                                                                                    Aprobar
+                                                                                </button>
+                                                                                <button
+                                                                                    className="btn btn-sm btn-outline-danger"
+                                                                                    onClick={() => handleResolverEdicionLevantamiento(permiso.id_levantamiento_terreno, false)}
+                                                                                    title="Rechazar edicion">
+                                                                                    <i className="fas fa-times mr-1" />
+                                                                                    Rechazar
+                                                                                </button>
+                                                                            </>
+                                                                        )}
                                                                         <button
                                                                             className="btn btn-sm btn-outline-danger"
                                                                             onClick={() => handleEliminarLevantamiento(permiso.id_levantamiento_terreno)}>
@@ -2062,7 +2129,7 @@ function InformesCentros() {
                                                                 </tr>
                                                                 {detalleAbierto ? (
                                                                     <tr className="informes-detalle-row">
-                                                                        <td colSpan={11}>
+                                                                        <td colSpan={12}>
                                                                             <div className="informes-detalle-panel">
                                                                                 <div className="informes-detalle-grid">
                                                                                     <div className="informes-detalle-full"><small>Resumen</small><strong>{permiso.resumen || "-"}</strong></div>
@@ -2143,12 +2210,39 @@ function InformesCentros() {
                                                                                 </>
                                                                             ) : (
                                                                                 <>
+                                                                                    {String(permiso.estado_edicion || "finalizado").toLowerCase() === "edicion_solicitada" ? (
+                                                                                        <>
+                                                                                            <button
+                                                                                                className="btn btn-sm btn-outline-success mr-2"
+                                                                                                onClick={() => handleResolverEdicionRetiro(permiso.id_retiro_terreno, true)}
+                                                                                                title="Aprobar edicion">
+                                                                                                <i className="fas fa-check mr-1" />
+                                                                                                Aprobar
+                                                                                            </button>
+                                                                                            <button
+                                                                                                className="btn btn-sm btn-outline-danger mr-2"
+                                                                                                onClick={() => handleResolverEdicionRetiro(permiso.id_retiro_terreno, false)}
+                                                                                                title="Rechazar edicion">
+                                                                                                <i className="fas fa-times mr-1" />
+                                                                                                Rechazar
+                                                                                            </button>
+                                                                                        </>
+                                                                                    ) : null}
                                                                                     <button
                                                                                         className="btn btn-sm btn-outline-secondary mr-2"
                                                                                         onClick={() => verRetiroPdf(permiso)}>
                                                                                         <i className="fas fa-file-pdf mr-1" />
                                                                                         Retiro
                                                                                     </button>
+                                                                                    {String(permiso.estado_edicion || "finalizado").toLowerCase() === "edicion_solicitada" ? (
+                                                                                        <span className="badge badge-warning mr-2">Edicion solicitada</span>
+                                                                                    ) : String(permiso.estado_edicion || "finalizado").toLowerCase() === "edicion_autorizada" ? (
+                                                                                        <span className="badge badge-info mr-2">Edicion autorizada</span>
+                                                                                    ) : String(permiso.estado_edicion || "finalizado").toLowerCase() === "edicion_rechazada" ? (
+                                                                                        <span className="badge badge-danger mr-2">Edicion rechazada</span>
+                                                                                    ) : (
+                                                                                        <span className="badge badge-success mr-2">Finalizado</span>
+                                                                                    )}
                                                                                     <button
                                                                                         className="btn btn-sm btn-outline-danger"
                                                                                         onClick={() => handleEliminarRetiro(permiso.id_retiro_terreno)}>

@@ -1910,6 +1910,26 @@ export const eliminarLevantamientoTerreno = async (idLevantamientoTerreno) => {
     }
 };
 
+export const solicitarEdicionLevantamientoTerreno = async (idLevantamientoTerreno) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/levantamientos_terreno/${idLevantamientoTerreno}/solicitar_edicion`, {});
+        return response.data;
+    } catch (error) {
+        console.error("Error al solicitar edicion de levantamiento en terreno:", error);
+        throw error;
+    }
+};
+
+export const resolverEdicionLevantamientoTerreno = async (idLevantamientoTerreno, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/levantamientos_terreno/${idLevantamientoTerreno}/resolver_edicion`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al resolver solicitud de edicion de levantamiento en terreno:", error);
+        throw error;
+    }
+};
+
 export const recepcionarRetiroEnBodega = async (idRetiroTerreno, payload = {}) => {
     try {
         const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/recepcionar_bodega`, payload);
@@ -1926,6 +1946,26 @@ export const eliminarRetiroTerreno = async (idRetiroTerreno) => {
         return response.data;
     } catch (error) {
         console.error("Error al eliminar retiro en terreno:", error);
+        throw error;
+    }
+};
+
+export const solicitarEdicionRetiroTerreno = async (idRetiroTerreno) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/solicitar_edicion`, {});
+        return response.data;
+    } catch (error) {
+        console.error("Error al solicitar edicion de retiro en terreno:", error);
+        throw error;
+    }
+};
+
+export const resolverEdicionRetiroTerreno = async (idRetiroTerreno, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/resolver_edicion`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al resolver solicitud de edicion de retiro en terreno:", error);
         throw error;
     }
 };

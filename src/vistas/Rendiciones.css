@@ -915,3 +915,80 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 1399.98px) {
+  .rendiciones-table thead th,
+  .rendiciones-table tbody td {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1199.98px) {
+  .rend-filtros-linea {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .filtro-item,
+  .filtro-periodo {
+    min-width: 200px;
+    flex: 1 1 200px;
+  }
+
+  .filtro-fecha {
+    min-width: 170px;
+    flex: 1 1 170px;
+  }
+
+  .detalle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 991.98px) {
+  .rendiciones-page .card {
+    border-radius: 12px;
+  }
+
+  .rendiciones-table {
+    min-width: 920px;
+  }
+
+  .preview-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .preview-title-block {
+    text-align: left;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .filtro-item,
+  .filtro-periodo,
+  .filtro-fecha {
+    min-width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-adj-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-totales {
+    width: 100%;
+  }
+
+  .kpi-value {
+    font-size: 1rem;
+  }
+}
