@@ -4,6 +4,7 @@ import {
   eliminarRendicion,
   obtenerActasEntrega,
   obtenerAbonosRendicion,
+  obtenerActividades,
   obtenerCentros,
   obtenerClientes,
   obtenerMantencionesTerreno,
@@ -145,13 +146,17 @@ const extractResumenCampos = (rendicion) => {
   };
 };
 
+const getActividadRendicion = (rendicion) => {
+  const resumen = extractResumenCampos(rendicion);
+  return resumen?.actividades || rendicion?.actividad_tipo || "-";
+};
+
 const extractTecnicosAsociados = (rendicion) => {
-  const fromNombre = String(rendicion?.tecnico_nombre || "").trim();
+  const tecnicoPrincipal = String(rendicion?.tecnico_nombre || "").trim();
   const descripcion = String(rendicion?.descripcion || "");
-  const line = descripcion
-    .split(/\r?\n/)
-    .map((l) => String(l || "").trim())
-    .find((l) => l.toLowerCase().startsWith("tecnicos asociados:"));
+  const lines = descripcion.split(/\r?\n/).map((l) => String(l || "").trim());
+  const line = lines.find((l) => normalizeText(l).startsWith("tecnicos asociados:"));
+  const jsonLine = lines.find((l) => normalizeText(l).startsWith("tecnicos asociados json:"));
   const fromLinea = line
     ? line
         .split(":")
@@ -161,8 +166,59 @@ const extractTecnicosAsociados = (rendicion) => {
         .map((x) => x.trim())
         .filter(Boolean)
     : [];
-  const all = [fromNombre, ...fromLinea].filter(Boolean);
+  let fromJson = [];
+  if (jsonLine) {
+    try {
+      const raw = jsonLine.split(":").slice(1).join(":").trim();
+      const parsed = JSON.parse(raw);
+      fromJson = Array.isArray(parsed) ? parsed.map((x) => String(x || "").trim()).filter(Boolean) : [];
+    } catch {
+      const raw = jsonLine.split(":").slice(1).join(":").trim();
+      const cleaned = raw.replace(/^\[|\]$/g, "");
+      fromJson = cleaned
+        .split(",")
+        .map((x) => String(x || "").replace(/["']/g, "").trim())
+        .filter(Boolean);
+    }
+  }
+  const principalNorm = normalizeText(tecnicoPrincipal);
+  const all = [...fromJson, ...fromLinea]
+    .filter(Boolean)
+    .filter((n) => normalizeText(n) !== principalNorm);
   return Array.from(new Set(all));
+};
+
+const extractTecnicosAsociadosDesdeActividad = (rendicion, actividades) => {
+  const actividadId = Number(rendicion?.actividad_id || 0) || 0;
+  if (!(actividadId > 0) || !Array.isArray(actividades) || !actividades.length) return [];
+  const actividad = actividades.find((a) => Number(a?.id_actividad || 0) === actividadId);
+  if (!actividad) return [];
+
+  const tecnicoPrincipal = normalizeText(rendicion?.tecnico_nombre || "");
+  const nombres = [];
+
+  const pushNombre = (val) => {
+    const nombre = String(val || "").trim();
+    if (!nombre) return;
+    if (tecnicoPrincipal && normalizeText(nombre) === tecnicoPrincipal) return;
+    nombres.push(nombre);
+  };
+
+  pushNombre(actividad?.encargado_ayudante?.nombre_encargado);
+  (Array.isArray(actividad?.tecnicos_asignados) ? actividad.tecnicos_asignados : []).forEach((t) =>
+    pushNombre(t?.nombre_encargado)
+  );
+
+  return Array.from(new Set(nombres));
+};
+
+const extractTecnicosAsociadosDesdeRegistro = (rendicion, tecnicosPorRegistro) => {
+  const tipo = normalizarTipo(rendicion?.actividad_tipo);
+  const actividadId = Number(rendicion?.actividad_id || 0) || 0;
+  if (!tipo || !(actividadId > 0) || !(tecnicosPorRegistro instanceof Map)) return [];
+  return Array.isArray(tecnicosPorRegistro.get(`${tipo}-${actividadId}`))
+    ? tecnicosPorRegistro.get(`${tipo}-${actividadId}`)
+    : [];
 };
 
 const normalizeText = (v) =>
@@ -246,6 +302,8 @@ export default function Rendiciones() {
   const [saldosTecnico, setSaldosTecnico] = useState([]);
   const [guardandoAbono, setGuardandoAbono] = useState(false);
   const [trabajosPendientes, setTrabajosPendientes] = useState([]);
+  const [actividades, setActividades] = useState([]);
+  const [tecnicosPorRegistro, setTecnicosPorRegistro] = useState(new Map());
   const [clientes, setClientes] = useState([]);
   const [centros, setCentros] = useState([]);
   const [clienteDetalle, setClienteDetalle] = useState(null);
@@ -293,9 +351,14 @@ export default function Rendiciones() {
 
   const cargarBase = async () => {
     try {
-      const [clientesData, centrosData] = await Promise.all([obtenerClientes(), obtenerCentros({ page: 1, per_page: 0 })]);
+      const [clientesData, centrosData, actividadesData] = await Promise.all([
+        obtenerClientes(),
+        obtenerCentros({ page: 1, per_page: 0 }),
+        obtenerActividades().catch(() => []),
+      ]);
       setClientes(Array.isArray(clientesData) ? clientesData : []);
       setCentros(Array.isArray(centrosData?.centros) ? centrosData.centros : []);
+      setActividades(Array.isArray(actividadesData) ? actividadesData : []);
     } catch (error) {
       console.error(error);
     }
@@ -350,6 +413,26 @@ export default function Rendiciones() {
         obtenerMantencionesTerreno().catch(() => []),
         obtenerRetirosTerreno().catch(() => []),
       ]);
+      const parseFirmasAdicionales = (raw) => {
+        if (!Array.isArray(raw)) return [];
+        return raw
+          .map((x) => {
+            if (typeof x === "string") return x.trim();
+            if (x && typeof x === "object") {
+              return String(x.nombre || x.tecnico || x.nombre_encargado || x.name || "").trim();
+            }
+            return "";
+          })
+          .filter(Boolean);
+      };
+
+      const buildTecnicos = (x) => {
+        const principal = String(x?.tecnico_1 || "").trim();
+        const ayudante = String(x?.tecnico_2 || "").trim();
+        const adicionales = parseFirmasAdicionales(x?.firmas_tecnicos_adicionales);
+        return Array.from(new Set([principal, ayudante, ...adicionales].filter(Boolean)));
+      };
+
       const trabajos = [
         ...(Array.isArray(actas) ? actas : []).map((x) => ({
           tipo: normalizarTipo(x?.tipo_instalacion || "instalacion"),
@@ -359,6 +442,7 @@ export default function Rendiciones() {
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
           fecha: x?.fecha_registro || x?.created_at || null,
+          tecnicos: buildTecnicos(x),
         })),
         ...(Array.isArray(mants) ? mants : []).map((x) => ({
           tipo: "mantencion",
@@ -368,6 +452,7 @@ export default function Rendiciones() {
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
           fecha: x?.fecha_ingreso || x?.created_at || null,
+          tecnicos: buildTecnicos(x),
         })),
         ...(Array.isArray(rets) ? rets : []).map((x) => ({
           tipo: "retiro",
@@ -377,8 +462,15 @@ export default function Rendiciones() {
           cliente_nombre: x?.cliente || x?.empresa || "",
           centro_nombre: x?.centro || "",
           fecha: x?.fecha_retiro || x?.created_at || null,
+          tecnicos: buildTecnicos(x),
         })),
       ].filter((t) => t.record_id > 0 && !!t.tipo);
+
+      const mapTecnicos = new Map();
+      trabajos.forEach((t) => {
+        mapTecnicos.set(`${t.tipo}-${t.record_id}`, Array.isArray(t.tecnicos) ? t.tecnicos : []);
+      });
+      setTecnicosPorRegistro(mapTecnicos);
 
       const rendidas = new Set();
       const rendidasCentro = new Set();
@@ -453,6 +545,22 @@ export default function Rendiciones() {
     });
   }, [rendiciones, categoria, tipoActividad]);
 
+  const rendicionesTabla = useMemo(() => {
+    const base = Array.isArray(rendicionesFiltradas) ? rendicionesFiltradas : [];
+    const solicitudes = (Array.isArray(rendicionesBase) ? rendicionesBase : []).filter((r) => {
+      const e = String(r?.estado || "").toLowerCase();
+      return e === "edicion_solicitada" || e === "edicion_autorizada";
+    });
+    const map = new Map();
+    [...solicitudes, ...base].forEach((r) => {
+      const id = Number(r?.id_rendicion || 0);
+      if (id > 0) map.set(id, r);
+    });
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b?.updated_at || b?.created_at || 0) - new Date(a?.updated_at || a?.created_at || 0)
+    );
+  }, [rendicionesFiltradas, rendicionesBase]);
+
   const tecnicosDisponibles = useMemo(() => {
     const out = new Map();
     (Array.isArray(saldosTecnico) ? saldosTecnico : []).forEach((s) => {
@@ -495,11 +603,8 @@ export default function Rendiciones() {
     () => (Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : []).filter((s) => calcularSaldoTecnico(s) > 0).length,
     [saldosTecnicoAgrupados]
   );
-  const rendidoPeriodo = useMemo(
-    () => (Array.isArray(rendicionesFiltradas) ? rendicionesFiltradas : []).reduce((acc, r) => acc + Number(r?.monto || 0), 0),
-    [rendicionesFiltradas]
-  );
-  const diferenciaConciliacion = useMemo(() => kpiAbonosPeriodo - rendidoPeriodo, [kpiAbonosPeriodo, rendidoPeriodo]);
+  // Conciliacion global (no depende de filtros de periodo): abonos acumulados - rendiciones enviadas acumuladas.
+  const diferenciaConciliacion = useMemo(() => Number(saldoGlobalTecnicos || 0), [saldoGlobalTecnicos]);
   const saldosTecnicoOrdenados = useMemo(
     () =>
       [...(Array.isArray(saldosTecnicoAgrupados) ? saldosTecnicoAgrupados : [])].sort((a, b) => {
@@ -622,17 +727,17 @@ export default function Rendiciones() {
   }, [abonosPage, abonosTotalPages]);
 
   useEffect(() => {
-    if (!rendicionesFiltradas.length) {
+    if (!rendicionesTabla.length) {
       setRendicionDetalle(null);
       setDetalleClosing(false);
       return;
     }
     setRendicionDetalle((prev) => {
       if (!prev) return null;
-      const vigente = rendicionesFiltradas.find((r) => r.id_rendicion === prev.id_rendicion);
+      const vigente = rendicionesTabla.find((r) => r.id_rendicion === prev.id_rendicion);
       return vigente || null;
     });
-  }, [rendicionesFiltradas]);
+  }, [rendicionesTabla]);
 
   const cancelarCierreDetalle = () => {
     if (detalleCloseTimerRef.current) {
@@ -766,11 +871,19 @@ export default function Rendiciones() {
           .totales .r:first-child{border-top:0}
           .totales .r span{text-align:right;font-weight:700}
           .adj-title{margin-top:12px;font-size:12px;font-weight:700;color:#4b6281;text-transform:uppercase}
-          .adj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+          .adj-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
           .adj-item{border:1px solid #dbe5f1;border-radius:8px;padding:8px}
           .adj-meta{font-size:11px;color:#475569;margin-bottom:4px;font-weight:600}
-          .adj-item img{width:100%;max-height:220px;object-fit:cover;border:1px solid #dbe5f1;border-radius:8px}
+          .adj-item img{width:100%;max-height:320px;object-fit:contain;border:1px solid #dbe5f1;border-radius:8px;background:#fff}
           .adj-empty{font-size:11px;color:#64748b}
+          .adj-page{page-break-before:always;break-before:page;margin-top:8px}
+          @media print{
+            body{margin:12px}
+            .adj-page{page-break-before:always;break-before:page}
+            .adj-item{break-inside:avoid;page-break-inside:avoid}
+            .adj-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+            .adj-item img{max-height:250px}
+          }
         </style>
       </head>
       <body>
@@ -803,13 +916,13 @@ export default function Rendiciones() {
           <tbody>${rowsHtml}</tbody>
         </table>
         <div class="totales">
-          <div class="r"><b>Total a rendir</b><span>${escHtml(totalRendirPrint)}</span></div>
+          <div class="r"><b>Monto asignado</b><span>${escHtml(totalRendirPrint)}</span></div>
           <div class="r"><b>Total gastos</b><span>${escHtml(totalGastosPrint)}</span></div>
           <div class="r"><b>Saldo</b><span>${escHtml(saldoPrint)}</span></div>
         </div>
         ${
           adjuntosHtml
-            ? `<div class="adj-title">Adjuntado</div><div class="adj-grid">${adjuntosHtml}</div>`
+            ? `<div class="adj-page"><div class="adj-title">Adjuntado</div><div class="adj-grid">${adjuntosHtml}</div></div>`
             : ""
         }
       </body>
@@ -823,8 +936,17 @@ export default function Rendiciones() {
     setTimeout(() => w.print(), 250);
   };
   const tecnicosAsociadosDetalle = useMemo(
-    () => (rendicionDetalle ? extractTecnicosAsociados(rendicionDetalle) : []),
-    [rendicionDetalle]
+    () => {
+      if (!rendicionDetalle) return [];
+      const fromDescripcion = extractTecnicosAsociados(rendicionDetalle);
+      const fromActividad = extractTecnicosAsociadosDesdeActividad(rendicionDetalle, actividades);
+      const fromRegistro = extractTecnicosAsociadosDesdeRegistro(rendicionDetalle, tecnicosPorRegistro);
+      const principalNorm = normalizeText(rendicionDetalle?.tecnico_nombre || "");
+      return Array.from(
+        new Set([...fromDescripcion, ...fromActividad, ...fromRegistro].filter((n) => normalizeText(n) !== principalNorm))
+      );
+    },
+    [rendicionDetalle, actividades, tecnicosPorRegistro]
   );
 
   const adjuntosDetalle = useMemo(() => {
@@ -1290,7 +1412,7 @@ export default function Rendiciones() {
                     </tr>
                   </thead>
                   <tbody>
-                    {!loading && rendicionesFiltradas.map((r) => (
+                    {!loading && rendicionesTabla.map((r) => (
                       <tr key={r.id_rendicion}>
                         <td>
                           <div className="gasto-id-cell">
@@ -1302,7 +1424,7 @@ export default function Rendiciones() {
                         <td>{r.tecnico_nombre || "-"}</td>
                         <td>{r.cliente_nombre || "-"}</td>
                         <td>{r.centro_nombre || "-"}</td>
-                        <td className="text-truncate" style={{ maxWidth: 220 }}>{r.descripcion || "-"}</td>
+                        <td className="text-truncate" style={{ maxWidth: 220 }}>{getActividadRendicion(r)}</td>
                         <td>{formatMoney(r.monto)}</td>
                         <td>
                           <span
@@ -1371,7 +1493,7 @@ export default function Rendiciones() {
                         </td>
                       </tr>
                     ))}
-                    {!loading && !rendicionesFiltradas.length && (
+                    {!loading && !rendicionesTabla.length && (
 	                      <tr><td colSpan={11} className="text-center text-muted py-4">Sin rendiciones para los filtros seleccionados.</td></tr>
                     )}
                     {loading && (
@@ -1390,6 +1512,8 @@ export default function Rendiciones() {
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <h6 className="mb-0">Detalle rendicion</h6>
                 <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                  <span className="badge badge-info">#{rendicionDetalle.id_rendicion}</span>
+                  <span className="actividad-chip">{rendicionDetalle.actividad_tipo || "-"}</span>
                   <button
                     type="button"
                     className="btn btn-sm btn-outline-secondary"
@@ -1404,8 +1528,6 @@ export default function Rendiciones() {
                   >
                     Cerrar
                   </button>
-                  <span className="badge badge-info">#{rendicionDetalle.id_rendicion}</span>
-                  <span className="actividad-chip">{rendicionDetalle.actividad_tipo || "-"}</span>
                 </div>
               </div>
                 <>
@@ -1414,8 +1536,6 @@ export default function Rendiciones() {
                     <div><strong>Tecnico</strong><span>{rendicionDetalle.tecnico_nombre || "-"}</span></div>
                     <div><strong>Cliente</strong><span>{rendicionDetalle.cliente_nombre || "-"}</span></div>
                     <div><strong>Centro</strong><span>{rendicionDetalle.centro_nombre || "-"}</span></div>
-                    <div><strong>Actividad</strong><span>{rendicionDetalle.actividad_tipo || "-"}</span></div>
-                    <div><strong>Categoria</strong><span>{rendicionDetalle.categoria || "-"}</span></div>
                     <div><strong>Estado</strong><span>{rendicionDetalle.estado || "-"}</span></div>
                     <div><strong>Monto</strong><span>{formatMoney(rendicionDetalle.monto)}</span></div>
                   </div>
@@ -1734,7 +1854,7 @@ export default function Rendiciones() {
               </div>
 
               <div className="preview-totales">
-                <div><b>Total a rendir</b><span>{resumenDescripcion.totalRendir ? formatMoney(parseMontoTexto(resumenDescripcion.totalRendir)) : "-"}</span></div>
+                <div><b>Monto asignado</b><span>{resumenDescripcion.totalRendir ? formatMoney(parseMontoTexto(resumenDescripcion.totalRendir)) : "-"}</span></div>
                 <div><b>Total gastos</b><span>{resumenDescripcion.totalGastos ? formatMoney(parseMontoTexto(resumenDescripcion.totalGastos)) : formatMoney(rendicionDetalle.monto)}</span></div>
                 <div><b>Saldo</b><span>{resumenDescripcion.saldo ? formatMoney(parseMontoTexto(resumenDescripcion.saldo)) : saldoDetalle !== null ? formatMoney(saldoDetalle) : "-"}</span></div>
               </div>
