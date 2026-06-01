@@ -12,16 +12,30 @@ import {
   crearInventarioBodegaEquipos,
   actualizarInventarioBodegaEquipo,
   eliminarInventarioBodegaEquipo,
+  obtenerUsuarios,
+  asignarInventarioBodegaATecnico,
+  devolverInventarioBodegaDesdeTecnico,
+  obtenerArmados,
+  obtenerMaterialesArmado,
+  obtenerEquipos,
+  obtenerMovimientosArmado,
 } from "../api";
 import "./BodegaRetiros.css";
 
 function formatDate(value) {
   if (!value) return "-";
+  const raw = String(value).trim();
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    // Evita desfase por zona horaria cuando la API envía fecha o fecha+hora ISO.
+    return `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}`;
+  }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
+  const usarUTC = /(?:gmt|utc|z|[+\-]\d{2}:?\d{2})/i.test(raw);
+  const dd = String(usarUTC ? d.getUTCDate() : d.getDate()).padStart(2, "0");
+  const mm = String((usarUTC ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, "0");
+  const yyyy = usarUTC ? d.getUTCFullYear() : d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
@@ -35,6 +49,15 @@ function formatDateTime(value) {
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
+function escHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 const CATALOGO_EQUIPOS_ARMADO = [
@@ -107,6 +130,8 @@ const CATALOGO_EQUIPOS_ARMADO = [
   "UPS online",
 ];
 
+const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
+
 export default function BodegaRetiros() {
   const [activeTab, setActiveTab] = useState("logistica");
   const [clientes, setClientes] = useState([]);
@@ -119,9 +144,25 @@ export default function BodegaRetiros() {
   const [observacionBodega, setObservacionBodega] = useState("");
   const [seleccionado, setSeleccionado] = useState(null);
   const [equiposRecepcion, setEquiposRecepcion] = useState([]);
-  const [usuario, setUsuario] = useState({ id: null, nombre: "Bodega" });
+  const [usuario, setUsuario] = useState({ id: null, nombre: "Bodega", rol: "" });
+  const [tecnicosSistema, setTecnicosSistema] = useState([]);
+  const [asignandoEquipoId, setAsignandoEquipoId] = useState(null);
+  const [tecnicoAsignacionId, setTecnicoAsignacionId] = useState("");
+  const [obsAsignacion, setObsAsignacion] = useState("");
+  const [equipoAsignacionModal, setEquipoAsignacionModal] = useState(null);
+  const [showAsignacionDirectaModal, setShowAsignacionDirectaModal] = useState(false);
+  const [equipoAsignacionDirectaId, setEquipoAsignacionDirectaId] = useState("");
+  const [mostrarTablaTransito, setMostrarTablaTransito] = useState(false);
+  const [mostrarTablaBodega, setMostrarTablaBodega] = useState(false);
+  const [mostrarTablaAsignaciones, setMostrarTablaAsignaciones] = useState(false);
+  const [mostrarTablaBajas, setMostrarTablaBajas] = useState(false);
+  const [mostrarTablaDespachos, setMostrarTablaDespachos] = useState(false);
   const [filtroHistorial, setFiltroHistorial] = useState("");
   const [filtroInventario, setFiltroInventario] = useState("");
+  const [filtroSerieBodega, setFiltroSerieBodega] = useState("");
+  const [filtroSerieBaja, setFiltroSerieBaja] = useState("");
+  const [filtroTecnicoAsignacion, setFiltroTecnicoAsignacion] = useState("");
+  const [filtroDespachoCentro, setFiltroDespachoCentro] = useState("");
   const [inventarioManual, setInventarioManual] = useState([]);
   const [showIngresoInventario, setShowIngresoInventario] = useState(false);
   const [inventarioEditandoId, setInventarioEditandoId] = useState(null);
@@ -152,6 +193,18 @@ export default function BodegaRetiros() {
   const [revisionEquiposArea, setRevisionEquiposArea] = useState([]);
   const [asignandoRevision, setAsignandoRevision] = useState(false);
   const [ordenesRevision, setOrdenesRevision] = useState([]);
+  const [armadosFinalizados, setArmadosFinalizados] = useState([]);
+  const [armadosSeguimiento, setArmadosSeguimiento] = useState([]);
+  const [guiasSalida, setGuiasSalida] = useState([]);
+  const [showGuiaModal, setShowGuiaModal] = useState(false);
+  const [armadoGuia, setArmadoGuia] = useState(null);
+  const [formGuia, setFormGuia] = useState({
+    numero_guia: "",
+    fecha_salida: new Date().toISOString().slice(0, 10),
+    observacion: "",
+  });
+  const [guiaCajasDetalle, setGuiaCajasDetalle] = useState([]);
+  const [loadingGuiaCajas, setLoadingGuiaCajas] = useState(false);
 
   const normalizeText = (value) =>
     String(value || "")
@@ -159,6 +212,23 @@ export default function BodegaRetiros() {
       .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+
+  const obtenerRevisionChecklistArmado = (armadoId) => {
+    const id = Number(armadoId || 0);
+    if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+    try {
+      const raw = localStorage.getItem(`orcagest_armado_checklist_v1_${id}`);
+      if (!raw) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+      const parsed = JSON.parse(raw);
+      const checks = parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {};
+      const done = Object.values(checks).filter((row) => !!String(row?.estado || "").trim()).length;
+      const total = CHECKLIST_ARMADO_TOTAL_ITEMS;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      return { done, total, pct };
+    } catch {
+      return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+    }
+  };
 
   const catalogoEquiposInventario = useMemo(() => {
     const base = new Set(CATALOGO_EQUIPOS_ARMADO);
@@ -175,9 +245,10 @@ export default function BodegaRetiros() {
       setUsuario({
         id: decoded.id || decoded.user_id || decoded.sub || null,
         nombre: decoded.name || decoded.nombre || decoded.email || "Bodega",
+        rol: String(decoded.role || decoded.rol || "").toLowerCase(),
       });
     } catch {
-      setUsuario({ id: null, nombre: "Bodega" });
+      setUsuario({ id: null, nombre: "Bodega", rol: "" });
     }
   }, []);
 
@@ -194,6 +265,24 @@ export default function BodegaRetiros() {
     localStorage.setItem("orcagest_bodega2_nombre_v1", String(bodega2Nombre || "Bodega 2").trim() || "Bodega 2");
   }, [bodega2Nombre]);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("orcagest_guias_salida_v1");
+      const data = JSON.parse(raw || "[]");
+      setGuiasSalida(Array.isArray(data) ? data : []);
+    } catch {
+      setGuiasSalida([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("orcagest_guias_salida_v1", JSON.stringify(guiasSalida || []));
+    } catch {
+      // noop
+    }
+  }, [guiasSalida]);
+
   const cargarInventarioManual = async () => {
     try {
       const data = await obtenerInventarioBodegaEquipos();
@@ -209,6 +298,33 @@ export default function BodegaRetiros() {
       setClientes(Array.isArray(data) ? data : []);
     } catch {
       setClientes([]);
+    }
+  };
+
+  const cargarTecnicos = async () => {
+    try {
+      const data = await obtenerUsuarios();
+      const lista = (Array.isArray(data) ? data : []).filter((u) => {
+        const rol = normalizeText(u?.rol || u?.role || "");
+        return rol === "tecnico" || rol === "supervisor";
+      });
+      setTecnicosSistema(lista);
+    } catch {
+      setTecnicosSistema([]);
+    }
+  };
+
+  const cargarArmadosFinalizados = async () => {
+    try {
+      const data = await obtenerArmados();
+      setArmadosSeguimiento(Array.isArray(data) ? data : []);
+      const lista = (Array.isArray(data) ? data : []).filter(
+        (a) => normalizeText(a?.estado || "") === "finalizado"
+      );
+      setArmadosFinalizados(lista);
+    } catch {
+      setArmadosSeguimiento([]);
+      setArmadosFinalizados([]);
     }
   };
 
@@ -248,6 +364,8 @@ export default function BodegaRetiros() {
   useEffect(() => {
     cargarClientes();
     cargarInventarioManual();
+    cargarTecnicos();
+    cargarArmadosFinalizados();
   }, []);
 
   useEffect(() => {
@@ -312,6 +430,16 @@ export default function BodegaRetiros() {
       }).length,
     [enBodega, revisionResumenPorRetiro]
   );
+
+  const enBodegaFiltrados = useMemo(() => {
+    const qSerie = normalizeText(filtroSerieBodega);
+    return (enBodega || []).filter((r) => {
+      const okSerie = !qSerie || (Array.isArray(r?.equipos) ? r.equipos : []).some((eq) =>
+        normalizeText(`${eq?.numero_serie || ""} ${eq?.codigo || ""}`).includes(qSerie)
+      );
+      return okSerie;
+    });
+  }, [enBodega, filtroSerieBodega]);
   const totalPendienteTransito = enTransito.length;
 
   const totalEquiposRetirados = (retiro) =>
@@ -506,6 +634,14 @@ export default function BodegaRetiros() {
       ubicacion: normalizarUbicacion(r.ubicacion),
       updated_at: r.updated_at || new Date().toISOString(),
       es_manual: true,
+      estado_asignacion: r.estado_asignacion || "en_bodega",
+      tecnico_asignado_id: r.tecnico_asignado_id || null,
+      tecnico_asignado_nombre: r.tecnico_asignado_nombre || "",
+      asignado_por_nombre: r.asignado_por_nombre || "",
+      fecha_asignacion: r.fecha_asignacion || null,
+      fecha_devolucion: r.fecha_devolucion || null,
+      observacion_asignacion: r.observacion_asignacion || "",
+      observacion_devolucion: r.observacion_devolucion || "",
     }));
 
     const base = (inventarioEquiposBase || []).map((r) => ({
@@ -538,6 +674,120 @@ export default function BodegaRetiros() {
     ).length;
     return { bCentral, bBaja, b2 };
   }, [inventarioEquipos, bodega2Nombre]);
+
+  const equiposAsignadosTecnicos = useMemo(
+    () =>
+      (inventarioEquipos || []).filter(
+        (x) => String(x?.estado_asignacion || "en_bodega").toLowerCase() === "asignado_tecnico"
+      ),
+    [inventarioEquipos]
+  );
+
+  const equiposAsignadosTecnicosFiltrados = useMemo(() => {
+    const q = normalizeText(filtroTecnicoAsignacion);
+    if (!q) return equiposAsignadosTecnicos;
+    return equiposAsignadosTecnicos.filter((x) =>
+      normalizeText(`${x?.tecnico_asignado_nombre || ""} ${x?.asignado_por_nombre || ""}`).includes(q)
+    );
+  }, [equiposAsignadosTecnicos, filtroTecnicoAsignacion]);
+
+  const equiposDisponiblesParaAsignar = useMemo(
+    () =>
+      (inventarioEquipos || []).filter(
+        (x) =>
+          !!x?.es_manual &&
+          Number(x?.id_bodega_equipo || 0) > 0 &&
+          String(x?.estado_asignacion || "en_bodega").toLowerCase() !== "asignado_tecnico"
+      ),
+    [inventarioEquipos]
+  );
+
+  const totalEquiposEnCentros = useMemo(
+    () =>
+      (inventarioEquipos || []).filter((x) => {
+        const centro = String(x?.centro || "-").trim();
+        const ubicacion = normalizeText(x?.ubicacion || "");
+        return centro && centro !== "-" && ubicacion !== "bodega central" && !ubicacion.includes("bodega");
+      }).length,
+    [inventarioEquipos]
+  );
+
+  const totalEquiposBaja = useMemo(
+    () =>
+      (inventarioEquipos || []).filter((x) => {
+        const estado = normalizeText(x?.estado_equipo || "");
+        const ubicacion = normalizeText(x?.ubicacion || "");
+        return estado.includes("baja") || ubicacion.includes("baja");
+      }).length,
+    [inventarioEquipos]
+  );
+
+  const equiposBaja = useMemo(
+    () =>
+      (inventarioEquipos || []).filter((x) => {
+        const estado = normalizeText(x?.estado_equipo || "");
+        const ubicacion = normalizeText(x?.ubicacion || "");
+        return estado.includes("baja") || ubicacion.includes("baja");
+      }),
+    [inventarioEquipos]
+  );
+
+  const equiposBajaFiltrados = useMemo(() => {
+    const q = normalizeText(filtroSerieBaja);
+    const clienteSel = clientes.find((c) => String(c.id_cliente ?? c.id) === String(clienteId || ""));
+    const centroSel = centros.find((c) => String(c.id_centro ?? c.id) === String(centroId || ""));
+    const clienteNombreSel = normalizeText(clienteSel?.nombre || clienteSel?.razon_social || "");
+    const centroNombreSel = normalizeText(centroSel?.nombre || "");
+
+    return equiposBaja.filter((x) => {
+      const clienteTxt = normalizeText(x?.cliente || x?.empresa || "");
+      const centroTxt = normalizeText(x?.centro || "");
+      const pasaCliente = !clienteId || (clienteNombreSel && clienteTxt.includes(clienteNombreSel));
+      const pasaCentro = !centroId || (centroNombreSel && centroTxt.includes(centroNombreSel));
+      const pasaSerie =
+        !q ||
+        normalizeText(`${x?.numero_serie || ""} ${x?.codigo || ""} ${x?.equipo_nombre || ""}`).includes(q);
+      return pasaCliente && pasaCentro && pasaSerie;
+    });
+  }, [equiposBaja, filtroSerieBaja, clientes, centros, clienteId, centroId]);
+
+  const guiaPorArmado = useMemo(() => {
+    const map = new Map();
+    (guiasSalida || []).forEach((g) => {
+      const id = Number(g?.armado_id || 0);
+      if (id) map.set(id, g);
+    });
+    return map;
+  }, [guiasSalida]);
+
+  const armadosDespachoFiltrados = useMemo(() => {
+    const q = normalizeText(filtroDespachoCentro);
+    return (armadosFinalizados || []).filter((a) => {
+      if (!q) return true;
+      const txt = normalizeText(`${a?.centro?.nombre || ""} ${a?.centro?.cliente || ""} ${a?.id_armado || ""}`);
+      return txt.includes(q);
+    });
+  }, [armadosFinalizados, filtroDespachoCentro]);
+
+  const totalDespachosEnTransitoCentro = useMemo(
+    () => (guiasSalida || []).filter((g) => normalizeText(g?.estado || "") === "en_transito_centro").length,
+    [guiasSalida]
+  );
+
+  const algunToggleLogisticaActivo =
+    mostrarTablaTransito || mostrarTablaBodega || mostrarTablaAsignaciones || mostrarTablaBajas || mostrarTablaDespachos;
+
+  const armadosSeguimientoResumen = useMemo(() => {
+    const lista = Array.isArray(armadosSeguimiento) ? armadosSeguimiento : [];
+    const enPreparacion = lista.filter((a) => normalizeText(a?.estado || "") !== "finalizado");
+    const listos = lista.filter((a) => normalizeText(a?.estado || "") === "finalizado");
+    return { enPreparacion, listos };
+  }, [armadosSeguimiento]);
+
+  const canGestionarAsignaciones = useMemo(() => {
+    const rol = String(usuario?.rol || "").toLowerCase();
+    return ["admin", "superadmin", "bodega", "operaciones", "almacen", "logistica", "logístico"].includes(rol);
+  }, [usuario]);
 
   const codigosExistentesSet = useMemo(() => {
     const set = new Set();
@@ -696,6 +946,370 @@ export default function BodegaRetiros() {
     }
   };
 
+  const asignarEquipoATecnico = async (row) => {
+    const id = Number(row?.id_bodega_equipo || 0);
+    const tecnicoId = Number(tecnicoAsignacionId || 0);
+    if (!id || !tecnicoId) {
+      alert("Selecciona un tecnico.");
+      return;
+    }
+    setAsignandoEquipoId(id);
+    try {
+      await asignarInventarioBodegaATecnico(id, {
+        tecnico_id: tecnicoId,
+        observacion: obsAsignacion || null,
+      });
+      setTecnicoAsignacionId("");
+      setObsAsignacion("");
+      await cargarInventarioManual();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo asignar el equipo.");
+    } finally {
+      setAsignandoEquipoId(null);
+    }
+  };
+
+  const devolverEquipoABodega = async (row) => {
+    const id = Number(row?.id_bodega_equipo || 0);
+    if (!id) return;
+    if (!window.confirm("Confirmar devolucion del equipo a bodega?")) return;
+    setAsignandoEquipoId(id);
+    try {
+      await devolverInventarioBodegaDesdeTecnico(id, {});
+      await cargarInventarioManual();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo devolver el equipo.");
+    } finally {
+      setAsignandoEquipoId(null);
+    }
+  };
+
+  const toggleSoloTransito = () => {
+    setMostrarTablaTransito((prev) => {
+      const next = !prev;
+      setMostrarTablaBodega(false);
+      setMostrarTablaAsignaciones(false);
+      setMostrarTablaBajas(false);
+      setMostrarTablaDespachos(false);
+      return next;
+    });
+  };
+
+  const toggleSoloBodega = () => {
+    setMostrarTablaBodega((prev) => {
+      const next = !prev;
+      setMostrarTablaTransito(false);
+      setMostrarTablaAsignaciones(false);
+      setMostrarTablaBajas(false);
+      setMostrarTablaDespachos(false);
+      return next;
+    });
+  };
+
+  const toggleSoloAsignaciones = () => {
+    setMostrarTablaAsignaciones((prev) => {
+      const next = !prev;
+      setMostrarTablaTransito(false);
+      setMostrarTablaBodega(false);
+      setMostrarTablaBajas(false);
+      setMostrarTablaDespachos(false);
+      return next;
+    });
+  };
+
+  const toggleSoloBajas = () => {
+    setMostrarTablaBajas((prev) => {
+      const next = !prev;
+      setMostrarTablaTransito(false);
+      setMostrarTablaBodega(false);
+      setMostrarTablaAsignaciones(false);
+      setMostrarTablaDespachos(false);
+      return next;
+    });
+  };
+
+  const toggleSoloDespachos = () => {
+    setMostrarTablaDespachos((prev) => {
+      const next = !prev;
+      setMostrarTablaTransito(false);
+      setMostrarTablaBodega(false);
+      setMostrarTablaAsignaciones(false);
+      setMostrarTablaBajas(false);
+      return next;
+    });
+  };
+
+  const abrirModalGuia = async (armado) => {
+    setArmadoGuia(armado);
+    setFormGuia({
+      numero_guia: `GS-${String(armado?.id_armado || "").padStart(4, "0")}`,
+      fecha_salida: new Date().toISOString().slice(0, 10),
+      observacion: "",
+    });
+    setLoadingGuiaCajas(true);
+    try {
+      const esCajaValida = (valor) => {
+        const raw = String(valor || "").trim();
+        const norm = normalizeText(raw);
+        if (!raw || !norm || norm === "sin caja") return false;
+        // Solo aceptar cajas reales: "Caja 1", "Caja 2", etc.
+        return /^caja\s*\d+/i.test(raw);
+      };
+      const [materiales, movimientos, equiposCentro] = await Promise.all([
+        obtenerMaterialesArmado(Number(armado?.id_armado || 0)),
+        obtenerMovimientosArmado(Number(armado?.id_armado || 0)),
+        obtenerEquipos(Number(armado?.centro_id || armado?.centro?.id_centro || 0)),
+      ]);
+      const grouped = {};
+      (Array.isArray(materiales) ? materiales : []).forEach((m) => {
+        const cajaRaw = String(m?.caja || "").trim();
+        if (!esCajaValida(cajaRaw)) return;
+        const qty = Number(m?.cantidad || 0);
+        if (qty <= 0) return;
+        const caja = cajaRaw;
+        if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
+        grouped[caja].materiales.push({
+          nombre: m?.nombre || "Item",
+          cantidad: qty,
+          serie: "",
+        });
+      });
+      // Equipos del armado: prioriza movimientos con caja válida (evita arrastrar "sin caja").
+      const vistos = new Set();
+      (Array.isArray(movimientos) ? movimientos : [])
+        .filter((m) => String(m?.tipo || "").toLowerCase() === "equipo" && Number(m?.cantidad || 0) > 0)
+        .forEach((m) => {
+          const cajaRaw = String(m?.caja || "").trim();
+          if (!esCajaValida(cajaRaw)) return;
+          const nombre = String(m?.nombre_item || "Equipo").trim();
+          const serie = String(m?.numero_serie || "").trim();
+          const key = `${cajaRaw}|${nombre}|${serie}`;
+          if (vistos.has(key)) return;
+          vistos.add(key);
+          const caja = cajaRaw;
+          if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
+          const extra = [serie ? `serie ${serie}` : ""].filter(Boolean).join(" · ");
+          grouped[caja].equipos.push({
+            nombre,
+            cantidad: Number(m?.cantidad || 0) || 1,
+            serie,
+          });
+        });
+      // Fallback: si no hay movimientos, usa equipos actuales del centro con caja válida.
+      if (!Object.values(grouped).some((x) => (x.equipos || []).length > 0)) {
+        (Array.isArray(equiposCentro) ? equiposCentro : []).forEach((e) => {
+          const cajaRaw = String(e?.caja || "").trim();
+          if (!esCajaValida(cajaRaw)) return;
+          const caja = cajaRaw;
+          if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
+          const serie = String(e?.numero_serie || "").trim();
+          const extra = [serie ? `serie ${serie}` : ""].filter(Boolean).join(" · ");
+          grouped[caja].equipos.push({
+            nombre: e?.nombre || "Equipo",
+            cantidad: 1,
+            serie,
+          });
+        });
+      }
+      const rows = Object.keys(grouped)
+        .sort((a, b) => a.localeCompare(b, "es", { numeric: true }))
+        .map((caja) => ({
+          caja,
+          materiales: grouped[caja]?.materiales || [],
+          equipos: grouped[caja]?.equipos || [],
+        }));
+      setGuiaCajasDetalle(rows);
+    } catch {
+      setGuiaCajasDetalle([]);
+    } finally {
+      setLoadingGuiaCajas(false);
+    }
+    setShowGuiaModal(true);
+  };
+
+  const guardarGuiaSalida = () => {
+    if (!armadoGuia?.id_armado) return;
+    const armadoId = Number(armadoGuia.id_armado);
+    const payload = {
+      armado_id: armadoId,
+      numero_guia: String(formGuia.numero_guia || "").trim() || `GS-${String(armadoId).padStart(4, "0")}`,
+      fecha_salida: formGuia.fecha_salida || new Date().toISOString().slice(0, 10),
+      observacion: String(formGuia.observacion || "").trim(),
+      estado: "en_transito_centro",
+      centro: armadoGuia?.centro?.nombre || "",
+      cliente: armadoGuia?.centro?.cliente || "",
+      updated_at: new Date().toISOString(),
+    };
+    setGuiasSalida((prev) => {
+      const sinActual = (prev || []).filter((g) => Number(g?.armado_id || 0) !== armadoId);
+      return [payload, ...sinActual];
+    });
+    setShowGuiaModal(false);
+    setArmadoGuia(null);
+  };
+
+  const marcarRecepcionCentro = (armadoId) => {
+    setGuiasSalida((prev) =>
+      (prev || []).map((g) =>
+        Number(g?.armado_id || 0) === Number(armadoId)
+          ? { ...g, estado: "recepcionado_en_centro", updated_at: new Date().toISOString() }
+          : g
+      )
+    );
+  };
+
+  const imprimirGuiaSalida = () => {
+    if (!armadoGuia) return;
+    const numeroGuia = String(formGuia.numero_guia || `GS-${String(armadoGuia.id_armado || "").padStart(4, "0")}`);
+    const fechaSalida = formGuia.fecha_salida || new Date().toISOString().slice(0, 10);
+    const cliente = armadoGuia?.centro?.cliente || "-";
+    const centro = armadoGuia?.centro?.nombre || "-";
+    const tecnico = armadoGuia?.tecnico?.nombre || "-";
+    const totalCajas = Number((guiaCajasDetalle || []).length || 0);
+    const observacion = String(formGuia.observacion || "").trim() || "-";
+    const detalleCajasHtml = (guiaCajasDetalle || []).length
+      ? guiaCajasDetalle
+          .map((row) => {
+            const mats = (row.materiales || []).map((it) => `<li>${escHtml(it.nombre)} x${escHtml(it.cantidad)}</li>`).join("");
+            const eqs = (row.equipos || [])
+              .map((it) => {
+                const serieTxt = String(it?.serie || "").trim();
+                return `<li>${escHtml(it.nombre)} x${escHtml(it.cantidad)}${serieTxt ? ` · N° Serie: ${escHtml(serieTxt)}` : ""}</li>`;
+              })
+              .join("");
+            const totalEquipos = (row.equipos || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
+            const totalMateriales = (row.materiales || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
+            const totalItems = totalEquipos + totalMateriales;
+            return `<tr>
+              <td>${escHtml(row.caja)}</td>
+              <td>
+                <div><b>Total:</b> ${escHtml(totalItems)}</div>
+                <div><b>Equipos:</b> ${escHtml(totalEquipos)}</div>
+                <div><b>Materiales:</b> ${escHtml(totalMateriales)}</div>
+              </td>
+              <td>
+                <div><b>Equipos:</b>${eqs ? `<ul style="margin:4px 0 0 16px;padding:0;">${eqs}</ul>` : " -"}</div>
+                ${mats ? `<div style="margin-top:6px;"><b>Materiales:</b><ul style="margin:4px 0 0 16px;padding:0;">${mats}</ul></div>` : ""}
+              </td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="3">Sin detalle de contenido registrado.</td></tr>`;
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Guia de salida ${escHtml(numeroGuia)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 26px; color: #0f172a; }
+          .doc { border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+          .head { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; padding: 14px 16px; background: #eff6ff; border-bottom: 1px solid #cbd5e1; align-items: center; }
+          .title { font-weight: 800; font-size: 18px; color: #1e3a8a; }
+          .meta { font-size: 12px; color: #334155; margin-top: 3px; }
+          .orca { font-size: 12px; text-align: right; line-height: 1.3; }
+          .orca-logo { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+          .orca-row { display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid #93c5fd; }
+          .orca-cell { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; background: #2563eb; color: #fff; font-weight: 800; font-size: 11px; border-right: 1px solid rgba(255,255,255,0.35); }
+          .orca-cell:last-child { border-right: 0; }
+          .orca-sub { font-size: 10px; letter-spacing: .14em; color: #1e40af; font-weight: 700; text-transform: uppercase; }
+          .body { padding: 14px 16px; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+          .field { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+          .field b { display: block; font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 3px; }
+          .section-title { margin: 14px 0 8px; font-weight: 700; color: #1e3a8a; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th, td { border: 1px solid #cbd5e1; padding: 7px 8px; text-align: left; }
+          th { background: #f1f5f9; color: #334155; }
+          .foot { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+          .sign { border-top: 1px solid #94a3b8; padding-top: 8px; text-align: center; font-size: 12px; color: #475569; min-height: 40px; }
+        </style>
+      </head>
+      <body>
+        <div class="doc">
+          <div class="head">
+            <div class="orca-logo">
+              <div class="orca-row">
+                <div class="orca-cell">O</div>
+                <div class="orca-cell">R</div>
+                <div class="orca-cell">C</div>
+                <div class="orca-cell">A</div>
+              </div>
+              <div class="orca-sub">Tecnologia</div>
+            </div>
+            <div>
+              <div class="title">GUIA DE SALIDA A CENTRO</div>
+              <div class="meta">N° guia: ${escHtml(numeroGuia)}</div>
+              <div class="meta">Fecha salida: ${escHtml(formatDate(fechaSalida))}</div>
+            </div>
+            <div class="orca">
+              <b>Orca Tecnologia</b><br/>
+              Via Azul N° 1051<br/>
+              Puerto Montt
+            </div>
+          </div>
+          <div class="body">
+            <div class="grid">
+              <div class="field"><b>ID armado</b>${escHtml(armadoGuia.id_armado)}</div>
+              <div class="field"><b>Total cajas con contenido</b>${escHtml(totalCajas)}</div>
+              <div class="field"><b>Cliente</b>${escHtml(cliente)}</div>
+              <div class="field"><b>Centro destino</b>${escHtml(centro)}</div>
+              <div class="field"><b>Tecnico encargado</b>${escHtml(tecnico)}</div>
+              <div class="field"><b>Estado</b>En transito a centro</div>
+            </div>
+            <div class="section-title">Observacion de despacho</div>
+            <div class="field">${escHtml(observacion)}</div>
+            <div class="section-title">Detalle</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Caja</th>
+                  <th>Cantidad</th>
+                  <th>Contenido</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${detalleCajasHtml}
+              </tbody>
+            </table>
+            <div class="foot">
+              <div class="sign">Firma bodega</div>
+              <div class="sign">Recepcion centro</div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch {
+            // noop
+          }
+        }, 800);
+      }
+    }, 250);
+  };
+
   return (
     <div className="container-fluid py-3 bodega-page">
       <div className="card shadow-sm border-0 mb-3 bodega-hero">
@@ -763,58 +1377,276 @@ export default function BodegaRetiros() {
       </div>
       {activeTab === "logistica" && (
       <>
-      <div className="card shadow-sm border-0 mb-3 bodega-filtros">
-        <div className="card-body">
-          <div className="row g-2">
-            <div className="col-md-4">
-              <label className="form-label">Cliente</label>
-              <select className="form-control" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
-                <option value="">Todos</option>
-                {clientes.map((c) => {
-                  const id = c.id_cliente ?? c.id;
-                  return (
-                    <option key={id} value={id}>
-                      {c.nombre || c.razon_social || `Cliente ${id}`}
-                    </option>
-                  );
-                })}
-              </select>
+      <div className="row g-3 mb-3 bodega-toggle-grid">
+        <div className="col-12 col-md-6 col-lg">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-transito ${mostrarTablaTransito ? "active" : ""}`}
+            onClick={toggleSoloTransito}
+          >
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Logistica</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-truck-loading mr-2 text-primary" />
+                  En transito
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{enTransito.length}</div>
+                <small className="text-muted">{mostrarTablaTransito ? "Ocultar tabla" : "Ver tabla"}</small>
+              </div>
             </div>
-            <div className="col-md-4">
-              <label className="form-label">Centro</label>
-              <select
-                className="form-control"
-                value={centroId}
-                onChange={(e) => setCentroId(e.target.value)}
-                disabled={!clienteId}
-              >
-                <option value="">Todos</option>
-                {centros.map((c) => {
-                  const id = c.id_centro ?? c.id;
-                  return (
-                    <option key={id} value={id}>
-                      {c.nombre || `Centro ${id}`}
-                    </option>
-                  );
-                })}
-              </select>
+          </button>
+        </div>
+        <div className="col-12 col-md-6 col-lg">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-despacho ${mostrarTablaDespachos ? "active" : ""}`}
+            onClick={toggleSoloDespachos}
+          >
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Despachos</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-shipping-fast mr-2 text-primary" />
+                  A centro
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{totalDespachosEnTransitoCentro}</div>
+                <small className="text-muted">{mostrarTablaDespachos ? "Ocultar tabla" : "Ver tabla"}</small>
+              </div>
             </div>
-            <div className="col-md-4 d-flex align-items-end">
-              <button className="btn btn-outline-primary w-100" onClick={cargarRetiros}>
-                Recargar
-              </button>
+          </button>
+        </div>
+        <div className="col-12 col-md-6 col-lg">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-asignacion ${mostrarTablaAsignaciones ? "active" : ""}`}
+            onClick={toggleSoloAsignaciones}
+          >
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Asignaciones</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-user-cog mr-2 text-info" />
+                  Tecnicos
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{equiposAsignadosTecnicos.length}</div>
+                <small className="text-muted">{mostrarTablaAsignaciones ? "Ocultar tabla" : "Ver tabla"}</small>
+              </div>
+            </div>
+          </button>
+        </div>
+        <div className="col-12 col-md-6 col-lg">
+          <div className="btn w-100 text-left bodega-toggle-card bodega-toggle-centros">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Operación</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-broadcast-tower mr-2 text-primary" />
+                  Equipos trabajando
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{totalEquiposEnCentros}</div>
+                <small className="text-muted">Instalados</small>
+              </div>
             </div>
           </div>
         </div>
+        <div className="col-12 col-md-6 col-lg">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-bodega ${mostrarTablaBodega ? "active" : ""}`}
+            onClick={toggleSoloBodega}
+          >
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Recepción</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-warehouse mr-2 text-success" />
+                  En bodega
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{enBodega.length}</div>
+                <small className="text-muted">{mostrarTablaBodega ? "Ocultar tabla" : "Ver tabla"}</small>
+              </div>
+            </div>
+          </button>
+        </div>
+        <div className="col-12 col-md-6 col-lg">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-baja ${mostrarTablaBajas ? "active" : ""}`}
+            onClick={toggleSoloBajas}
+          >
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="small text-uppercase text-muted">Control</div>
+                <div className="h5 mb-0">
+                  <i className="fas fa-exclamation-triangle mr-2 text-danger" />
+                  Equipos de baja
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="h4 mb-0">{totalEquiposBaja}</div>
+                <small className="text-muted">{mostrarTablaBajas ? "Ocultar tabla" : "Ver tabla"}</small>
+              </div>
+            </div>
+          </button>
+        </div>
       </div>
 
+      {!algunToggleLogisticaActivo ? (
+      <div className="card shadow-sm border-0 mb-3 bodega-tabla bodega-seguimiento-armado">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+          <strong>
+            <i className="fas fa-tools mr-2 text-primary" />
+            Armados en seguimiento
+          </strong>
+          <div className="d-flex align-items-center" style={{ gap: 8 }}>
+            <span className="badge badge-info">En preparación: {armadosSeguimientoResumen.enPreparacion.length}</span>
+            <span className="badge badge-success">Listos despacho: {armadosSeguimientoResumen.listos.length}</span>
+            <button className="btn btn-outline-primary btn-sm" onClick={cargarArmadosFinalizados}>
+              <i className="fas fa-sync-alt mr-1" />
+              Actualizar
+            </button>
+          </div>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-sm mb-0 bodega-table">
+              <thead className="thead-light">
+                <tr>
+                  <th>ID armado</th>
+                  <th>Cliente</th>
+                  <th>Centro</th>
+                  <th>Técnico encargado</th>
+                  <th>Inicio</th>
+                  <th>Término</th>
+                  <th>Armado</th>
+                  <th>Revisión checklist</th>
+                  <th className="text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!armadosSeguimiento.length ? (
+                  <tr>
+	                    <td colSpan={9} className="text-center py-3 text-muted">
+                      Sin armados para seguimiento.
+                    </td>
+                  </tr>
+                ) : (
+                  armadosSeguimiento.slice(0, 8).map((a) => {
+                    const finalizado = normalizeText(a?.estado || "") === "finalizado";
+                    const progresoChecklist = obtenerRevisionChecklistArmado(a?.id_armado || a?.id);
+                    const revision = Math.max(0, Math.min(100, Number(progresoChecklist?.pct || 0)));
+                    return (
+                      <tr key={`seg-arm-${a.id_armado}`}>
+                        <td>{a.id_armado}</td>
+                        <td>{a?.centro?.cliente || "-"}</td>
+                        <td>{a?.centro?.nombre || "-"}</td>
+                        <td>{a?.tecnico?.nombre || "-"}</td>
+                        <td>{formatDate(a?.fecha_inicio || a?.fecha_asignacion)}</td>
+                        <td>{formatDate(a?.fecha_cierre)}</td>
+                        <td>
+                          {finalizado ? (
+                            <span className="badge badge-success">Finalizado</span>
+                          ) : (
+                            <span className="badge badge-info">En preparación</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                            <div className="progress flex-grow-1" style={{ height: 8, minWidth: 120 }}>
+                              <div
+                                className={`progress-bar ${finalizado ? "bg-success" : "bg-info"}`}
+                                role="progressbar"
+                                style={{ width: `${revision}%` }}
+                                aria-valuenow={revision}
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                              />
+                            </div>
+                            {revision >= 100 ? (
+                              <span className="badge badge-success">{revision}%</span>
+                            ) : revision >= 70 ? (
+                              <span className="badge badge-primary">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                            ) : revision >= 40 ? (
+                              <span className="badge badge-warning">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                            ) : (
+                              <span className="badge badge-danger">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center">
+                          {finalizado ? (
+                            <button className="btn btn-sm btn-outline-primary" onClick={toggleSoloDespachos}>
+                              <i className="fas fa-shipping-fast mr-1" />
+                              Ir a despachos
+                            </button>
+                          ) : (
+                            <span className="text-muted">Seguimiento</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      ) : null}
 
+
+      {mostrarTablaTransito ? (
       <div className="card shadow-sm border-0 mb-3 bodega-tabla bodega-tabla-transito">
         <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
           <strong>
             <i className="fas fa-truck-loading mr-2 text-primary" />
             En transito ({enTransito.length})
           </strong>
+          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+            <select className="form-control form-control-sm d-inline-block" style={{ width: 190 }} value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+              <option value="">Cliente: todos</option>
+              {clientes.map((c) => {
+                const id = c.id_cliente ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || c.razon_social || `Cliente ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 190 }}
+              value={centroId}
+              onChange={(e) => setCentroId(e.target.value)}
+              disabled={!clienteId}
+            >
+              <option value="">Centro: todos</option>
+              {centros.map((c) => {
+                const id = c.id_centro ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || `Centro ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <button className="btn btn-outline-primary btn-sm" onClick={cargarRetiros}>
+              <i className="fas fa-sync-alt mr-1" />
+              Recargar
+            </button>
+          </div>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -886,13 +1718,56 @@ export default function BodegaRetiros() {
           </div>
         </div>
       </div>
+      ) : null}
 
+      {mostrarTablaBodega ? (
       <div className="card shadow-sm border-0 bodega-tabla">
         <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
           <strong>
             <i className="fas fa-warehouse mr-2 text-success" />
-            En bodega ({enBodega.length})
+            En bodega ({enBodegaFiltrados.length})
           </strong>
+          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+            <select className="form-control form-control-sm d-inline-block" style={{ width: 190 }} value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+              <option value="">Cliente: todos</option>
+              {clientes.map((c) => {
+                const id = c.id_cliente ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || c.razon_social || `Cliente ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 190 }}
+              value={centroId}
+              onChange={(e) => setCentroId(e.target.value)}
+              disabled={!clienteId}
+            >
+              <option value="">Centro: todos</option>
+              {centros.map((c) => {
+                const id = c.id_centro ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || `Centro ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <input
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 190 }}
+              placeholder="Buscar N° serie / código"
+              value={filtroSerieBodega}
+              onChange={(e) => setFiltroSerieBodega(e.target.value)}
+            />
+            <button className="btn btn-outline-primary btn-sm" onClick={cargarRetiros}>
+              <i className="fas fa-sync-alt mr-1" />
+              Recargar
+            </button>
+          </div>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -910,14 +1785,14 @@ export default function BodegaRetiros() {
                 </tr>
               </thead>
               <tbody>
-                {!enBodega.length ? (
+                {!enBodegaFiltrados.length ? (
                   <tr>
                     <td colSpan={8} className="text-center py-3 text-muted">
-                      Sin retiros recepcionados en bodega.
+                      Sin retiros recepcionados en bodega para los filtros actuales.
                     </td>
                   </tr>
                 ) : (
-                  enBodega.map((r) => (
+                  enBodegaFiltrados.map((r) => (
                     <tr key={r.id_retiro_terreno}>
                       <td>{r.id_retiro_terreno}</td>
                       <td>{`N${r.id_retiro_terreno || "-"}`}</td>
@@ -974,6 +1849,270 @@ export default function BodegaRetiros() {
           </div>
         </div>
       </div>
+      ) : null}
+
+      {mostrarTablaAsignaciones ? (
+      <div className="card shadow-sm border-0 mt-3 bodega-tabla">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+          <strong>
+            <i className="fas fa-user-cog mr-2 text-info" />
+            Asignaciones a tecnicos ({equiposAsignadosTecnicos.length})
+          </strong>
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: 6 }}>
+            <input
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 220 }}
+              placeholder="Buscar por tecnico"
+              value={filtroTecnicoAsignacion}
+              onChange={(e) => setFiltroTecnicoAsignacion(e.target.value)}
+            />
+            {canGestionarAsignaciones ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEquipoAsignacionDirectaId("");
+                  setTecnicoAsignacionId("");
+                  setObsAsignacion("");
+                  setShowAsignacionDirectaModal(true);
+                }}
+              >
+                <i className="fas fa-user-plus mr-1" />
+                Asignar equipos a tecnicos
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-sm mb-0 bodega-table">
+              <thead className="thead-light">
+                <tr>
+                  <th>N° serie</th>
+                  <th>Código</th>
+                  <th>Equipo</th>
+                  <th>Tecnico</th>
+                  <th>Fecha asignacion</th>
+                  <th>Asignado por</th>
+                  <th>Observacion</th>
+                  <th className="text-center">Accion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!equiposAsignadosTecnicosFiltrados.length ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-3 text-muted">
+                      Sin equipos asignados para el filtro actual.
+                    </td>
+                  </tr>
+                ) : (
+                  equiposAsignadosTecnicosFiltrados.map((x, idx) => (
+                    <tr key={`asg-${x.id_bodega_equipo || idx}`}>
+                      <td>{x.numero_serie || "-"}</td>
+                      <td>{x.codigo || "-"}</td>
+                      <td>{x.equipo_nombre || "-"}</td>
+                      <td>{x.tecnico_asignado_nombre || "-"}</td>
+                      <td>{formatDateTime(x.fecha_asignacion)}</td>
+                      <td>{x.asignado_por_nombre || "-"}</td>
+                      <td>{x.observacion_asignacion || "-"}</td>
+                      <td className="text-center">
+                        {canGestionarAsignaciones ? (
+                          <button
+                            className="btn btn-outline-success btn-sm"
+                            disabled={asignandoEquipoId === Number(x.id_bodega_equipo || 0)}
+                            onClick={() => devolverEquipoABodega(x)}
+                          >
+                            <i className="fas fa-undo mr-1" />
+                            Devolver
+                          </button>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      ) : null}
+
+      {mostrarTablaBajas ? (
+      <div className="card shadow-sm border-0 mt-3 bodega-tabla">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+          <strong>
+            <i className="fas fa-exclamation-triangle mr-2 text-danger" />
+            Equipos de baja ({equiposBajaFiltrados.length})
+          </strong>
+          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+            <select className="form-control form-control-sm d-inline-block" style={{ width: 190 }} value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+              <option value="">Cliente: todos</option>
+              {clientes.map((c) => {
+                const id = c.id_cliente ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || c.razon_social || `Cliente ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 190 }}
+              value={centroId}
+              onChange={(e) => setCentroId(e.target.value)}
+              disabled={!clienteId}
+            >
+              <option value="">Centro: todos</option>
+              {centros.map((c) => {
+                const id = c.id_centro ?? c.id;
+                return (
+                  <option key={id} value={id}>
+                    {c.nombre || `Centro ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+            <input
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 190 }}
+              placeholder="Buscar N° serie / código"
+              value={filtroSerieBaja}
+              onChange={(e) => setFiltroSerieBaja(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-sm mb-0 bodega-table">
+              <thead className="thead-light">
+                <tr>
+                  <th>N° serie</th>
+                  <th>Código</th>
+                  <th>Equipo</th>
+                  <th>Modelo</th>
+                  <th>Ubicación</th>
+                  <th>Estado</th>
+                  <th>Últ. actualización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!equiposBajaFiltrados.length ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-3 text-muted">
+                      Sin equipos de baja para los filtros actuales.
+                    </td>
+                  </tr>
+                ) : (
+                  equiposBajaFiltrados.map((x, idx) => (
+                    <tr key={`baja-${x.id_bodega_equipo || x.id_retiro_equipo || idx}`}>
+                      <td>{x.numero_serie || "-"}</td>
+                      <td>{x.codigo || "-"}</td>
+                      <td>{x.equipo_nombre || "-"}</td>
+                      <td>{x.modelo || "-"}</td>
+                      <td>{x.ubicacion || "-"}</td>
+                      <td><span className="badge badge-danger">{x.estado_equipo || "No operativo / baja"}</span></td>
+                      <td>{formatDateTime(x.updated_at)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      ) : null}
+
+      {mostrarTablaDespachos ? (
+      <div className="card shadow-sm border-0 mt-3 bodega-tabla">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+          <strong>
+            <i className="fas fa-shipping-fast mr-2 text-primary" />
+            Despachos a centro ({armadosDespachoFiltrados.length})
+          </strong>
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: 6 }}>
+            <input
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 260 }}
+              placeholder="Buscar centro / cliente / ID armado"
+              value={filtroDespachoCentro}
+              onChange={(e) => setFiltroDespachoCentro(e.target.value)}
+            />
+            <button className="btn btn-outline-primary btn-sm" onClick={cargarArmadosFinalizados}>
+              <i className="fas fa-sync-alt mr-1" />
+              Recargar
+            </button>
+          </div>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-sm mb-0 bodega-table">
+              <thead className="thead-light">
+                <tr>
+                  <th>ID armado</th>
+                  <th>Cliente</th>
+                  <th>Centro</th>
+                  <th>Fecha cierre</th>
+                  <th>Total cajas</th>
+                  <th>Guía salida</th>
+                  <th>Estado despacho</th>
+                  <th className="text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!armadosDespachoFiltrados.length ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-3 text-muted">
+                      Sin armados finalizados para despacho.
+                    </td>
+                  </tr>
+                ) : (
+                  armadosDespachoFiltrados.map((a) => {
+                    const guia = guiaPorArmado.get(Number(a?.id_armado || 0));
+                    const estado = normalizeText(guia?.estado || "");
+                    return (
+                      <tr key={`desp-${a.id_armado}`}>
+                        <td>{a.id_armado}</td>
+                        <td>{a?.centro?.cliente || "-"}</td>
+                        <td>{a?.centro?.nombre || "-"}</td>
+                        <td>{formatDate(a.fecha_cierre || a.fecha_inicio || a.fecha_asignacion)}</td>
+                        <td>{a.total_cajas || 0}</td>
+                        <td>{guia?.numero_guia || "-"}</td>
+                        <td>
+                          {!guia ? (
+                            <span className="badge badge-secondary">Pendiente guía</span>
+                          ) : estado === "recepcionado_en_centro" ? (
+                            <span className="badge badge-success">Recepcionado en centro</span>
+                          ) : (
+                            <span className="badge badge-warning">En tránsito a centro</span>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          {!guia ? (
+                            <button className="btn btn-sm btn-primary" onClick={() => abrirModalGuia(a)}>
+                              <i className="fas fa-file-export mr-1" />
+                              Generar guía
+                            </button>
+                          ) : estado !== "recepcionado_en_centro" ? (
+                            <button className="btn btn-sm btn-outline-success" onClick={() => marcarRecepcionCentro(a.id_armado)}>
+                              <i className="fas fa-check mr-1" />
+                              Marcar recepción
+                            </button>
+                          ) : (
+                            <span className="text-muted">Completado</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      ) : null}
       </>
       )}
 
@@ -1064,6 +2203,7 @@ export default function BodegaRetiros() {
                   <th>Cliente</th>
                   <th>Centro</th>
                   <th>Estado equipo</th>
+                  <th>Asignación</th>
                   <th>Ubicación actual</th>
                   <th>Últ. actualización</th>
                   <th className="text-center">Acción</th>
@@ -1072,7 +2212,7 @@ export default function BodegaRetiros() {
               <tbody>
                 {!inventarioEquipos.length ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-3 text-muted">
+                    <td colSpan={10} className="text-center py-3 text-muted">
                       Sin equipos para el filtro actual.
                     </td>
                   </tr>
@@ -1095,11 +2235,44 @@ export default function BodegaRetiros() {
                           <span className="badge badge-secondary">{r.estado_equipo}</span>
                         )}
                       </td>
+                      <td>
+                        {String(r.estado_asignacion || "en_bodega").toLowerCase() === "asignado_tecnico" ? (
+                          <span className="badge badge-info">
+                            Asignado: {r.tecnico_asignado_nombre || "Tecnico"}
+                          </span>
+                        ) : (
+                          <span className="badge badge-secondary">En bodega</span>
+                        )}
+                      </td>
                       <td>{r.ubicacion || "-"}</td>
                       <td>{formatDateTime(r.updated_at)}</td>
                       <td className="text-center">
                         {r.es_manual ? (
                           <div className="d-inline-flex" style={{ gap: 6 }}>
+                            {canGestionarAsignaciones && Number(r.id_bodega_equipo || 0) > 0 && String(r.estado_asignacion || "en_bodega").toLowerCase() !== "asignado_tecnico" ? (
+                              <button
+                                className="btn btn-sm btn-primary"
+                                title="Asignar a tecnico"
+                                onClick={() => {
+                                  setEquipoAsignacionModal(r);
+                                  setTecnicoAsignacionId("");
+                                  setObsAsignacion("");
+                                }}
+                              >
+                                <i className="fas fa-user-plus mr-1" />
+                                Asignar
+                              </button>
+                            ) : null}
+                            {canGestionarAsignaciones && String(r.estado_asignacion || "en_bodega").toLowerCase() === "asignado_tecnico" ? (
+                              <button
+                                className="btn btn-outline-success btn-sm"
+                                title="Devolver a bodega"
+                                onClick={() => devolverEquipoABodega(r)}
+                              >
+                                <i className="fas fa-undo mr-1" />
+                                Devolver
+                              </button>
+                            ) : null}
                             <button
                               className="btn btn-outline-warning btn-sm"
                               title="Editar"
@@ -1283,7 +2456,7 @@ export default function BodegaRetiros() {
 
       {seleccionado ? (
         <div className="modal d-block" tabIndex="-1" role="dialog">
-          <div className="modal-dialog" role="document">
+          <div className="modal-dialog modal-lg modal-dialog-scrollable" role="document">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Recepcionar en bodega</h5>
@@ -1298,7 +2471,7 @@ export default function BodegaRetiros() {
                   <span>&times;</span>
                 </button>
               </div>
-              <div className="modal-body">
+              <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
                 <p className="mb-2">
                   <strong>{seleccionado.centro || "-"}</strong> ({seleccionado.empresa || seleccionado.cliente || "-"})
                 </p>
@@ -2097,6 +3270,304 @@ export default function BodegaRetiros() {
                 >
                   <i className={`bi ${inventarioEditandoId ? "bi-save2" : "bi-plus-circle"} mr-1`} />
                   {inventarioEditandoId ? "Guardar cambios" : "Guardar equipo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {equipoAsignacionModal ? (
+        <div className="modal d-block" tabIndex="-1" role="dialog">
+          <div className="modal-dialog" role="document">
+            <div className="modal-content bodega-inv-modal">
+              <div className="modal-header bodega-inv-modal-header">
+                <h5 className="modal-title bodega-inv-modal-title">
+                  <i className="fas fa-user-plus" />
+                  Asignar equipo a tecnico
+                </h5>
+                <button type="button" className="close" onClick={() => setEquipoAsignacionModal(null)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body bodega-inv-modal-body">
+                <div className="bodega-inv-block">
+                  <div className="small text-muted mb-2">
+                    <strong>{equipoAsignacionModal.equipo_nombre || "-"}</strong> · Serie:{" "}
+                    {equipoAsignacionModal.numero_serie || "-"} · Código: {equipoAsignacionModal.codigo || "-"}
+                  </div>
+                  <div className="form-group">
+                    <label>Tecnico</label>
+                    <select
+                      className="form-control"
+                      value={tecnicoAsignacionId}
+                      onChange={(e) => setTecnicoAsignacionId(e.target.value)}
+                    >
+                      <option value="">Seleccionar tecnico...</option>
+                      {tecnicosSistema.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name || u.nombre || u.email || `User ${u.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group mb-0">
+                    <label>Observacion (opcional)</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={obsAsignacion}
+                      onChange={(e) => setObsAsignacion(e.target.value)}
+                      placeholder="Motivo de entrega o uso"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer bodega-inv-modal-footer">
+                <button className="btn btn-light" onClick={() => setEquipoAsignacionModal(null)}>
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={!tecnicoAsignacionId || asignandoEquipoId === Number(equipoAsignacionModal?.id_bodega_equipo || 0)}
+                  onClick={async () => {
+                    await asignarEquipoATecnico(equipoAsignacionModal);
+                    setEquipoAsignacionModal(null);
+                  }}
+                >
+                  <i className="fas fa-check mr-1" />
+                  Confirmar asignacion
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAsignacionDirectaModal ? (
+        <div className="modal d-block" tabIndex="-1" role="dialog">
+          <div className="modal-dialog" role="document">
+            <div className="modal-content bodega-inv-modal">
+              <div className="modal-header bodega-inv-modal-header">
+                <h5 className="modal-title bodega-inv-modal-title">
+                  <i className="fas fa-user-plus" />
+                  Asignar equipos a tecnicos
+                </h5>
+                <button type="button" className="close" onClick={() => setShowAsignacionDirectaModal(false)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body bodega-inv-modal-body">
+                <div className="bodega-inv-block">
+                  <div className="form-group">
+                    <label>Equipo disponible</label>
+                    <select
+                      className="form-control"
+                      value={equipoAsignacionDirectaId}
+                      onChange={(e) => setEquipoAsignacionDirectaId(e.target.value)}
+                    >
+                      <option value="">Seleccionar equipo...</option>
+                      {equiposDisponiblesParaAsignar.map((x) => (
+                        <option key={`disp-asg-${x.id_bodega_equipo}`} value={x.id_bodega_equipo}>
+                          {`${x.equipo_nombre || "-"} | ${x.numero_serie || "-"} | ${x.codigo || "-"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Tecnico</label>
+                    <select
+                      className="form-control"
+                      value={tecnicoAsignacionId}
+                      onChange={(e) => setTecnicoAsignacionId(e.target.value)}
+                    >
+                      <option value="">Seleccionar tecnico...</option>
+                      {tecnicosSistema.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name || u.nombre || u.email || `User ${u.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group mb-0">
+                    <label>Observacion (opcional)</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={obsAsignacion}
+                      onChange={(e) => setObsAsignacion(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer bodega-inv-modal-footer">
+                <button className="btn btn-light" onClick={() => setShowAsignacionDirectaModal(false)}>
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={!equipoAsignacionDirectaId || !tecnicoAsignacionId}
+                  onClick={async () => {
+                    const row = equiposDisponiblesParaAsignar.find(
+                      (x) => String(x.id_bodega_equipo || "") === String(equipoAsignacionDirectaId)
+                    );
+                    if (!row) return;
+                    await asignarEquipoATecnico(row);
+                    setShowAsignacionDirectaModal(false);
+                  }}
+                >
+                  <i className="fas fa-check mr-1" />
+                  Confirmar asignacion
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showGuiaModal && armadoGuia ? (
+        <div className="modal fade show d-block" tabIndex="-1" role="dialog">
+          <div className="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-file-export mr-2 text-primary" />
+                  Guía de salida a centro
+                </h5>
+                <button type="button" className="close" onClick={() => setShowGuiaModal(false)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
+                <div className="row">
+                  <div className="col-lg-4">
+                    <div className="mb-2"><strong>Armado:</strong> {armadoGuia.id_armado}</div>
+                    <div className="mb-2"><strong>Cliente:</strong> {armadoGuia?.centro?.cliente || "-"}</div>
+                    <div className="mb-3"><strong>Centro:</strong> {armadoGuia?.centro?.nombre || "-"}</div>
+                    <div className="form-group">
+                      <label className="small text-muted mb-1">N° guía</label>
+                      <input
+                        className="form-control"
+                        value={formGuia.numero_guia}
+                        onChange={(e) => setFormGuia((p) => ({ ...p, numero_guia: e.target.value }))}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="small text-muted mb-1">Fecha salida</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={formGuia.fecha_salida}
+                        onChange={(e) => setFormGuia((p) => ({ ...p, fecha_salida: e.target.value }))}
+                      />
+                    </div>
+                    <div className="form-group mb-0">
+                      <label className="small text-muted mb-1">Observación</label>
+                      <textarea
+                        className="form-control"
+                        rows={4}
+                        value={formGuia.observacion}
+                        onChange={(e) => setFormGuia((p) => ({ ...p, observacion: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-lg-8">
+                    <div className="p-3 border rounded" style={{ background: "linear-gradient(180deg,#f8fbff,#f1f7ff)", borderColor: "#cfe0ff", boxShadow: "0 10px 24px rgba(37,99,235,.08)" }}>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <strong style={{ color: "#1e3a8a" }}>
+                      <i className="fas fa-file-alt mr-2" />
+                      Vista previa guía
+                    </strong>
+                    <span className="badge badge-primary px-2 py-1">{formGuia.numero_guia || "-"}</span>
+                  </div>
+                  <div className="row">
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Cliente</small><strong>{armadoGuia?.centro?.cliente || "-"}</strong></div>
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Centro destino</small><strong>{armadoGuia?.centro?.nombre || "-"}</strong></div>
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Técnico encargado</small><strong>{armadoGuia?.tecnico?.nombre || "-"}</strong></div>
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Fecha salida</small><strong>{formatDate(formGuia.fecha_salida)}</strong></div>
+                    <div className="col-12"><small className="text-muted d-block">Observación</small><strong>{formGuia.observacion || "-"}</strong></div>
+                  </div>
+                  <hr />
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <strong style={{ color: "#1e3a8a" }}>Detalle de cajas y contenido</strong>
+                    <span className="badge badge-info">Cajas con contenido: {(guiaCajasDetalle || []).length}</span>
+                  </div>
+                  {loadingGuiaCajas ? (
+                    <div className="text-muted small">Cargando contenido...</div>
+                  ) : !guiaCajasDetalle.length ? (
+                    <div className="text-muted small">Sin detalle de contenido registrado.</div>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-sm mb-0">
+                        <thead>
+                          <tr>
+                            <th>Caja</th>
+                            <th>Cantidad</th>
+                            <th>Contenido</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {guiaCajasDetalle.map((row) => {
+                            const totalEquipos = (row.equipos || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
+                            const totalMateriales = (row.materiales || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
+                            const totalItems = totalEquipos + totalMateriales;
+                            return (
+                              <tr key={`caja-prev-${row.caja}`}>
+                                <td>{row.caja}</td>
+                                <td>
+                                  <div><strong>Total:</strong> {totalItems}</div>
+                                  <div><strong>Equipos:</strong> {totalEquipos}</div>
+                                  <div><strong>Materiales:</strong> {totalMateriales}</div>
+                                </td>
+                                <td>
+                                  <div>
+                                    <strong>Equipos:</strong>
+                                    {(row.equipos || []).length ? (
+                                      <ul className="mb-1 mt-1 pl-3">
+                                        {(row.equipos || []).map((it, idx) => (
+                                          <li key={`eq-${row.caja}-${idx}`}>
+                                            {it.nombre} x{it.cantidad}
+                                            {it.serie ? ` · N° Serie: ${it.serie}` : ""}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <span> -</span>
+                                    )}
+                                  </div>
+                                  {(row.materiales || []).length ? (
+                                    <div className="mt-1">
+                                      <strong>Materiales:</strong>
+                                      <ul className="mb-0 mt-1 pl-3">
+                                        {(row.materiales || []).map((it, idx) => (
+                                          <li key={`mat-${row.caja}-${idx}`}>{it.nombre} x{it.cantidad}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={() => setShowGuiaModal(false)}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn btn-outline-secondary" onClick={imprimirGuiaSalida}>
+                  <i className="fas fa-print mr-1" />
+                  Imprimir / PDF
+                </button>
+                <button type="button" className="btn btn-primary" onClick={guardarGuiaSalida}>
+                  <i className="fas fa-save mr-1" />
+                  Guardar guía
                 </button>
               </div>
             </div>

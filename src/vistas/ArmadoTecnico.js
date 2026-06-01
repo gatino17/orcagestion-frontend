@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import { io } from "socket.io-client";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
     cargarArmados,
     agregarArmado,
     modificarArmado,
+    borrarArmado,
     cargarParticipaciones,
     transferirArmado,
     cargarMateriales,
@@ -27,6 +29,7 @@ const estadosOptions = [
     { value: "", label: "Todos" },
     { value: "pendiente", label: "Pendiente" },
     { value: "en_proceso", label: "En proceso" },
+    { value: "prefinalizado", label: "Prefinalizado" },
     { value: "finalizado", label: "Finalizado" }
 ];
 
@@ -57,7 +60,7 @@ const ORDEN_EQUIPOS = [
     "zapatilla rack",
     "parlantes",
     "sensor magnetico",
-    "sensor magnÃ©tico",
+    "sensor magnético",
     "tablero 500x400x200",
     "baliza interior",
     "bocina interior",
@@ -541,6 +544,8 @@ const calcularProgresoChecklistAreas = (checks = {}) => {
 };
 
 const ArmadoTecnico = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
     const [rol, setRol] = useState("");
     const [userId, setUserId] = useState(null);
     const [userNombre, setUserNombre] = useState("");
@@ -557,6 +562,8 @@ const ArmadoTecnico = () => {
     const [centroSel, setCentroSel] = useState("");
     const [tecnicoSel, setTecnicoSel] = useState("");
     const [estadoAsignacion, setEstadoAsignacion] = useState("pendiente");
+    const [fechaInicioAsignacion, setFechaInicioAsignacion] = useState("");
+    const [fechaTerminoAsignacion, setFechaTerminoAsignacion] = useState("");
     const [observacion, setObservacion] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [planillaOpen, setPlanillaOpen] = useState(false);
@@ -570,6 +577,7 @@ const ArmadoTecnico = () => {
     const [materiales, setMateriales] = useState([]);
     const [materialesSnapshot, setMaterialesSnapshot] = useState({});
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
+    const [verCodigoPlanilla, setVerCodigoPlanilla] = useState(false);
     const [cajas, setCajas] = useState(["Caja 1"]);
     const [movimientos, setMovimientos] = useState([]);
     const [movimientosRecientes, setMovimientosRecientes] = useState([]);
@@ -591,6 +599,7 @@ const ArmadoTecnico = () => {
     const [checklistArmado, setChecklistArmado] = useState(null);
     const [checklistEstado, setChecklistEstado] = useState({});
     const [checklistObs, setChecklistObs] = useState("");
+    const [checklistAreaActiva, setChecklistAreaActiva] = useState("");
     const [checklistVersion, setChecklistVersion] = useState(0);
     const lastSeenMovIdRef = useRef(0);
     const colorTecnico = useCallback((valor) => {
@@ -797,6 +806,18 @@ const ArmadoTecnico = () => {
             console.error("Error al decodificar token:", err);
         }
     }, []);
+
+    useEffect(() => {
+        if (!location.state?.openAssignModal) return;
+        setEditingId(null);
+        setClienteSel("");
+        setCentroSel("");
+        setTecnicoSel("");
+        setEstadoAsignacion("pendiente");
+        setObservacion("");
+        setShowModal(true);
+        navigate(location.pathname, { replace: true, state: null });
+    }, [location, navigate]);
 
     const recargarMovimientosRecientes = useCallback(() => {
         const filtros = {};
@@ -1146,19 +1167,27 @@ const ArmadoTecnico = () => {
         const map = {
             pendiente: { clase: "badge badge-pill badge-warning", label: "Pendiente" },
             en_proceso: { clase: "badge badge-pill badge-info", label: "En proceso" },
+            prefinalizado: { clase: "badge badge-pill", label: "Prefinalizado" },
             finalizado: { clase: "badge badge-pill badge-success", label: "Finalizado" }
         };
         const { clase, label } = map[normalizado] || map.pendiente;
-        return <span className={clase}>{label}</span>;
+        return <span className={clase} style={normalizado === "prefinalizado" ? { backgroundColor: "#7c3aed", color: "#fff" } : undefined}>{label}</span>;
     };
 
     const formatearFecha = (valor) => {
         if (!valor) return "-";
+        const raw = String(valor).trim();
+        const soloFecha = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (soloFecha) {
+            const [, anio, mes, dia] = soloFecha;
+            return `${dia}/${mes}/${anio}`;
+        }
         const fecha = new Date(valor);
         if (Number.isNaN(fecha.getTime())) return "-";
-        const dia = String(fecha.getDate()).padStart(2, "0");
-        const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-        const anio = fecha.getFullYear();
+        const usarUTC = /(?:gmt|utc|z|[+\-]\d{2}:?\d{2})/i.test(raw);
+        const dia = String(usarUTC ? fecha.getUTCDate() : fecha.getDate()).padStart(2, "0");
+        const mes = String((usarUTC ? fecha.getUTCMonth() : fecha.getMonth()) + 1).padStart(2, "0");
+        const anio = usarUTC ? fecha.getUTCFullYear() : fecha.getFullYear();
         return `${dia}/${mes}/${anio}`;
     };
 
@@ -1214,10 +1243,19 @@ const ArmadoTecnico = () => {
             setChecklistArmado(armado);
             setChecklistEstado(saved.checks || {});
             setChecklistObs(saved.observacion || "");
+            setChecklistAreaActiva("");
             setChecklistOpen(true);
         },
         [leerChecklistGuardado]
     );
+
+    const checklistSeccionesVisibles = useMemo(() => {
+        if (!checklistAreaActiva) return CHECKLIST_ARMADO_SECCIONES;
+        const area = CHECKLIST_ARMADO_AREAS.find((a) => a.key === checklistAreaActiva);
+        if (!area) return CHECKLIST_ARMADO_SECCIONES;
+        const seccionesPermitidas = new Set(area.secciones || []);
+        return CHECKLIST_ARMADO_SECCIONES.filter((_, idx) => seccionesPermitidas.has(idx + 1));
+    }, [checklistAreaActiva]);
 
     const actualizarChecklistItem = useCallback((itemKey, patch) => {
         setChecklistEstado((prev) => {
@@ -1272,22 +1310,35 @@ const ArmadoTecnico = () => {
             name: "Centro",
             selector: (row) => row.centro?.nombre || row.centro_nombre || "-",
             sortable: true,
-            wrap: true,
-            grow: 1.4
+            wrap: false,
+            grow: 0.9,
+            minWidth: "150px",
+            style: {
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+            }
         },
         {
             name: "Cliente",
             selector: (row) => row.centro?.cliente || row.cliente || "-",
             sortable: true,
-            wrap: true,
-            grow: 1.1
+            wrap: false,
+            grow: 0.8,
+            minWidth: "130px",
+            style: {
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+            }
         },
         {
             name: "Técnico",
             selector: (row) => row.tecnico?.nombre || row.tecnico_nombre || "-",
             sortable: true,
-            wrap: true,
-            grow: 1.1,
+            wrap: false,
+            grow: 0.8,
+            minWidth: "135px",
             cell: (row) => (
                 <div>
                     <div>{row.tecnico?.nombre || row.tecnico_nombre || "-"}</div>
@@ -1296,7 +1347,7 @@ const ArmadoTecnico = () => {
                             Previos: {row.tecnicos_historial.slice(0, -1).join(", ")}
                         </small>
                     )}
-                </div>
+                                            </div>
             )
         },
         {
@@ -1311,6 +1362,7 @@ const ArmadoTecnico = () => {
                 const colorMap = {
                     pendiente: { bg: "#f59e0b", text: "#fff" },
                     en_proceso: { bg: "#0ea5e9", text: "#fff" },
+                    prefinalizado: { bg: "#7c3aed", text: "#fff" },
                     finalizado: { bg: "#22c55e", text: "#fff" }
                 };
                 const { bg, text } = colorMap[normalizado] || colorMap.pendiente;
@@ -1341,9 +1393,10 @@ const ArmadoTecnico = () => {
                         >
                             <option value="pendiente">Pendiente</option>
                             <option value="en_proceso">En proceso</option>
+                            <option value="prefinalizado">Prefinalizado</option>
                             <option value="finalizado">Finalizado</option>
                         </select>
-                    </div>
+                                            </div>
                 ) : (
                     renderEstado(row.estado)
                 );
@@ -1366,6 +1419,14 @@ const ArmadoTecnico = () => {
             cell: (row) => formatearFecha(row.fecha_inicio)
         },
         {
+            name: "Check tecnico",
+            selector: (row) => row.check_tecnico_fecha,
+            sortable: true,
+            grow: 0.65,
+            wrap: true,
+            cell: (row) => <span style={{ color: "#15803d", fontWeight: 700 }}>{formatearFecha(row.check_tecnico_fecha)}</span>
+        },
+        {
             name: "Cierre",
             selector: (row) => row.fecha_cierre,
             sortable: true,
@@ -1380,7 +1441,7 @@ const ArmadoTecnico = () => {
             wrap: true,
             cell: (row) => {
                 const esFinalizado = (row.estado || "").toLowerCase() === "finalizado";
-                if (!esFinalizado) return <span className="text-muted">—</span>;
+                if (!esFinalizado) return <span className="text-muted">-</span>;
                 return (
                     <button className="btn btn-sm btn-outline-success" onClick={() => descargarExcelArmado(row)}>
                         <i className="fas fa-file-excel mr-1" />
@@ -1417,7 +1478,7 @@ const ArmadoTecnico = () => {
                         <div className="d-flex justify-content-between align-items-center mb-1">
                             <small>{progreso.done}/{progreso.total || 0}</small>
                             <strong style={{ color }}>{pct}%</strong>
-                        </div>
+                                            </div>
                         <div style={{ height: 8, background: "#e5e7eb", borderRadius: 999 }}>
                             <div
                                 style={{
@@ -1428,8 +1489,8 @@ const ArmadoTecnico = () => {
                                     transition: "width .25s ease"
                                 }}
                             />
-                        </div>
-                    </div>
+                                            </div>
+                                            </div>
                 );
             }
         },
@@ -1451,7 +1512,16 @@ const ArmadoTecnico = () => {
                             <i className="fas fa-clipboard-check mr-1" />
                             Checklist
                         </button>
-                    </div>
+                        {rol === "admin" && (
+                            <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => handleEliminarArmado(row)}
+                                title="Eliminar armado"
+                            >
+                                <i className="fas fa-trash-alt" />
+                            </button>
+                        )}
+                                            </div>
                 );
             }
         }
@@ -1462,6 +1532,8 @@ const ArmadoTecnico = () => {
         setCentroSel("");
         setTecnicoSel("");
         setEstadoAsignacion("pendiente");
+        setFechaInicioAsignacion("");
+        setFechaTerminoAsignacion("");
         setObservacion("");
         setShowModal(true);
     };
@@ -1552,7 +1624,7 @@ const ArmadoTecnico = () => {
         const id = row.id_armado || row.id;
         if (!id) return;
         try {
-            const hoy = new Date().toISOString().slice(0, 10);
+            const hoy = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
             const payload = { estado: nuevoEstado };
             if (nuevoEstado === "finalizado") {
                 payload.fecha_cierre = hoy;
@@ -1575,6 +1647,29 @@ const ArmadoTecnico = () => {
         } catch (err) {
             console.error("No se pudo actualizar estado:", err);
             alert("No se pudo actualizar el estado.");
+        }
+    };
+
+    const handleEliminarArmado = async (row) => {
+        if (rol !== "admin") return;
+        const id = row?.id_armado || row?.id;
+        if (!id) return;
+
+        const centro = row?.centro?.nombre || row?.centro_nombre || "este centro";
+        const ok = window.confirm(`¿Eliminar la asignación de armado para ${centro}? Esta acción no se puede deshacer.`);
+        if (!ok) return;
+
+        try {
+            await borrarArmado(id, async () => {
+                if (Number(armadoActivo?.id_armado || 0) === Number(id)) {
+                    setPlanillaOpen(false);
+                    setArmadoActivo(null);
+                }
+                await fetchArmados();
+            });
+        } catch (err) {
+            console.error("No se pudo eliminar el armado:", err);
+            alert("No se pudo eliminar el armado.");
         }
     };
 
@@ -1818,14 +1913,16 @@ const ArmadoTecnico = () => {
 
     const handleGuardarAsignacion = async () => {
         if (!centroSel || !tecnicoSel) {
-            alert("Selecciona centro y tÃ©cnico.");
+            alert("Selecciona centro y técnico.");
             return;
         }
         const payload = {
             centro_id: Number(centroSel),
             tecnico_id: Number(tecnicoSel),
             estado: estadoAsignacion,
-            fecha_asignacion: new Date().toISOString().slice(0, 10),
+            fecha_asignacion: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),
+            fecha_inicio: fechaInicioAsignacion || null,
+            fecha_cierre: fechaTerminoAsignacion || null,
             observacion,
             creado_por: userId
         };
@@ -1838,7 +1935,7 @@ const ArmadoTecnico = () => {
     const handleTransferir = async () => {
         if (!armadoActivo?.id_armado) return;
         if (!transferTecSel) {
-            alert("Selecciona el nuevo tÃ©cnico.");
+            alert("Selecciona el nuevo técnico.");
             return;
         }
         await transferirArmado(
@@ -1854,10 +1951,11 @@ const ArmadoTecnico = () => {
     };
 
     const resumen = useMemo(() => {
-        const base = { total: armados.length, pendientes: 0, enProceso: 0, finalizados: 0 };
+        const base = { total: armados.length, pendientes: 0, enProceso: 0, prefinalizados: 0, finalizados: 0 };
         armados.forEach((a) => {
             const estado = (a.estado || "").toLowerCase();
             if (estado === "finalizado") base.finalizados += 1;
+            else if (estado === "prefinalizado") base.prefinalizados += 1;
             else if (estado === "en_proceso") base.enProceso += 1;
             else base.pendientes += 1;
         });
@@ -1870,26 +1968,30 @@ const ArmadoTecnico = () => {
                 <div>
                     <p className="text-muted mb-1">Armado técnico</p>
                     <h3 className="mb-0">Asignaciones de armado</h3>
-                </div>
+                                            </div>
                 <div className="d-flex gap-2 summary-wrap">
                     <div className="summary-pill bg-light">
                         <small>Total</small>
                         <strong>{resumen.total}</strong>
-                    </div>
+                                            </div>
                     <div className="summary-pill bg-warning text-dark">
                         <small>Pendientes</small>
                         <strong>{resumen.pendientes}</strong>
-                    </div>
+                                            </div>
                     <div className="summary-pill bg-info text-white">
                         <small>En proceso</small>
                         <strong>{resumen.enProceso}</strong>
-                    </div>
+                                            </div>
+                    <div className="summary-pill" style={{ backgroundColor: "#7c3aed", color: "#fff" }}>
+                        <small>Prefinalizado</small>
+                        <strong>{resumen.prefinalizados}</strong>
+                                            </div>
                     <div className="summary-pill bg-success text-white">
                         <small>Finalizados</small>
                         <strong>{resumen.finalizados}</strong>
-                    </div>
-                </div>
-            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             <div className="card">
                 <div className="card-body filters-row">
                     {error && <div className="alert alert-danger mb-3">{error}</div>}
@@ -1907,7 +2009,7 @@ const ArmadoTecnico = () => {
                                     </option>
                                 ))}
                             </select>
-                        </div>
+                                            </div>
 
                         {rol === "admin" && (
                             <div>
@@ -1924,7 +2026,7 @@ const ArmadoTecnico = () => {
                                         </option>
                                     ))}
                                 </select>
-                            </div>
+                                            </div>
                         )}
 
                         {rol === "admin" && (
@@ -1937,7 +2039,7 @@ const ArmadoTecnico = () => {
                             <i className="fas fa-sync mr-2" />
                             Actualizar
                         </button>
-                    </div>
+                                            </div>
 
                     <div className="table-responsive mt-3">
                         <DataTable
@@ -1951,9 +2053,9 @@ const ArmadoTecnico = () => {
                             persistTableHead
                             noDataComponent="No hay armados para mostrar"
                         />
-                    </div>
-                </div>
-            </div>
+                                            </div>
+                                            </div>
+                                            </div>
 
             {planillaOpen && (
                 <div className="modal show d-block" tabIndex="-1" role="dialog">
@@ -1982,7 +2084,7 @@ const ArmadoTecnico = () => {
                                 <button type="button" className="close" onClick={() => setPlanillaOpen(false)}>
                                     <span>&times;</span>
                                 </button>
-                            </div>
+                                            </div>
                             <div className="modal-body">
                                 {loadingPlanilla ? (
                                     <p>Cargando planilla...</p>
@@ -2003,6 +2105,16 @@ const ArmadoTecnico = () => {
                                                     Materiales
                                                 </button>
                                             </div>
+                                            {tabPlanilla === "equipos" && (
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-sm ml-2 ${verCodigoPlanilla ? "btn-primary" : "btn-outline-primary"}`}
+                                                    onClick={() => setVerCodigoPlanilla((v) => !v)}
+                                                >
+                                                    <i className="fas fa-barcode mr-1" />
+                                                    {verCodigoPlanilla ? "Ocultar N series" : "Ver N series"}
+                                                </button>
+                                            )}
                                             <button
                                                 className="btn btn-sm btn-outline-primary ml-auto"
                                                 onClick={handleAgregarCaja}
@@ -2031,16 +2143,16 @@ const ArmadoTecnico = () => {
                                                                         style={{ backgroundColor: `${color}22`, borderColor: color }}
                                                                     >
                                                                         <i className="fas fa-user" style={{ color }} />
-                                                                    </div>
+                                            </div>
                                                                     <div className="flex-grow-1">
                                                                         <div className="d-flex justify-content-between">
                                                                             <strong>{p.tecnico_nombre || `Tec. ${p.tecnico_id}`}</strong>
                                                                             <small className="text-muted">
                                                                                 {formatearFecha(p.fecha_inicio)} - {formatearFecha(p.fecha_fin) || "en curso"}
                                                                             </small>
-                                                                        </div>
+                                            </div>
                                                                         {p.nota && <div className="text-muted small">{p.nota}</div>}
-                                                                    </div>
+                                            </div>
                                                                     {rol === "admin" && (
                                                                         <button
                                                                             className="btn btn-sm btn-outline-danger"
@@ -2074,14 +2186,14 @@ const ArmadoTecnico = () => {
                                                                             <i className="fas fa-trash" />
                                                                         </button>
                                                                     )}
-                                                                </div>
+                                            </div>
                                                             );
                                                         })}
-                                                    </div>
+                                            </div>
                                                         ) : (
                                                             <p className="text-muted mb-0">Sin transferencias aún.</p>
                                                         )}
-                                                    </div>
+                                            </div>
                                                     {rol === "admin" && (
                                                         <div className="col-md-6">
                                                             <h6>Transferir armado</h6>
@@ -2099,7 +2211,7 @@ const ArmadoTecnico = () => {
                                                                         </option>
                                                                     ))}
                                                                 </select>
-                                                            </div>
+                                            </div>
                                                             <div className="form-group">
                                                                 <label>Nota / Avance</label>
                                                                 <textarea
@@ -2108,14 +2220,14 @@ const ArmadoTecnico = () => {
                                                                     value={transferNota}
                                                                     onChange={(e) => setTransferNota(e.target.value)}
                                                                 />
-                                                            </div>
+                                            </div>
                                                             <button className="btn btn-primary" onClick={handleTransferir}>
                                                                 <i className="fas fa-random mr-2" />
                                                                 Transferir
                                                             </button>
-                                                        </div>
+                                            </div>
                                                     )}
-                                                </div>
+                                            </div>
                                                     <div className="table-responsive">
                                                 <table className="table table-bordered arm-equip-table">
                                                     <thead>
@@ -2147,7 +2259,26 @@ const ArmadoTecnico = () => {
                                                                 const enEdicion = editingId === rowKey;
                                                                 return (
                                                                     <tr key={rowKey}>
-                                                                        <td>{eq.nombre}</td>
+                                                                        <td>
+                                                                            <div>{eq.nombre}</div>
+                                                                            {verCodigoPlanilla && !enEdicion ? (
+                                                                                <div className="mt-1">
+                                                                                    {eq.codigo ? (
+                                                                                        <span
+                                                                                            className="badge badge-light mr-2"
+                                                                                            style={{ border: "1px solid #bfdbfe", color: "#1e40af" }}
+                                                                                        >
+                                                                                            Cod: {eq.codigo}
+                                                                                        </span>
+                                                                                    ) : null}
+                                                                                    {eq.numero_serie ? (
+                                                                                        <span style={{ color: "#dc2626", fontWeight: 800 }}>
+                                                                                            N° Serie: {eq.numero_serie}
+                                                                                        </span>
+                                                                                    ) : null}
+                                            </div>
+                                                                            ) : null}
+                                                                        </td>
                                                                             <td style={{ minWidth: "110px" }}>
                                                                                 {enEdicion ? (
                                                                                     <select
@@ -2195,7 +2326,7 @@ const ArmadoTecnico = () => {
                                                                                             </>
                                                                                         );
                                                                                     })()}
-                                                                                </div>
+                                            </div>
                                                                             )}
                                                                         </td>
                                                                         {!esMovil && (
@@ -2207,7 +2338,7 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "ip", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.ip || "—"
+                                                                                    eq.ip || "-"
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -2220,7 +2351,7 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "observacion", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.observacion || "—"
+                                                                                    eq.observacion || "-"
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -2233,7 +2364,7 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "codigo", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.codigo || "—"
+                                                                                    eq.codigo || "-"
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -2247,7 +2378,7 @@ const ArmadoTecnico = () => {
                                                                             }
                                                                         />
                                                                     ) : (
-                                                                        eq.numero_serie || "—"
+                                                                        eq.numero_serie || "-"
                                                                     )}
                                                                         </td>
                                                                         {!esMovil && (
@@ -2259,7 +2390,7 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "estado", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.estado || "—"
+                                                                                    eq.estado || "-"
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -2305,7 +2436,7 @@ const ArmadoTecnico = () => {
                                                             })}
                                                         </tbody>
                                                     </table>
-                                                </div>
+                                            </div>
                                             </>
                                         )}
 
@@ -2315,7 +2446,7 @@ const ArmadoTecnico = () => {
                                                 <div>
                                                     <h6 className="mb-0">Materiales</h6>
                                                     <p className="text-muted mb-0">Registra cantidades usadas/pendientes para este armado.</p>
-                                                </div>
+                                            </div>
                                                 <div className="ml-auto">
                                                     <button
                                                         className="btn btn-sm btn-success"
@@ -2355,7 +2486,7 @@ const ArmadoTecnico = () => {
                                                         <i className="fas fa-save mr-2" />
                                                         Guardar materiales
                                                     </button>
-                                                </div>
+                                            </div>
                                             </div>
                                             <div className="row">
                                                 {materiales.map((mat, idx) => (
@@ -2396,8 +2527,8 @@ const ArmadoTecnico = () => {
                                                                             </>
                                                                         );
                                                                     })()}
-                                                                </div>
-                                                            </div>
+                                            </div>
+                                            </div>
                                                             <div className="material-assign">
                                                                 <div className="mr-2">
                                                                     <label className="text-muted small mb-1">Caja</label>
@@ -2425,7 +2556,7 @@ const ArmadoTecnico = () => {
                                                                             </option>
                                                                         ))}
                                                                     </select>
-                                                                </div>
+                                            </div>
                                                                 <div className="material-qty">
                                                                     <label className="text-muted mr-2 mb-0">Cant.</label>
                                                                     <input
@@ -2449,25 +2580,25 @@ const ArmadoTecnico = () => {
                                                                         }
                                                                         placeholder="0"
                                                                     />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
                                                 ))}
                                             </div>
-                                        </div>
+                                            </div>
                                         )}
                                     </>
                                 )}
-                            </div>
+                                            </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setPlanillaOpen(false)}>
                                     Cerrar
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
             {planillaOpen && (
                 <div className="card mt-3">
@@ -2475,7 +2606,7 @@ const ArmadoTecnico = () => {
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <h6 className="mb-0">Movimientos recientes (armado)</h6>
                             <small className="text-muted">Últimos 10</small>
-                        </div>
+                                            </div>
                         <div className="table-responsive">
                             <table className="table table-sm table-striped mb-0">
                                 <thead>
@@ -2520,9 +2651,9 @@ const ArmadoTecnico = () => {
                                     )}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
 
             {/* Historial global solo para admin */}
@@ -2604,8 +2735,8 @@ const ArmadoTecnico = () => {
                                     <option value={15}>15</option>
                                     <option value={20}>20</option>
                                 </select>
-                            </div>
-                        </div>
+                                            </div>
+                                            </div>
                         <div className="table-responsive">
                             <table className="table table-sm table-striped mb-0">
                                 <thead>
@@ -2665,7 +2796,7 @@ const ArmadoTecnico = () => {
                                                     >
                                                         <i className="fas fa-trash-alt" />
                                                     </button>
-                                                </div>
+                                            </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -2678,7 +2809,7 @@ const ArmadoTecnico = () => {
                                     )}
                                 </tbody>
                             </table>
-                        </div>
+                                            </div>
                         <div className="d-flex justify-content-between align-items-center mt-2">
                             <small className="text-muted">
                                 Página {Math.min(movsPage, movsTotalPaginasVista)} — {movsTotalPaginasVista} en total
@@ -2698,10 +2829,10 @@ const ArmadoTecnico = () => {
                                 >
                                     Siguiente
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
 
             {historialOpen && (
@@ -2716,7 +2847,7 @@ const ArmadoTecnico = () => {
                                 <button type="button" className="close" onClick={() => setHistorialOpen(false)}>
                                     <span>&times;</span>
                                 </button>
-                            </div>
+                                            </div>
                             <div className="modal-body">
                                 {historialLoading ? (
                                     <div className="text-muted">Cargando historial...</div>
@@ -2739,7 +2870,7 @@ const ArmadoTecnico = () => {
                                                 </span>
                                                 <strong style={{ color: "#0f172a" }}>{historialData?.armado?.centro_nombre || "-"}</strong>
                                             </div>
-                                        </div>
+                                            </div>
                                         <div className="row mb-3">
                                             <div className="col-md-4 mb-2">
                                                 <div
@@ -2748,7 +2879,7 @@ const ArmadoTecnico = () => {
                                                 >
                                                     <small className="d-block" style={{ color: "#1e40af", fontWeight: 600 }}>Equipos con cambios</small>
                                                     <strong style={{ color: "#1e3a8a", fontSize: "1.15rem" }}>{metricasHistorial.equiposConCambios}</strong>
-                                                </div>
+                                            </div>
                                             </div>
                                             <div className="col-md-4 mb-2">
                                                 <div
@@ -2757,7 +2888,7 @@ const ArmadoTecnico = () => {
                                                 >
                                                     <small className="d-block" style={{ color: "#c2410c", fontWeight: 600 }}>Cambios totales</small>
                                                     <strong style={{ color: "#9a3412", fontSize: "1.15rem" }}>{metricasHistorial.cambiosTotales}</strong>
-                                                </div>
+                                            </div>
                                             </div>
                                             <div className="col-md-4 mb-2">
                                                 <div
@@ -2766,14 +2897,14 @@ const ArmadoTecnico = () => {
                                                 >
                                                     <small className="d-block" style={{ color: "#475569", fontWeight: 600 }}>Ultimo cambio</small>
                                                     <strong style={{ color: "#334155", fontSize: "1.05rem" }}>{formatearFechaHora(metricasHistorial.ultimoCambio)}</strong>
-                                                </div>
                                             </div>
-                                        </div>
+                                            </div>
+                                            </div>
 
                                         <div className="btn-group mb-3" role="group" aria-label="Tabs historial">
                                             <button type="button" className={`btn btn-sm ${historialTab === "resumen" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setHistorialTab("resumen")}>Resumen</button>
                                             <button type="button" className={`btn btn-sm ${historialTab === "detalle" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setHistorialTab("detalle")}>Detalle tecnico</button>
-                                        </div>
+                                            </div>
 
                                         {historialTab === "resumen" && (
                                             <div className="row">
@@ -2787,12 +2918,12 @@ const ArmadoTecnico = () => {
                                                                 <div className="d-flex justify-content-between align-items-center">
                                                                     <strong>{r.nombre_item || "-"}</strong>
                                                                     <span className={`badge ${cambios > 0 ? "badge-warning" : "badge-secondary"}`}>{cambios > 0 ? `${cambios} cambios` : "Sin cambios"}</span>
-                                                                </div>
+                                            </div>
                                                                 <div className="small text-muted mt-1">{cambios > 0 ? "Anterior -> Actual" : "Inicial -> Actual"}</div>
                                                                 <div>{cambios > 0 ? (r.serie_anterior_actual || "-") : (r.serie_inicial || "-")} -&gt; {r.serie_actual || "-"}</div>
                                                                 <div className="small text-muted mt-1">Ultima actualizacion: {formatearFechaHora(r.ultima_actualizacion)}</div>
-                                                            </div>
-                                                        </div>
+                                            </div>
+                                            </div>
                                                     );
                                                 })}
                                                 {!historialResumenConCambios.length && <div className="col-12"><div className="text-muted">No hay equipos con cambios.</div></div>}
@@ -2881,15 +3012,15 @@ const ArmadoTecnico = () => {
                                         )}
                                     </>
                                 )}
-                            </div>
+                                            </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setHistorialOpen(false)}>
                                     Cerrar
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
 
             {showModal && (
@@ -2901,7 +3032,7 @@ const ArmadoTecnico = () => {
                                 <button type="button" className="close" onClick={() => setShowModal(false)}>
                                     <span>&times;</span>
                                 </button>
-                            </div>
+                                            </div>
                             <div className="modal-body">
                                 <div className="form-group">
                                     <label>Cliente</label>
@@ -2913,7 +3044,7 @@ const ArmadoTecnico = () => {
                                             </option>
                                         ))}
                                     </select>
-                                </div>
+                                            </div>
                                 <div className="form-group">
                                     <label>Centro</label>
                                     <select className="form-control" value={centroSel} onChange={(e) => setCentroSel(e.target.value)} disabled={!clienteSel}>
@@ -2924,26 +3055,45 @@ const ArmadoTecnico = () => {
                                             </option>
                                         ))}
                                     </select>
-                                </div>
+                                            </div>
                                 <div className="form-group">
                                     <label>Técnico</label>
                                     <select className="form-control" value={tecnicoSel} onChange={(e) => setTecnicoSel(e.target.value)}>
-                                        <option value="">Selecciona tÃ©cnico</option>
+                                        <option value="">Selecciona técnico</option>
                                         {tecnicos.map((tec) => (
                                             <option key={tec.id} value={tec.id}>
                                                 {tec.name || tec.nombre || `ID ${tec.id}`}
                                             </option>
                                         ))}
                                     </select>
-                                </div>
+                                            </div>
                                 <div className="form-group">
                                     <label>Estado</label>
                                     <select className="form-control" value={estadoAsignacion} onChange={(e) => setEstadoAsignacion(e.target.value)}>
                                         <option value="pendiente">Pendiente</option>
                                         <option value="en_proceso">En proceso</option>
-                                        <option value="finalizado">Finalizado</option>
+                            <option value="prefinalizado">Prefinalizado</option>
+                            <option value="finalizado">Finalizado</option>
                                     </select>
-                                </div>
+                                            </div>
+                                <div className="form-group">
+                                    <label>Fecha inicio</label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        value={fechaInicioAsignacion}
+                                        onChange={(e) => setFechaInicioAsignacion(e.target.value)}
+                                    />
+                                            </div>
+                                <div className="form-group">
+                                    <label>Fecha término</label>
+                                    <input
+                                        type="date"
+                                        className="form-control"
+                                        value={fechaTerminoAsignacion}
+                                        onChange={(e) => setFechaTerminoAsignacion(e.target.value)}
+                                    />
+                                            </div>
                                 <div className="form-group">
                                     <label>Observación</label>
                                     <textarea
@@ -2952,19 +3102,19 @@ const ArmadoTecnico = () => {
                                         value={observacion}
                                         onChange={(e) => setObservacion(e.target.value)}
                                     />
-                                </div>
-                            </div>
+                                            </div>
+                                            </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
                                     Cancelar
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleGuardarAsignacion}>
-                                    Guardar asignaciÃ³n
+                                    Guardar asignación
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
 
             {checklistOpen && (
@@ -2978,40 +3128,45 @@ const ArmadoTecnico = () => {
                                 <button type="button" className="close" onClick={() => setChecklistOpen(false)}>
                                     <span>&times;</span>
                                 </button>
-                            </div>
+                                            </div>
                             <div className="modal-body">
                                 <div className="armado-checklist-head">
                                     <div>
                                         <strong>Armado N°:</strong> {checklistArmado?.id_armado || "-"}
-                                    </div>
+                                            </div>
                                     <div>
                                         <strong>Técnico:</strong> {checklistArmado?.tecnico?.nombre || checklistArmado?.tecnico_nombre || "-"}
-                                    </div>
+                                            </div>
                                     <div>
                                         <strong>Progreso:</strong>{" "}
                                         {(() => {
                                             const progreso = obtenerProgresoChecklist(checklistArmado?.id_armado || checklistArmado?.id);
                                             return `${progreso.done}/${progreso.total}`;
                                         })()}
-                                    </div>
-                                </div>
+                                            </div>
+                                            </div>
 
                                 <div className="armado-checklist-areas mb-3">
                                     {CHECKLIST_ARMADO_AREAS.map((area) => {
                                         const p = progresoChecklistAreas?.[area.key] || { done: 0, total: 0, pct: 0 };
                                         const color = p.pct >= 100 ? "#16a34a" : p.pct >= 60 ? "#f59e0b" : "#dc2626";
                                         return (
-                                            <div key={`area-progress-${area.key}`} className="armado-checklist-area-card">
+                                            <button
+                                                type="button"
+                                                key={`area-progress-${area.key}`}
+                                                className={`armado-checklist-area-card ${checklistAreaActiva === area.key ? "is-active" : ""}`}
+                                                onClick={() => setChecklistAreaActiva((prev) => (prev === area.key ? "" : area.key))}
+                                            >
                                                 <div className="d-flex justify-content-between align-items-center mb-1">
                                                     <strong>{area.label}</strong>
                                                     <span style={{ color, fontWeight: 700 }}>{p.pct}%</span>
-                                                </div>
+                                            </div>
                                                 <div className="d-flex justify-content-between align-items-center mb-1">
                                                     <small>{p.done}/{p.total}</small>
                                                     <small className="text-muted">
                                                         {area.secciones.map((n) => `Sec ${n}`).join(", ")}
                                                     </small>
-                                                </div>
+                                            </div>
                                                 <div style={{ height: 7, background: "#e5e7eb", borderRadius: 999 }}>
                                                     <div
                                                         style={{
@@ -3022,11 +3177,11 @@ const ArmadoTecnico = () => {
                                                             transition: "width .25s ease",
                                                         }}
                                                     />
-                                                </div>
                                             </div>
+                                            </button>
                                         );
                                     })}
-                                </div>
+                                            </div>
                                 {rol === "supervisor" && (
                                     <div className="alert alert-info py-2 px-3 mb-3">
                                         <i className="fas fa-user-shield mr-2" />
@@ -3036,7 +3191,7 @@ const ArmadoTecnico = () => {
                                                 ? supervisorAreas.map((a) => a.toUpperCase()).join(", ")
                                                 : "sin area asignada"}
                                         </strong>
-                                    </div>
+                                            </div>
                                 )}
 
                                 <div className="table-responsive">
@@ -3051,14 +3206,15 @@ const ArmadoTecnico = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {CHECKLIST_ARMADO_SECCIONES.map((sec, secIdx) => (
-                                                <React.Fragment key={`sec-${secIdx}`}>
+                                            {checklistSeccionesVisibles.map((sec) => (
+                                                <React.Fragment key={`sec-${sec.titulo}`}>
                                                     <tr className="armado-checklist-section-row">
                                                         <td colSpan="5">{sec.titulo}</td>
                                                     </tr>
                                                     {sec.items.map((label, itemIdx) => {
-                                                        const itemKey = `s${secIdx + 1}-i${itemIdx + 1}`;
-                                                        const editable = puedeEditarChecklistItem(secIdx + 1);
+                                                        const secNumero = CHECKLIST_ARMADO_SECCIONES.indexOf(sec) + 1;
+                                                        const itemKey = `s${secNumero}-i${itemIdx + 1}`;
+                                                        const editable = puedeEditarChecklistItem(secNumero);
                                                         const rowData =
                                                             checklistEstado?.[itemKey] && typeof checklistEstado[itemKey] === "object"
                                                                 ? checklistEstado[itemKey]
@@ -3066,7 +3222,7 @@ const ArmadoTecnico = () => {
                                                         const estado = String(rowData.estado || "").toLowerCase();
                                                         return (
                                                             <tr key={itemKey} className={!editable ? "armado-checklist-row-readonly" : ""}>
-                                                                <td>{`${secIdx + 1}.${itemIdx + 1}`}</td>
+                                                                <td>{`${secNumero}.${itemIdx + 1}`}</td>
                                                                 <td>{label}</td>
                                                                 <td>
                                                                     <select
@@ -3121,7 +3277,7 @@ const ArmadoTecnico = () => {
                                             ))}
                                         </tbody>
                                     </table>
-                                </div>
+                                            </div>
 
                                 <div className="form-group mt-3 mb-0">
                                     <label>Observación general</label>
@@ -3132,8 +3288,8 @@ const ArmadoTecnico = () => {
                                         onChange={(e) => setChecklistObs(e.target.value)}
                                         placeholder="Notas de cierre del checklist..."
                                     />
-                                </div>
-                            </div>
+                                            </div>
+                                            </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setChecklistOpen(false)}>
                                     Cerrar
@@ -3141,17 +3297,29 @@ const ArmadoTecnico = () => {
                                 <button type="button" className="btn btn-primary" onClick={guardarChecklistArmado}>
                                     Guardar checklist
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                            </div>
+                                            </div>
+                                            </div>
+                                            </div>
             )}
 
-        </div>
+                                            </div>
     );
 };
 
 export default ArmadoTecnico;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -12,6 +12,7 @@ import {
   modificarActividad,
   agregarActividad
 } from "../controllers/actividadesControllers";
+import { agregarArmado } from "../controllers/armadosControllers";
 import {
   obtenerArmados,
   obtenerSoportes,
@@ -21,6 +22,7 @@ import {
 } from "../api";
 import { cargarEncargados } from "../controllers/encargadosControllers";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
+import { cargarUsuarios } from "../controllers/usuariosControllers";
 import "./Calendario.css";
 
 const estadoOptions = [
@@ -74,6 +76,7 @@ const calcularPctChecklistArmado = (armadoId) => {
 };
 
 function Calendario() {
+  const LAST_ARMADO_TEC_KEY = "orcagest_last_armado_tec_id";
   const location = useLocation();
   const navigate = useNavigate();
   const [actividades, setActividades] = useState([]);
@@ -116,6 +119,16 @@ function Calendario() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroTecnico, setFiltroTecnico] = useState("");
+  const [usuarios, setUsuarios] = useState([]);
+  const [showArmadoModal, setShowArmadoModal] = useState(false);
+  const [armadoClienteId, setArmadoClienteId] = useState("");
+  const [armadoCentroId, setArmadoCentroId] = useState("");
+  const [armadoTecnicoId, setArmadoTecnicoId] = useState("");
+  const [armadoEstado, setArmadoEstado] = useState("pendiente");
+  const [armadoFechaInicio, setArmadoFechaInicio] = useState("");
+  const [armadoFechaTermino, setArmadoFechaTermino] = useState("");
+  const [armadoObservacion, setArmadoObservacion] = useState("");
+  const [toastAsignacion, setToastAsignacion] = useState("");
 
   const toDateKey = (value) => {
     if (!value) return "";
@@ -140,6 +153,7 @@ function Calendario() {
       setActividades(data);
       setEncargados(await cargarEncargados());
       setCentros(await cargarCentrosClientes());
+      await cargarUsuarios(setUsuarios);
       try {
         const soportes = await obtenerSoportes();
         const listaSoportes = Array.isArray(soportes) ? soportes : [];
@@ -440,6 +454,31 @@ function Calendario() {
     return centros.filter((centro) => buildClienteKey(centro.cliente_id, centro.cliente) === clienteId);
   }, [centros, clienteId]);
 
+  const clientesArmado = useMemo(() => {
+    const map = new Map();
+    centros.forEach((centro) => {
+      const key = buildClienteKey(centro.cliente_id, centro.cliente);
+      if (!key || map.has(key)) return;
+      map.set(key, {
+        id: key,
+        nombre: centro.cliente || "Cliente sin nombre"
+      });
+    });
+    return Array.from(map.values());
+  }, [centros]);
+
+  const centrosArmado = useMemo(() => {
+    if (!armadoClienteId) return [];
+    return centros.filter((centro) => buildClienteKey(centro.cliente_id, centro.cliente) === armadoClienteId);
+  }, [centros, armadoClienteId]);
+
+  const tecnicosArmado = useMemo(() => {
+    return (usuarios || []).filter((u) => {
+      const rol = String(u?.rol || "").toLowerCase();
+      return rol === "tecnico" || rol === "bodega";
+    });
+  }, [usuarios]);
+
   const filteredAyudantes = encargados.filter(
     (encargado) => encargado.id_encargado !== parseInt(encargadoId || 0, 10)
   );
@@ -462,6 +501,54 @@ function Calendario() {
   const handleClienteChange = (event) => {
     setClienteId(event.target.value);
     setCentroId("");
+  };
+
+  const resetArmadoForm = () => {
+    const ultimoTecnico = localStorage.getItem(LAST_ARMADO_TEC_KEY) || "";
+    setArmadoClienteId("");
+    setArmadoCentroId("");
+    setArmadoTecnicoId(ultimoTecnico);
+    setArmadoEstado("pendiente");
+    setArmadoFechaInicio("");
+    setArmadoFechaTermino("");
+    setArmadoObservacion("");
+  };
+
+  const handleGuardarArmadoDesdeCalendario = async () => {
+    if (!armadoCentroId || !armadoTecnicoId) {
+      alert("Selecciona centro y tecnico para asignar el armado.");
+      return;
+    }
+
+    const payload = {
+      centro_id: Number(armadoCentroId),
+      tecnico_id: Number(armadoTecnicoId),
+      estado: armadoEstado || "pendiente",
+      fecha_inicio: armadoFechaInicio || null,
+      fecha_cierre: armadoFechaTermino || null,
+      observacion: armadoObservacion || null,
+    };
+
+    await agregarArmado(payload, async () => {
+      try {
+        const armados = await obtenerArmados();
+        const lista = (Array.isArray(armados) ? armados : [])
+          .sort((a, b) => {
+            const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
+            const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
+            return fb - fa;
+          })
+          .slice(0, 20);
+        setArmadosCalendario(lista);
+      } catch (error) {
+        setArmadosCalendario([]);
+      }
+      localStorage.setItem(LAST_ARMADO_TEC_KEY, String(armadoTecnicoId));
+      setToastAsignacion("Armado asignado correctamente.");
+      setTimeout(() => setToastAsignacion(""), 2500);
+      setShowArmadoModal(false);
+      resetArmadoForm();
+    });
   };
 
   const handleProgramarDesdeSoporte = (soporte) => {
@@ -1436,10 +1523,16 @@ function Calendario() {
           <h2>Programación operativa</h2>
           <p>Coordina actividades, tecnicos y centros desde un único panel.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
-          <i className="fas fa-plus me-2" />
-          Nueva actividad
-        </button>
+        <div className="scheduler-header-actions">
+          <button className="btn btn-outline-primary scheduler-action-btn" onClick={() => { resetArmadoForm(); setShowArmadoModal(true); }}>
+            <i className="fas fa-tools me-2" />
+            Asignar armado
+          </button>
+          <button className="btn btn-primary scheduler-action-btn" onClick={() => { resetForm(); setShowModal(true); }}>
+            <i className="fas fa-plus me-2" />
+            Nueva actividad
+          </button>
+        </div>
       </div>
 
       <div className="scheduler-metrics">
@@ -2162,6 +2255,139 @@ function Calendario() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {showArmadoModal && (
+        <div className="modal fade show" tabIndex="-1" style={{ display: "block" }}>
+          <div className="modal-dialog modal-dialog-scrollable scheduler-modal-dialog">
+            <div className="modal-content scheduler-modal-content">
+              <div className="modal-header scheduler-modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-tools me-2" />
+                  Asignar armado
+                </h5>
+                <button type="button" className="close" onClick={() => setShowArmadoModal(false)}>
+                  &times;
+                </button>
+              </div>
+              <div className="modal-body scheduler-modal">
+                <form className="row g-3 scheduler-modal-form">
+                  <div className="col-md-6">
+                    <label>Cliente</label>
+                    <select
+                      className="form-control"
+                      value={armadoClienteId}
+                      onChange={(e) => {
+                        setArmadoClienteId(e.target.value);
+                        setArmadoCentroId("");
+                      }}
+                    >
+                      <option value="">Seleccione cliente</option>
+                      {clientesArmado.map((cliente) => (
+                        <option key={cliente.id} value={cliente.id}>
+                          {cliente.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Centro</label>
+                    <select
+                      className="form-control"
+                      value={armadoCentroId}
+                      onChange={(e) => setArmadoCentroId(e.target.value)}
+                      disabled={!armadoClienteId}
+                    >
+                      <option value="">{armadoClienteId ? "Seleccione centro" : "Primero seleccione cliente"}</option>
+                      {centrosArmado.map((centro) => (
+                        <option key={centro.id} value={centro.id}>
+                          {centro.nombre} - {centro.cliente}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Tecnico</label>
+                    <select
+                      className="form-control"
+                      value={armadoTecnicoId}
+                      onChange={(e) => setArmadoTecnicoId(e.target.value)}
+                    >
+                      <option value="">Seleccione tecnico</option>
+                      {tecnicosArmado.map((tec) => (
+                        <option key={tec.id} value={tec.id}>
+                          {tec.name || tec.nombre || `ID ${tec.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Estado</label>
+                    <select className="form-control" value={armadoEstado} onChange={(e) => setArmadoEstado(e.target.value)}>
+                      <option value="pendiente">Pendiente</option>
+                      <option value="en_proceso">En proceso</option>
+                      <option value="finalizado">Finalizado</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Fecha inicio</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={armadoFechaInicio}
+                      onChange={(e) => setArmadoFechaInicio(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label>Fecha término</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={armadoFechaTermino}
+                      onChange={(e) => setArmadoFechaTermino(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-12">
+                    <label>Observacion</label>
+                    <textarea
+                      className="form-control"
+                      rows="3"
+                      value={armadoObservacion}
+                      onChange={(e) => setArmadoObservacion(e.target.value)}
+                    />
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer scheduler-modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowArmadoModal(false)}>
+                  <i className="fas fa-times me-1" />
+                  Cerrar
+                </button>
+                <button className="btn btn-primary" onClick={handleGuardarArmadoDesdeCalendario}>
+                  <i className="fas fa-save me-1" />
+                  Guardar asignacion
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastAsignacion && (
+        <div
+          className="alert alert-success"
+          style={{
+            position: "fixed",
+            right: 16,
+            bottom: 16,
+            zIndex: 2000,
+            marginBottom: 0,
+            boxShadow: "0 10px 24px rgba(15,23,42,.18)"
+          }}
+        >
+          <i className="fas fa-check-circle me-2" />
+          {toastAsignacion}
         </div>
       )}
     </div>

@@ -1489,6 +1489,24 @@ export const eliminarInventarioBodegaEquipo = async (id) => {
     }
 };
 
+export const asignarInventarioBodegaATecnico = async (id, payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_equipos/${id}/asignar_tecnico`, payload || {});
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const devolverInventarioBodegaDesdeTecnico = async (id, payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_equipos/${id}/devolver_bodega`, payload || {});
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const obtenerCasosIsmael = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/soporte/ismael`, { params });

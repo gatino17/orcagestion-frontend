@@ -15,6 +15,24 @@
   margin: 0;
 }
 
+.scheduler-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.scheduler-action-btn {
+  min-height: 42px;
+  padding: 0.5rem 0.9rem;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 .scheduler-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -690,6 +708,11 @@
 @media (max-width: 992px) {
   .scheduler-header {
     flex-direction: column;
+  }
+  .scheduler-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.55rem;
   }
 }
 .scheduler-modal label {

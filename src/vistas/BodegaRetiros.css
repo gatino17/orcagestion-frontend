@@ -85,6 +85,74 @@
   min-width: 128px;
 }
 
+.bodega-toggle-card {
+  border: 1px solid #dbe7ff;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  padding: 0.85rem 0.95rem;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.bodega-toggle-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 12px 24px rgba(30, 64, 175, 0.12);
+}
+
+.bodega-toggle-card.active {
+  border-color: #3b82f6;
+  background: linear-gradient(180deg, #eff6ff, #dbeafe);
+}
+
+.bodega-toggle-transito {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.95));
+}
+
+.bodega-toggle-transito.active {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #fef3c7, #fde68a);
+}
+
+.bodega-toggle-asignacion {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: linear-gradient(180deg, #f8fbff, #eaf3ff);
+}
+
+.bodega-toggle-asignacion.active {
+  border-color: #3b82f6;
+  background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+}
+
+.bodega-toggle-bodega {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(180deg, #f0fdf4, #dcfce7);
+}
+
+.bodega-toggle-bodega.active {
+  border-color: #10b981;
+  background: linear-gradient(180deg, #dcfce7, #bbf7d0);
+}
+
+.bodega-toggle-despacho {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: linear-gradient(180deg, #f5f9ff, #e5efff);
+}
+
+.bodega-toggle-despacho.active {
+  border-color: #2563eb;
+  background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+}
+
+.bodega-toggle-centros {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(180deg, #f8fbff, #eef4ff);
+}
+
+.bodega-toggle-baja {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: linear-gradient(180deg, #fff7f7, #fee2e2);
+}
+
 .bodega-inv-kpi {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
