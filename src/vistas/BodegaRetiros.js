@@ -19,6 +19,11 @@ import {
   obtenerMaterialesArmado,
   obtenerEquipos,
   obtenerMovimientosArmado,
+  obtenerHistorialEquiposArmado,
+  obtenerGuiasSalidaArmado,
+  guardarGuiaSalidaArmado,
+  marcarRecepcionCentroGuiaArmado,
+  eliminarGuiaSalidaArmado,
 } from "../api";
 import "./BodegaRetiros.css";
 
@@ -198,6 +203,8 @@ export default function BodegaRetiros() {
   const [guiasSalida, setGuiasSalida] = useState([]);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [armadoGuia, setArmadoGuia] = useState(null);
+  const [verCodigoGuia, setVerCodigoGuia] = useState(false);
+  const [modoEdicionGuia, setModoEdicionGuia] = useState(false);
   const [formGuia, setFormGuia] = useState({
     numero_guia: "",
     fecha_salida: new Date().toISOString().slice(0, 10),
@@ -265,24 +272,6 @@ export default function BodegaRetiros() {
     localStorage.setItem("orcagest_bodega2_nombre_v1", String(bodega2Nombre || "Bodega 2").trim() || "Bodega 2");
   }, [bodega2Nombre]);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("orcagest_guias_salida_v1");
-      const data = JSON.parse(raw || "[]");
-      setGuiasSalida(Array.isArray(data) ? data : []);
-    } catch {
-      setGuiasSalida([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("orcagest_guias_salida_v1", JSON.stringify(guiasSalida || []));
-    } catch {
-      // noop
-    }
-  }, [guiasSalida]);
-
   const cargarInventarioManual = async () => {
     try {
       const data = await obtenerInventarioBodegaEquipos();
@@ -316,15 +305,17 @@ export default function BodegaRetiros() {
 
   const cargarArmadosFinalizados = async () => {
     try {
-      const data = await obtenerArmados();
+      const [data, guias] = await Promise.all([obtenerArmados(), obtenerGuiasSalidaArmado()]);
       setArmadosSeguimiento(Array.isArray(data) ? data : []);
       const lista = (Array.isArray(data) ? data : []).filter(
         (a) => normalizeText(a?.estado || "") === "finalizado"
       );
       setArmadosFinalizados(lista);
+      setGuiasSalida(Array.isArray(guias) ? guias : []);
     } catch {
       setArmadosSeguimiento([]);
       setArmadosFinalizados([]);
+      setGuiasSalida([]);
     }
   };
 
@@ -789,6 +780,11 @@ export default function BodegaRetiros() {
     return ["admin", "superadmin", "bodega", "operaciones", "almacen", "logistica", "logístico"].includes(rol);
   }, [usuario]);
 
+  const esAdminBodega = useMemo(() => {
+    const rol = String(usuario?.rol || "").toLowerCase();
+    return ["admin", "superadmin"].includes(rol);
+  }, [usuario]);
+
   const codigosExistentesSet = useMemo(() => {
     const set = new Set();
     (inventarioEquiposBase || []).forEach((x) => {
@@ -1039,12 +1035,18 @@ export default function BodegaRetiros() {
     });
   };
 
-  const abrirModalGuia = async (armado) => {
+  const abrirModalGuia = async (armado, guiaExistente = null, modoEdicion = false) => {
     setArmadoGuia(armado);
+    setVerCodigoGuia(false);
+    setModoEdicionGuia(modoEdicion);
     setFormGuia({
-      numero_guia: `GS-${String(armado?.id_armado || "").padStart(4, "0")}`,
-      fecha_salida: new Date().toISOString().slice(0, 10),
-      observacion: "",
+      numero_guia:
+        String(guiaExistente?.numero_guia || "").trim() ||
+        `GS-${String(armado?.id_armado || "").padStart(4, "0")}`,
+      fecha_salida:
+        String(guiaExistente?.fecha_salida || "").trim() ||
+        new Date().toISOString().slice(0, 10),
+      observacion: String(guiaExistente?.observacion || "").trim(),
     });
     setLoadingGuiaCajas(true);
     try {
@@ -1055,11 +1057,27 @@ export default function BodegaRetiros() {
         // Solo aceptar cajas reales: "Caja 1", "Caja 2", etc.
         return /^caja\s*\d+/i.test(raw);
       };
-      const [materiales, movimientos, equiposCentro] = await Promise.all([
+      const [materiales, movimientos, equiposCentro, historialEquipos] = await Promise.all([
         obtenerMaterialesArmado(Number(armado?.id_armado || 0)),
         obtenerMovimientosArmado(Number(armado?.id_armado || 0)),
         obtenerEquipos(Number(armado?.centro_id || armado?.centro?.id_centro || 0)),
+        obtenerHistorialEquiposArmado(Number(armado?.id_armado || 0)).catch(() => null),
       ]);
+      const seriesPorNombre = new Map();
+      (Array.isArray(historialEquipos?.resumen) ? historialEquipos.resumen : []).forEach((r) => {
+        const nombre = String(r?.nombre_item || "").trim();
+        const serie = String(r?.serie_actual || "").trim();
+        if (!nombre || !serie || serie === "-") return;
+        const key = normalizeText(nombre);
+        if (!seriesPorNombre.has(key)) seriesPorNombre.set(key, []);
+        seriesPorNombre.get(key).push(serie);
+      });
+      const tomarSerieHistorial = (nombre) => {
+        const key = normalizeText(String(nombre || ""));
+        const lista = seriesPorNombre.get(key);
+        if (!Array.isArray(lista) || !lista.length) return "";
+        return String(lista.shift() || "").trim();
+      };
       const grouped = {};
       (Array.isArray(materiales) ? materiales : []).forEach((m) => {
         const cajaRaw = String(m?.caja || "").trim();
@@ -1082,7 +1100,8 @@ export default function BodegaRetiros() {
           const cajaRaw = String(m?.caja || "").trim();
           if (!esCajaValida(cajaRaw)) return;
           const nombre = String(m?.nombre_item || "Equipo").trim();
-          const serie = String(m?.numero_serie || "").trim();
+          let serie = String(m?.numero_serie || m?.serie || m?.n_serie || "").trim();
+          if (!serie) serie = tomarSerieHistorial(nombre);
           const key = `${cajaRaw}|${nombre}|${serie}`;
           if (vistos.has(key)) return;
           vistos.add(key);
@@ -1093,6 +1112,7 @@ export default function BodegaRetiros() {
             nombre,
             cantidad: Number(m?.cantidad || 0) || 1,
             serie,
+            codigo: String(m?.codigo || "").trim(),
           });
         });
       // Fallback: si no hay movimientos, usa equipos actuales del centro con caja válida.
@@ -1102,12 +1122,14 @@ export default function BodegaRetiros() {
           if (!esCajaValida(cajaRaw)) return;
           const caja = cajaRaw;
           if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
-          const serie = String(e?.numero_serie || "").trim();
+          let serie = String(e?.numero_serie || e?.serie || e?.n_serie || "").trim();
+          if (!serie) serie = tomarSerieHistorial(e?.nombre || "Equipo");
           const extra = [serie ? `serie ${serie}` : ""].filter(Boolean).join(" · ");
           grouped[caja].equipos.push({
             nombre: e?.nombre || "Equipo",
             cantidad: 1,
             serie,
+            codigo: String(e?.codigo || "").trim(),
           });
         });
       }
@@ -1127,7 +1149,18 @@ export default function BodegaRetiros() {
     setShowGuiaModal(true);
   };
 
-  const guardarGuiaSalida = () => {
+  const eliminarGuiaSalida = async (armadoId) => {
+    if (!esAdminBodega) return;
+    if (!window.confirm("¿Eliminar este despacho? Se quitará la guía guardada del armado.")) return;
+    try {
+      await eliminarGuiaSalidaArmado(armadoId);
+      setGuiasSalida((prev) => (prev || []).filter((g) => Number(g?.armado_id || 0) !== Number(armadoId)));
+    } catch {
+      alert("No se pudo eliminar el despacho.");
+    }
+  };
+
+  const guardarGuiaSalida = async () => {
     if (!armadoGuia?.id_armado) return;
     const armadoId = Number(armadoGuia.id_armado);
     const payload = {
@@ -1140,22 +1173,32 @@ export default function BodegaRetiros() {
       cliente: armadoGuia?.centro?.cliente || "",
       updated_at: new Date().toISOString(),
     };
-    setGuiasSalida((prev) => {
-      const sinActual = (prev || []).filter((g) => Number(g?.armado_id || 0) !== armadoId);
-      return [payload, ...sinActual];
-    });
-    setShowGuiaModal(false);
-    setArmadoGuia(null);
+    try {
+      const guardada = await guardarGuiaSalidaArmado(armadoId, payload);
+      setGuiasSalida((prev) => {
+        const sinActual = (prev || []).filter((g) => Number(g?.armado_id || 0) !== armadoId);
+        return [guardada, ...sinActual];
+      });
+      setShowGuiaModal(false);
+      setArmadoGuia(null);
+    } catch {
+      alert("No se pudo guardar la guía de despacho.");
+    }
   };
 
-  const marcarRecepcionCentro = (armadoId) => {
-    setGuiasSalida((prev) =>
-      (prev || []).map((g) =>
-        Number(g?.armado_id || 0) === Number(armadoId)
-          ? { ...g, estado: "recepcionado_en_centro", updated_at: new Date().toISOString() }
-          : g
-      )
-    );
+  const marcarRecepcionCentro = async (armadoId) => {
+    try {
+      const actualizada = await marcarRecepcionCentroGuiaArmado(armadoId, {
+        fecha_recepcion_centro: new Date().toISOString(),
+      });
+      setGuiasSalida((prev) =>
+        (prev || []).map((g) =>
+          Number(g?.armado_id || 0) === Number(armadoId) ? actualizada : g
+        )
+      );
+    } catch {
+      alert("No se pudo marcar la recepción en centro.");
+    }
   };
 
   const imprimirGuiaSalida = () => {
@@ -2049,24 +2092,26 @@ export default function BodegaRetiros() {
           <div className="table-responsive">
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
-                <tr>
-                  <th>ID armado</th>
-                  <th>Cliente</th>
-                  <th>Centro</th>
-                  <th>Fecha cierre</th>
-                  <th>Total cajas</th>
-                  <th>Guía salida</th>
-                  <th>Estado despacho</th>
-                  <th className="text-center">Acción</th>
-                </tr>
+	                <tr>
+	                  <th>ID armado</th>
+	                  <th>Cliente</th>
+	                  <th>Centro</th>
+	                  <th>Fecha cierre</th>
+	                  <th>Fecha despacho</th>
+	                  <th>Fecha recepción</th>
+	                  <th>Total cajas</th>
+	                  <th>Guía salida</th>
+	                  <th>Estado despacho</th>
+	                  <th className="text-center">Acción</th>
+	                </tr>
               </thead>
               <tbody>
                 {!armadosDespachoFiltrados.length ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-3 text-muted">
-                      Sin armados finalizados para despacho.
-                    </td>
-                  </tr>
+	                    <td colSpan={10} className="text-center py-3 text-muted">
+	                      Sin armados finalizados para despacho.
+	                    </td>
+	                  </tr>
                 ) : (
                   armadosDespachoFiltrados.map((a) => {
                     const guia = guiaPorArmado.get(Number(a?.id_armado || 0));
@@ -2074,33 +2119,82 @@ export default function BodegaRetiros() {
                     return (
                       <tr key={`desp-${a.id_armado}`}>
                         <td>{a.id_armado}</td>
-                        <td>{a?.centro?.cliente || "-"}</td>
-                        <td>{a?.centro?.nombre || "-"}</td>
-                        <td>{formatDate(a.fecha_cierre || a.fecha_inicio || a.fecha_asignacion)}</td>
-                        <td>{a.total_cajas || 0}</td>
-                        <td>{guia?.numero_guia || "-"}</td>
+	                        <td>{a?.centro?.cliente || "-"}</td>
+	                        <td>{a?.centro?.nombre || "-"}</td>
+	                        <td>{formatDate(a.fecha_cierre || a.fecha_inicio || a.fecha_asignacion)}</td>
+	                        <td>{formatDate(guia?.fecha_salida)}</td>
+	                        <td>{formatDate(guia?.fecha_recepcion_centro)}</td>
+	                        <td>{a.total_cajas || 0}</td>
+	                        <td>{guia?.numero_guia || "-"}</td>
                         <td>
                           {!guia ? (
                             <span className="badge badge-secondary">Pendiente guía</span>
                           ) : estado === "recepcionado_en_centro" ? (
                             <span className="badge badge-success">Recepcionado en centro</span>
                           ) : (
-                            <span className="badge badge-warning">En tránsito a centro</span>
+                            <span className="badge badge-warning">En tránsito hacia centro</span>
                           )}
                         </td>
                         <td className="text-center">
                           {!guia ? (
-                            <button className="btn btn-sm btn-primary" onClick={() => abrirModalGuia(a)}>
+                            <button className="btn btn-sm btn-primary" onClick={() => abrirModalGuia(a, null, true)}>
                               <i className="fas fa-file-export mr-1" />
                               Generar guía
                             </button>
                           ) : estado !== "recepcionado_en_centro" ? (
-                            <button className="btn btn-sm btn-outline-success" onClick={() => marcarRecepcionCentro(a.id_armado)}>
-                              <i className="fas fa-check mr-1" />
-                              Marcar recepción
-                            </button>
+                            <div className="d-flex justify-content-center" style={{ gap: 6, flexWrap: "wrap" }}>
+                              <button className="btn btn-sm btn-outline-primary" onClick={() => abrirModalGuia(a, guia, false)}>
+                                <i className="fas fa-eye mr-1" />
+                                Ver despacho
+                              </button>
+                              <button className="btn btn-sm btn-outline-success" onClick={() => marcarRecepcionCentro(a.id_armado)}>
+                                <i className="fas fa-check mr-1" />
+                                Recepción en centro
+                              </button>
+                              {esAdminBodega ? (
+                                <button
+                                  className="btn btn-sm btn-outline-warning"
+                                  onClick={() => abrirModalGuia(a, guia, true)}
+                                  title="Editar despacho"
+                                >
+                                  <i className="fas fa-pen" />
+                                </button>
+                              ) : null}
+                              {esAdminBodega ? (
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => eliminarGuiaSalida(a.id_armado)}
+                                  title="Eliminar despacho"
+                                >
+                                  <i className="fas fa-trash-alt" />
+                                </button>
+                              ) : null}
+                            </div>
                           ) : (
-                            <span className="text-muted">Completado</span>
+                            <div className="d-flex justify-content-center" style={{ gap: 6, flexWrap: "wrap" }}>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => abrirModalGuia(a, guia, false)}>
+                                <i className="fas fa-eye mr-1" />
+                                Ver despacho
+                              </button>
+                              {esAdminBodega ? (
+                                <button
+                                  className="btn btn-sm btn-outline-warning"
+                                  onClick={() => abrirModalGuia(a, guia, true)}
+                                  title="Editar despacho"
+                                >
+                                  <i className="fas fa-pen" />
+                                </button>
+                              ) : null}
+                              {esAdminBodega ? (
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => eliminarGuiaSalida(a.id_armado)}
+                                  title="Eliminar despacho"
+                                >
+                                  <i className="fas fa-trash-alt" />
+                                </button>
+                              ) : null}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -3461,6 +3555,16 @@ export default function BodegaRetiros() {
                         onChange={(e) => setFormGuia((p) => ({ ...p, fecha_salida: e.target.value }))}
                       />
                     </div>
+                    <div className="form-group mb-3">
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${verCodigoGuia ? "btn-primary" : "btn-outline-primary"}`}
+                        onClick={() => setVerCodigoGuia((v) => !v)}
+                      >
+                        <i className="fas fa-barcode mr-1" />
+                        {verCodigoGuia ? "Ocultar N° serie" : "Ver N° serie"}
+                      </button>
+                    </div>
                     <div className="form-group mb-0">
                       <label className="small text-muted mb-1">Observación</label>
                       <textarea
@@ -3527,7 +3631,7 @@ export default function BodegaRetiros() {
                                         {(row.equipos || []).map((it, idx) => (
                                           <li key={`eq-${row.caja}-${idx}`}>
                                             {it.nombre} x{it.cantidad}
-                                            {it.serie ? ` · N° Serie: ${it.serie}` : ""}
+                                            {verCodigoGuia && it.serie ? ` · N° Serie: ${it.serie}` : ""}
                                           </li>
                                         ))}
                                       </ul>
@@ -3565,10 +3669,12 @@ export default function BodegaRetiros() {
                   <i className="fas fa-print mr-1" />
                   Imprimir / PDF
                 </button>
-                <button type="button" className="btn btn-primary" onClick={guardarGuiaSalida}>
-                  <i className="fas fa-save mr-1" />
-                  Guardar guía
-                </button>
+                {modoEdicionGuia ? (
+                  <button type="button" className="btn btn-primary" onClick={guardarGuiaSalida}>
+                    <i className="fas fa-save mr-1" />
+                    Guardar guía
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

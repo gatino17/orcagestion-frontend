@@ -1711,6 +1711,46 @@ export const obtenerHistorialEquiposArmado = async (armadoId) => {
     }
 };
 
+export const obtenerGuiasSalidaArmado = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/armados/guias-salida`, { params });
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener guias de salida:", error);
+        throw error;
+    }
+};
+
+export const guardarGuiaSalidaArmado = async (armadoId, data) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/armados/${armadoId}/guia-salida`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al guardar guia de salida:", error);
+        throw error;
+    }
+};
+
+export const marcarRecepcionCentroGuiaArmado = async (armadoId, data = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/armados/${armadoId}/guia-salida/recepcion-centro`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al marcar recepcion de guia:", error);
+        throw error;
+    }
+};
+
+export const eliminarGuiaSalidaArmado = async (armadoId) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/armados/${armadoId}/guia-salida`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar guia de salida:", error);
+        throw error;
+    }
+};
+
 export const obtenerMovimientosRecientes = async (limit = 20, page = 1, filtros = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/armados/movimientos`, { params: { limit, page, ...filtros } });

@@ -54,6 +54,52 @@ const getClientTone = (cliente) => {
   return `disp-client-${hash % 6}`;
 };
 
+const getBloqueoTipoTone = (tipo) => {
+  const key = String(tipo || "").trim().toLowerCase();
+  if (key === "vacaciones") return "bloqueo-tipo-vacaciones";
+  if (key === "licencia") return "bloqueo-tipo-licencia";
+  if (key === "permiso") return "bloqueo-tipo-permiso";
+  if (key === "dia_libre") return "bloqueo-tipo-dia-libre";
+  if (key === "compensatorio") return "bloqueo-tipo-compensatorio";
+  return "bloqueo-tipo-default";
+};
+
+const getBloqueoTipoLabel = (tipo) => {
+  const key = String(tipo || "").trim().toLowerCase();
+  if (key === "dia_libre") return "Día libre";
+  if (key === "compensatorio") return "Compensatorio";
+  if (key === "vacaciones") return "Vacaciones";
+  if (key === "licencia") return "Licencia";
+  if (key === "permiso") return "Permiso";
+  return "Bloqueo";
+};
+
+const normalizarNombreTecnico = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const parseFechaCalendario = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, y, m, d] = isoDate;
+    const fecha = new Date(Number(y), Number(m) - 1, Number(d));
+    fecha.setHours(0, 0, 0, 0);
+    return fecha;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const fecha = /gmt|utc/i.test(raw)
+    ? new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate())
+    : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  fecha.setHours(0, 0, 0, 0);
+  return fecha;
+};
+
 const calcularPctChecklistArmado = (armadoId) => {
   const id = Number(armadoId || 0);
   if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
@@ -129,18 +175,21 @@ function Calendario() {
   const [armadoFechaTermino, setArmadoFechaTermino] = useState("");
   const [armadoObservacion, setArmadoObservacion] = useState("");
   const [toastAsignacion, setToastAsignacion] = useState("");
+  const [disponibilidadOffsetDias, setDisponibilidadOffsetDias] = useState(0);
 
   const toDateKey = (value) => {
-    if (!value) return "";
-    const raw = String(value).trim();
-    const isoDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (isoDate?.[1]) return isoDate[1];
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
+    const d = parseFechaCalendario(value);
+    if (!d) return "";
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
+  };
+
+  const sumarDiasBase = (fecha, dias) => {
+    const d = new Date(fecha);
+    d.setDate(d.getDate() + dias);
+    return d;
   };
 
   useEffect(() => {
@@ -204,8 +253,7 @@ function Calendario() {
             const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
             const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
             return fb - fa;
-          })
-          .slice(0, 20);
+          });
         setArmadosCalendario(lista);
       } catch (error) {
         setArmadosCalendario([]);
@@ -473,16 +521,64 @@ function Calendario() {
   }, [centros, armadoClienteId]);
 
   const tecnicosArmado = useMemo(() => {
-    return (usuarios || []).filter((u) => {
+    const usuariosOperativos = (usuarios || []).filter((u) => {
       const rol = String(u?.rol || "").toLowerCase();
       return rol === "tecnico" || rol === "bodega";
     });
-  }, [usuarios]);
+    const encargadosLista = Array.isArray(encargados) ? encargados : [];
+    const encargadosByUserId = new Map(
+      encargadosLista
+        .filter((enc) => Number(enc?.user_id || 0))
+        .map((enc) => [Number(enc.user_id), enc])
+    );
+    const encargadosByName = new Map(
+      encargadosLista
+        .filter((enc) => normalizarNombreTecnico(enc?.nombre_encargado))
+        .map((enc) => [normalizarNombreTecnico(enc.nombre_encargado), enc])
+    );
 
-  const filteredAyudantes = encargados.filter(
+    const merged = usuariosOperativos
+      .map((user) => {
+        const userId = Number(user?.id || 0) || null;
+        const nombreVisible = String(user?.tecnico?.nombre_encargado || user?.name || "").trim();
+        const encargadoMatch =
+          (userId ? encargadosByUserId.get(userId) : null) ||
+          encargadosByName.get(normalizarNombreTecnico(nombreVisible)) ||
+          null;
+        if (!userId || !encargadoMatch?.id_encargado) return null;
+        return {
+          id: userId,
+          name: encargadoMatch.nombre_encargado || nombreVisible || `ID ${userId}`,
+          rol: String(user?.rol || "").toLowerCase(),
+          encargado_id: Number(encargadoMatch.id_encargado),
+          user_id: Number(encargadoMatch.user_id || userId)
+        };
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    return merged.filter((item) => {
+      const key = `${item.id}-${item.encargado_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [usuarios, encargados]);
+
+  const encargadosDisponiblesActividad = useMemo(
+    () =>
+      tecnicosArmado.map((tec) => ({
+        id_encargado: tec.encargado_id,
+        user_id: tec.user_id,
+        nombre_encargado: tec.name
+      })),
+    [tecnicosArmado]
+  );
+
+  const filteredAyudantes = encargadosDisponiblesActividad.filter(
     (encargado) => encargado.id_encargado !== parseInt(encargadoId || 0, 10)
   );
-  const tecnicosAdicionalesDisponibles = encargados.filter((enc) => {
+  const tecnicosAdicionalesDisponibles = encargadosDisponiblesActividad.filter((enc) => {
     const id = Number(enc.id_encargado || 0);
     if (!id) return false;
     if (id === Number(encargadoId || 0)) return false;
@@ -532,13 +628,11 @@ function Calendario() {
     await agregarArmado(payload, async () => {
       try {
         const armados = await obtenerArmados();
-        const lista = (Array.isArray(armados) ? armados : [])
-          .sort((a, b) => {
-            const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
-            const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
-            return fb - fa;
-          })
-          .slice(0, 20);
+        const lista = (Array.isArray(armados) ? armados : []).sort((a, b) => {
+          const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
+          const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
+          return fb - fa;
+        });
         setArmadosCalendario(lista);
       } catch (error) {
         setArmadosCalendario([]);
@@ -651,21 +745,21 @@ function Calendario() {
   }, [actividades, hoy]);
 
   const proximasActividades = useMemo(() => {
-    const fin14 = new Date(hoy);
-    fin14.setDate(fin14.getDate() + 13);
-    fin14.setHours(23, 59, 59, 999);
+    const fin30 = new Date(hoy);
+    fin30.setDate(fin30.getDate() + 29);
+    fin30.setHours(23, 59, 59, 999);
     return [...filteredActividades]
       .filter((act) => {
         if (!act.fecha_inicio) return false;
         const inicio = new Date(act.fecha_inicio);
         if (Number.isNaN(inicio.getTime())) return false;
-        return inicio >= hoy && inicio <= fin14;
+        return inicio >= hoy && inicio <= fin30;
       })
       .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio))
-      .slice(0, 14);
+      .slice(0, 30);
   }, [filteredActividades, hoy]);
 
-  const resumenProximas14 = useMemo(() => {
+  const resumenProximas30 = useMemo(() => {
     const base = {
       total: proximasActividades.length,
       mantencion: 0,
@@ -687,21 +781,18 @@ function Calendario() {
     return base;
   }, [proximasActividades]);
 
+  const tecnicoEnArmado = (armado, tecnicoUserId, tecnicoNombre) => {
+    const idArmado = Number(armado?.tecnico_id || armado?.tecnico?.id || 0) || null;
+    if (tecnicoUserId && idArmado) return idArmado === tecnicoUserId;
+    const nombreArmado = normalizarNombreTecnico(
+      armado?.tecnico?.nombre || armado?.tecnico?.name || armado?.tecnico_nombre || ""
+    );
+    const nombreTecnico = normalizarNombreTecnico(tecnicoNombre);
+    return !!nombreArmado && nombreArmado === nombreTecnico;
+  };
+
   const disponibilidadTecnicos = useMemo(() => {
-    const normalizarInicioDia = (fecha) => {
-      if (!fecha) return null;
-      let d = null;
-      const raw = String(fecha).trim();
-      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-        const [y, m, day] = raw.slice(0, 10).split("-").map(Number);
-        d = new Date(y, (m || 1) - 1, day || 1);
-      } else {
-        d = new Date(fecha);
-      }
-      if (Number.isNaN(d.getTime())) return null;
-      d.setHours(0, 0, 0, 0);
-      return d;
-    };
+    const normalizarInicioDia = (fecha) => parseFechaCalendario(fecha);
     const sumarDias = (fecha, dias) => {
       const d = new Date(fecha);
       d.setDate(d.getDate() + dias);
@@ -728,6 +819,7 @@ function Calendario() {
     const tecnicosBase = (Array.isArray(encargados) ? encargados : [])
       .map((enc) => ({
         id: Number(enc?.id_encargado || 0) || null,
+        userId: Number(enc?.user_id || 0) || null,
         nombre: String(enc?.nombre_encargado || "").trim()
       }))
       .filter((enc) => !!enc.nombre);
@@ -753,6 +845,7 @@ function Calendario() {
     const listado = tecnicosBase.map((tecnico) => {
       const tecnicoNombre = tecnico.nombre;
       const tecnicoId = tecnico.id;
+      const tecnicoUserId = tecnico.userId;
       const bloqueosTecnico = (Array.isArray(bloqueosTecnicos) ? bloqueosTecnicos : [])
         .filter((b) => String(b?.estado || "").toLowerCase() === "activo")
         .filter((b) => {
@@ -766,12 +859,25 @@ function Calendario() {
         if (estado === "cancelado") return false;
         return tecnicoEnActividad(act, tecnicoId, tecnicoNombre);
       });
+      const armadosTecnico = (Array.isArray(armadosCalendario) ? armadosCalendario : []).filter((armado) => {
+        const estado = String(armado?.estado || "").toLowerCase();
+        if (estado === "cancelado") return false;
+        return tecnicoEnArmado(armado, tecnicoUserId, tecnicoNombre);
+      });
 
       const enTerrenoHoy = actividadesTecnico.some((act) => {
         const estado = String(act?.estado || "").toLowerCase();
         if (estado === "cancelado") return false;
         const inicio = normalizarInicioDia(act?.fecha_inicio);
         const fin = normalizarInicioDia(act?.fecha_termino || act?.fecha_inicio);
+        if (!inicio || !fin) return false;
+        return inicio <= hoy && hoy <= fin;
+      });
+      const enArmadoHoy = armadosTecnico.some((armado) => {
+        const estado = String(armado?.estado || "").toLowerCase();
+        if (estado === "cancelado") return false;
+        const inicio = normalizarInicioDia(armado?.fecha_inicio || armado?.fecha_asignacion);
+        const fin = normalizarInicioDia(armado?.fecha_cierre || armado?.fecha_inicio || armado?.fecha_asignacion);
         if (!inicio || !fin) return false;
         return inicio <= hoy && hoy <= fin;
       });
@@ -788,12 +894,32 @@ function Calendario() {
         .map((act) => normalizarInicioDia(act?.fecha_termino || act?.fecha_inicio))
         .filter(Boolean)
         .sort((a, b) => b.getTime() - a.getTime())[0];
+      const tramoArmadoActual = armadosTecnico
+        .filter((armado) => {
+          const estado = String(armado?.estado || "").toLowerCase();
+          if (estado === "cancelado") return false;
+          const inicio = normalizarInicioDia(armado?.fecha_inicio || armado?.fecha_asignacion);
+          const fin = normalizarInicioDia(armado?.fecha_cierre || armado?.fecha_inicio || armado?.fecha_asignacion);
+          if (!inicio || !fin) return false;
+          return inicio <= hoy && hoy <= fin;
+        })
+        .map((armado) => normalizarInicioDia(armado?.fecha_cierre || armado?.fecha_inicio || armado?.fecha_asignacion))
+        .filter(Boolean)
+        .sort((a, b) => b.getTime() - a.getTime())[0];
 
       const proximaSalida = actividadesTecnico
         .map((act) => {
           const estado = String(act?.estado || "").toLowerCase();
           if (estado === "cancelado") return null;
           return normalizarInicioDia(act?.fecha_inicio);
+        })
+        .filter((d) => d && d > hoy)
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      const proximoArmado = armadosTecnico
+        .map((armado) => {
+          const estado = String(armado?.estado || "").toLowerCase();
+          if (estado === "cancelado") return null;
+          return normalizarInicioDia(armado?.fecha_inicio || armado?.fecha_asignacion);
         })
         .filter((d) => d && d > hoy)
         .sort((a, b) => a.getTime() - b.getTime())[0];
@@ -806,7 +932,9 @@ function Calendario() {
       });
 
       const diasTerrenoSet = new Set();
+      const diasArmadoSet = new Set();
       const diasBloqueadosSet = new Set();
+      const tiposBloqueoSemana = new Set();
       actividadesTecnico.forEach((act) => {
         const estado = String(act?.estado || "").toLowerCase();
         if (estado === "cancelado") return;
@@ -820,6 +948,20 @@ function Calendario() {
           diasTerrenoSet.add(d.toISOString().slice(0, 10));
         }
       });
+      armadosTecnico.forEach((armado) => {
+        const estado = String(armado?.estado || "").toLowerCase();
+        if (estado === "cancelado") return;
+        const inicio = normalizarInicioDia(armado?.fecha_inicio || armado?.fecha_asignacion);
+        const fin = normalizarInicioDia(armado?.fecha_cierre || armado?.fecha_inicio || armado?.fecha_asignacion);
+        if (!inicio || !fin) return;
+        const desde = inicio > hoy ? inicio : hoy;
+        const hasta = fin < finSemana ? fin : finSemana;
+        if (desde > hasta) return;
+        for (let d = new Date(desde); d <= hasta; d = sumarDias(d, 1)) {
+          const key = d.toISOString().slice(0, 10);
+          if (!diasTerrenoSet.has(key) && !diasBloqueadosSet.has(key)) diasArmadoSet.add(key);
+        }
+      });
       bloqueosTecnico.forEach((b) => {
         const inicio = normalizarInicioDia(b?.fecha_inicio);
         const fin = normalizarInicioDia(b?.fecha_fin);
@@ -827,29 +969,43 @@ function Calendario() {
         const desde = inicio > hoy ? inicio : hoy;
         const hasta = fin < finSemana ? fin : finSemana;
         if (desde > hasta) return;
+        tiposBloqueoSemana.add(String(b?.tipo || "").trim().toLowerCase());
         for (let d = new Date(desde); d <= hasta; d = sumarDias(d, 1)) {
           diasBloqueadosSet.add(d.toISOString().slice(0, 10));
         }
       });
       const diasTerreno = diasTerrenoSet.size;
+      const diasArmado = diasArmadoSet.size;
       const diasBloqueados = diasBloqueadosSet.size;
-      const diasOficina = Math.max(0, diasRestantesSemana - diasTerreno - diasBloqueados);
+      const diasOficina = Math.max(0, diasRestantesSemana - diasTerreno - diasArmado - diasBloqueados);
+      const tiposBloqueoSemanaLista = Array.from(tiposBloqueoSemana).filter(Boolean);
+      const bloqueoSemanaLabel =
+        tiposBloqueoSemanaLista.length === 1 ? getBloqueoTipoLabel(tiposBloqueoSemanaLista[0]) : "Mixto";
+      const bloqueoSemanaTone =
+        tiposBloqueoSemanaLista.length === 1 ? getBloqueoTipoTone(tiposBloqueoSemanaLista[0]) : "bloqueo-tipo-default";
 
       const estadoHoyTexto = bloqueoActual
-        ? "No disponible hoy"
+        ? `No disponible hoy por ${getBloqueoTipoLabel(bloqueoActual?.tipo).toLowerCase()}`
         : enTerrenoHoy
         ? "En terreno hoy"
+        : enArmadoHoy
+        ? "En armado hoy"
         : "Disponible hoy";
       const estadoHoyClase = bloqueoActual
         ? "bg-secondary"
         : enTerrenoHoy
         ? "bg-info text-dark"
+        : enArmadoHoy
+        ? "bg-warning text-dark"
         : "bg-success";
       const nombreDia = (fecha) => {
         const dias = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
         return dias[fecha.getDay()] || "";
       };
       const proximaSalidaMensaje = (() => {
+        if (proximoArmado && (!proximaSalida || proximoArmado < proximaSalida)) {
+          return `Armado: ${formatearFecha(proximoArmado.toISOString().slice(0, 10))}`;
+        }
         if (!proximaSalida) return "Sin salida programada";
         const fechaTxt = formatearFecha(proximaSalida.toISOString().slice(0, 10));
         if (proximaSalida > finSemana) {
@@ -861,7 +1017,60 @@ function Calendario() {
         ? `Disponible desde: ${formatearFecha(sumarDias(normalizarInicioDia(bloqueoActual.fecha_fin) || hoy, 1).toISOString().slice(0, 10))}`
         : enTerrenoHoy
         ? `Vuelve: ${formatearFecha(sumarDias(tramoActual || hoy, 1).toISOString().slice(0, 10))}`
+        : enArmadoHoy
+        ? `Vuelve: ${formatearFecha(sumarDias(tramoArmadoActual || hoy, 1).toISOString().slice(0, 10))}`
         : proximaSalidaMensaje;
+      const semanaDias = Array.from({ length: 7 }, (_, idx) => {
+        const fecha = sumarDias(inicioSemana, idx);
+        const dayKey = fecha.toISOString().slice(0, 10);
+        const bloqueoDia = bloqueosTecnico.find((b) => {
+          const inicio = normalizarInicioDia(b?.fecha_inicio);
+          const fin = normalizarInicioDia(b?.fecha_fin);
+          if (!inicio || !fin) return false;
+          return inicio <= fecha && fecha <= fin;
+        });
+        const actividadDia = actividadesTecnico.some((act) => {
+          const estado = String(act?.estado || "").toLowerCase();
+          if (estado === "cancelado") return false;
+          const inicio = normalizarInicioDia(act?.fecha_inicio);
+          const fin = normalizarInicioDia(act?.fecha_termino || act?.fecha_inicio);
+          if (!inicio || !fin) return false;
+          return inicio <= fecha && fecha <= fin;
+        });
+        const armadoDia = armadosTecnico.some((armado) => {
+          const estado = String(armado?.estado || "").toLowerCase();
+          if (estado === "cancelado") return false;
+          const inicio = normalizarInicioDia(armado?.fecha_inicio || armado?.fecha_asignacion);
+          const fin = normalizarInicioDia(armado?.fecha_cierre || armado?.fecha_inicio || armado?.fecha_asignacion);
+          if (!inicio || !fin) return false;
+          return inicio <= fecha && fecha <= fin;
+        });
+
+        let estadoDia = "oficina";
+        let labelDia = "Libre";
+        let toneDia = "week-day-oficina";
+        if (bloqueoDia) {
+          estadoDia = "bloqueado";
+          labelDia = getBloqueoTipoLabel(bloqueoDia?.tipo);
+          toneDia = `week-day-bloqueado ${getBloqueoTipoTone(bloqueoDia?.tipo)}`;
+        } else if (actividadDia) {
+          estadoDia = "terreno";
+          labelDia = "Terreno";
+          toneDia = "week-day-terreno";
+        } else if (armadoDia) {
+          estadoDia = "armado";
+          labelDia = "Armado";
+          toneDia = "week-day-armado";
+        }
+
+        return {
+          key: dayKey,
+          dayLabel: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][idx],
+          estado: estadoDia,
+          label: labelDia,
+          tone: toneDia
+        };
+      });
 
       return {
         name: tecnicoNombre,
@@ -869,37 +1078,25 @@ function Calendario() {
         estadoHoyClase,
         proximoHito,
         diasTerreno,
+        diasArmado,
         diasOficina,
-        diasBloqueados
+        diasBloqueados,
+        bloqueoSemanaLabel,
+        bloqueoSemanaTone,
+        semanaDias
       };
     });
 
     return listado.sort((a, b) => b.diasTerreno - a.diasTerreno || a.name.localeCompare(b.name));
-  }, [actividades, hoy, encargados, bloqueosTecnicos]);
+  }, [actividades, armadosCalendario, hoy, encargados, bloqueosTecnicos]);
 
-  const disponibilidad14Dias = useMemo(() => {
-    const normalizarInicioDia = (fecha) => {
-      if (!fecha) return null;
-      let d = null;
-      const raw = String(fecha).trim();
-      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-        const [y, m, day] = raw.slice(0, 10).split("-").map(Number);
-        d = new Date(y, (m || 1) - 1, day || 1);
-      } else {
-        d = new Date(fecha);
-      }
-      if (Number.isNaN(d.getTime())) return null;
-      d.setHours(0, 0, 0, 0);
-      return d;
-    };
-    const sumarDias = (fecha, dias) => {
-      const d = new Date(fecha);
-      d.setDate(d.getDate() + dias);
-      return d;
-    };
+  const disponibilidad30Dias = useMemo(() => {
+    const normalizarInicioDia = (fecha) => parseFechaCalendario(fecha);
+    const baseDisponibilidad = sumarDiasBase(hoy, disponibilidadOffsetDias);
     const tecnicosBase = (Array.isArray(encargados) ? encargados : [])
       .map((enc) => ({
         id: Number(enc?.id_encargado || 0) || null,
+        userId: Number(enc?.user_id || 0) || null,
         nombre: String(enc?.nombre_encargado || "").trim()
       }))
       .filter((enc) => !!enc.nombre);
@@ -921,17 +1118,19 @@ function Calendario() {
       return principal === tecnicoNombre || ayudante === tecnicoNombre || adicionales.includes(tecnicoNombre);
     };
 
-    const dias = Array.from({ length: 14 }, (_, idx) => {
-      const fecha = sumarDias(hoy, idx);
+    const dias = Array.from({ length: 30 }, (_, idx) => {
+      const fecha = sumarDiasBase(baseDisponibilidad, idx);
       return {
         key: fecha.toISOString().slice(0, 10),
         etiqueta: `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}`,
-        dia: fecha.toLocaleDateString("es-CL", { weekday: "short" }).replace(".", "")
+        dia: fecha.toLocaleDateString("es-CL", { weekday: "short" }).replace(".", ""),
+        isSunday: fecha.getDay() === 0
       };
     });
 
     const rows = tecnicosBase.map((tecnico) => {
       const tecnicoId = tecnico.id;
+      const tecnicoUserId = tecnico.userId;
       const tecnicoNombre = tecnico.nombre;
       const bloqueosTecnico = (Array.isArray(bloqueosTecnicos) ? bloqueosTecnicos : [])
         .filter((b) => String(b?.estado || "").toLowerCase() === "activo")
@@ -944,6 +1143,11 @@ function Calendario() {
         const estado = String(act?.estado || "").toLowerCase();
         if (estado === "cancelado") return false;
         return tecnicoEnActividad(act, tecnicoId, tecnicoNombre);
+      });
+      const armadosTecnico = (Array.isArray(armadosCalendario) ? armadosCalendario : []).filter((armado) => {
+        const estado = String(armado?.estado || "").toLowerCase();
+        if (estado === "cancelado") return false;
+        return tecnicoEnArmado(armado, tecnicoUserId, tecnicoNombre);
       });
 
       const estados = dias.map((d) => {
@@ -958,8 +1162,17 @@ function Calendario() {
           const fin = normalizarInicioDia(a?.fecha_termino || a?.fecha_inicio);
           return ini && fin && ini <= fecha && fecha <= fin;
         });
+        const armadosDia = armadosTecnico.filter((a) => {
+          const ini = normalizarInicioDia(a?.fecha_inicio || a?.fecha_asignacion);
+          const fin = normalizarInicioDia(a?.fecha_cierre || a?.fecha_inicio || a?.fecha_asignacion);
+          return ini && fin && ini <= fecha && fecha <= fin;
+        });
         const actividadKey = actividadesDia
           .map((a) => String(a?.id_actividad || `${a?.nombre_actividad || ""}-${a?.centro?.nombre || ""}-${a?.area || ""}`))
+          .sort()
+          .join("|");
+        const armadoKey = armadosDia
+          .map((a) => String(a?.id_armado || `${a?.centro?.nombre || ""}-${a?.estado || ""}`))
           .sort()
           .join("|");
         const detalleActividades = actividadesDia
@@ -970,11 +1183,19 @@ function Calendario() {
             return `${cliente} / ${centro} - ${tipo}`;
           })
           .join(" | ");
+        const detalleArmados = armadosDia
+          .map((a) => {
+            const cliente = String(a?.centro?.cliente || "Sin cliente");
+            const centro = String(a?.centro?.nombre || "Sin centro");
+            return `${cliente} / ${centro}`;
+          })
+          .join(" | ");
         const clientesDia = Array.from(
           new Set(actividadesDia.map((a) => String(a?.centro?.cliente || "Sin cliente").trim()).filter(Boolean))
         ).sort();
         const clienteTone = clientesDia.length === 1 ? getClientTone(clientesDia[0]) : "disp-client-mixed";
         if (bloqueosDia.length) {
+          const tipoBloqueo = String(bloqueosDia[0]?.tipo || "").trim().toLowerCase();
           const detalleBloqueos = bloqueosDia
             .map((b) => `${String(b?.tipo || "bloqueo").replace(/_/g, " ")} (${b?.fecha_inicio || "-"} a ${b?.fecha_fin || "-"})`)
             .join(" | ");
@@ -983,7 +1204,8 @@ function Calendario() {
             detalle: detalleActividades
               ? `Bloqueado: ${detalleBloqueos} | Terreno: ${detalleActividades}`
               : `Bloqueado: ${detalleBloqueos}`,
-            key: `bloqueo:${detalleBloqueos}`
+            key: `bloqueo:${detalleBloqueos}`,
+            bloqueoTone: getBloqueoTipoTone(tipoBloqueo)
           };
         }
         if (actividadesDia.length) {
@@ -994,6 +1216,13 @@ function Calendario() {
             clienteTone
           };
         }
+        if (armadosDia.length) {
+          return {
+            estado: "armado",
+            detalle: `Armado: ${detalleArmados}`,
+            key: `armado:${armadoKey}`
+          };
+        }
         return { estado: "libre", detalle: "Disponible", key: "libre" };
       });
 
@@ -1001,7 +1230,15 @@ function Calendario() {
     });
 
     return { dias, rows };
-  }, [actividades, bloqueosTecnicos, encargados, hoy]);
+  }, [actividades, armadosCalendario, bloqueosTecnicos, encargados, hoy, disponibilidadOffsetDias]);
+
+  const tituloDisponibilidadMes = useMemo(() => {
+    const base = sumarDiasBase(hoy, disponibilidadOffsetDias);
+    return base.toLocaleDateString("es-CL", {
+      month: "long",
+      year: "numeric"
+    });
+  }, [hoy, disponibilidadOffsetDias]);
 
   const bloqueosPaginados = useMemo(() => {
     const total = Array.isArray(bloqueosTecnicos) ? bloqueosTecnicos.length : 0;
@@ -1091,7 +1328,7 @@ function Calendario() {
     {
       name: "N°",
       sortable: false,
-      width: "70px",
+      width: "52px",
       cell: (_row, index) => <span>{Number(index || 0) + 1}</span>
     },
     {
@@ -1112,9 +1349,11 @@ function Calendario() {
       name: "Tipo",
       selector: (row) => row.area || "-",
       sortable: true,
-      width: "130px",
+      width: "122px",
       cell: (row) => (
-        <span className="pill state-en-progreso">{row.area || "-"}</span>
+        <span className="pill state-en-progreso calendar-pill-compact" title={row.area || "-"}>
+          {row.area || "-"}
+        </span>
       )
     },
     {
@@ -1131,10 +1370,18 @@ function Calendario() {
         const estadoRaw = String(row.estado || "Sin estado");
         const estadoKey = estadoRaw.toLowerCase().replace(/\s+/g, "-");
         const esFinalizado = estadoKey === "finalizado";
+        const esEnProgreso = estadoKey === "en-progreso";
         if (esFinalizado) {
           return (
             <span className={`pill state-${estadoKey}`} title="Finalizado">
               <i className="fas fa-check-circle" style={{ color: "#16a34a" }} />
+            </span>
+          );
+        }
+        if (esEnProgreso) {
+          return (
+            <span className={`pill state-${estadoKey}`} title="En progreso">
+              <i className="fas fa-cog" />
             </span>
           );
         }
@@ -1758,140 +2005,6 @@ function Calendario() {
               />
             </div>
           </div>
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="mb-0">Disponibilidad</h6>
-              <div className="mt-2">
-                {disponibilidadTecnicos.length ? (
-                  <div className="table-responsive">
-                    <table className="table table-sm mb-0 scheduler-tech-table">
-                      <thead>
-                        <tr>
-                          <th>Tecnico</th>
-                          <th className="text-center">Estado hoy</th>
-                          <th className="text-center">Proximo hito</th>
-                          <th className="text-center">Semana</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {disponibilidadTecnicos.map((item) => (
-                          <tr key={item.name}>
-                            <td><strong>{item.name}</strong></td>
-                            <td className="text-center">
-                              <span className={`badge ${item.estadoHoyClase}`}>{item.estadoHoyTexto}</span>
-                            </td>
-                            <td className="text-center">
-                              <span className="small text-muted">{item.proximoHito}</span>
-                            </td>
-                            <td className="text-center">
-                              <div
-                                className="week-balance"
-                                title={`Esta semana: ${item.diasTerreno} dias terreno, ${item.diasOficina} dias oficina, ${item.diasBloqueados} dias bloqueado`}
-                              >
-                                <div className="week-balance-chips">
-                                  <span className="week-chip week-chip-terreno">
-                                    Terreno <strong>{item.diasTerreno}d</strong>
-                                  </span>
-                                  <span className="week-chip week-chip-oficina">
-                                    Oficina <strong>{item.diasOficina}d</strong>
-                                  </span>
-                                  {item.diasBloqueados > 0 ? (
-                                    <span className="week-chip week-chip-bloqueado">
-                                      Bloq. <strong>{item.diasBloqueados}d</strong>
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <div className="week-balance-bar">
-                                  <span
-                                    className="week-bar-terreno"
-                                    style={{ flex: Math.max(0, item.diasTerreno) }}
-                                  />
-                                  <span
-                                    className="week-bar-oficina"
-                                    style={{ flex: Math.max(0, item.diasOficina) }}
-                                  />
-                                  <span
-                                    className="week-bar-bloqueado"
-                                    style={{ flex: Math.max(0, item.diasBloqueados) }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="mb-0 text-muted">Sin tecnicos asignados.</p>
-                )}
-              </div>
-              <div className="mt-3">
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <h6 className="mb-0">Vista 14 dias</h6>
-                  <div className="availability-legend">
-                    <span><i className="fas fa-square text-success" /> Libre</span>
-                    <span><i className="fas fa-square text-info" /> Terreno</span>
-                    <span><i className="fas fa-square text-secondary" /> Bloqueado</span>
-                  </div>
-                </div>
-                <div className="table-responsive">
-                  <table className="table table-sm mb-0 disponibilidad-14-table">
-                    <thead>
-                      <tr>
-                        <th style={{ minWidth: 170 }}>Tecnico</th>
-                        {disponibilidad14Dias.dias.map((d) => (
-                          <th key={`day-h-${d.key}`} className="text-center">
-                            <div>{d.etiqueta}</div>
-                            <small className="text-muted">{d.dia}</small>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {disponibilidad14Dias.rows.map((row) => (
-                        <tr key={`row-14-${row.tecnico}`}>
-                          <td><strong>{row.tecnico}</strong></td>
-                          {row.estados.map((cell, idx) => {
-                            const prev = row.estados[idx - 1];
-                            const next = row.estados[idx + 1];
-                            const esTerrenoMismaActividad = cell.estado === "terreno" && !!cell.key && cell.key !== "libre";
-                            const samePrev =
-                              esTerrenoMismaActividad &&
-                              !!prev &&
-                              prev.estado === "terreno" &&
-                              prev.key === cell.key;
-                            const sameNext =
-                              esTerrenoMismaActividad &&
-                              !!next &&
-                              next.estado === "terreno" &&
-                              next.key === cell.key;
-                            const segClass =
-                              samePrev && sameNext
-                                ? "disp-seg-mid"
-                                : samePrev
-                                ? "disp-seg-end"
-                                : sameNext
-                                ? "disp-seg-start"
-                                : "disp-seg-single";
-                            return (
-                              <td
-                                key={`cell-${row.tecnico}-${idx}`}
-                                className={`text-center disp-cell ${segClass} ${cell.estado === "terreno" ? "disp-cell-terreno" : ""} ${cell.clienteTone || ""}`}
-                                title={cell.detalle || ""}
-                              >
-                                <span className={`disp-dot disp-${cell.estado}`} />
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
           <div className="card mt-3 bloqueo-card">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
@@ -1900,6 +2013,13 @@ function Calendario() {
                   Bloqueos de tecnicos
                 </h6>
                 {loadingBloqueos ? <span className="table-meta">Cargando...</span> : <span className="pill state-pendiente">{bloqueosTecnicos.length} activos</span>}
+              </div>
+              <div className="bloqueo-legend mb-3">
+                <span className="pill bloqueo-tipo-vacaciones">Vacaciones</span>
+                <span className="pill bloqueo-tipo-licencia">Licencia</span>
+                <span className="pill bloqueo-tipo-permiso">Permiso</span>
+                <span className="pill bloqueo-tipo-dia-libre">Día libre</span>
+                <span className="pill bloqueo-tipo-compensatorio">Compensatorio</span>
               </div>
               <div className="row g-3 align-items-end bloqueo-form">
                 <div className="col-lg-3 col-md-6">
@@ -1957,7 +2077,11 @@ function Calendario() {
                     {bloqueosPaginados.data.map((b) => (
                       <tr key={b.id_bloqueo}>
                         <td><strong>{b?.tecnico?.nombre_encargado || `Tecnico ${b.tecnico_id}`}</strong></td>
-                        <td className="text-capitalize">{b.tipo || "-"}</td>
+                        <td>
+                          <span className={`pill ${getBloqueoTipoTone(b.tipo)}`}>
+                            {String(b.tipo || "-").replace(/_/g, " ")}
+                          </span>
+                        </td>
                         <td>{formatearFecha(b.fecha_inicio)}</td>
                         <td>{formatearFecha(b.fecha_fin)}</td>
                         <td>{b.motivo || "-"}</td>
@@ -2038,12 +2162,12 @@ function Calendario() {
           <div className="card mt-3">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h6 className="mb-0">Proximas actividades (14 dias)</h6>
-                <span className="pill state-en-progreso">{resumenProximas14.total}</span>
+                <h6 className="mb-0">Próximas actividades (30 días)</h6>
+                <span className="pill state-en-progreso">{resumenProximas30.total}</span>
               </div>
-              {!!resumenProximas14.total && (
+              {!!resumenProximas30.total && (
                 <p className="table-meta mb-2">
-                  Mantencion: {resumenProximas14.mantencion} | Instalacion: {resumenProximas14.instalacion} | Reapuntamiento: {resumenProximas14.reapuntamiento} | Retiro: {resumenProximas14.retiro} | Levantamiento: {resumenProximas14.levantamiento} | Soporte: {resumenProximas14.soporte}
+                  Mantencion: {resumenProximas30.mantencion} | Instalacion: {resumenProximas30.instalacion} | Reapuntamiento: {resumenProximas30.reapuntamiento} | Retiro: {resumenProximas30.retiro} | Levantamiento: {resumenProximas30.levantamiento} | Soporte: {resumenProximas30.soporte}
                 </p>
               )}
               {proximasActividades.length ? (
@@ -2093,6 +2217,153 @@ function Calendario() {
               ) : (
                 <p className="mb-0 text-muted">Sin registros en este mes.</p>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card mt-3">
+        <div className="card-body">
+          <h6 className="mb-0">Disponibilidad</h6>
+          <div className="mt-2">
+            {disponibilidadTecnicos.length ? (
+              <div className="table-responsive">
+                <table className="table table-sm mb-0 scheduler-tech-table">
+                  <thead>
+                    <tr>
+                      <th>Tecnico</th>
+                      <th className="text-center">Estado hoy</th>
+                      <th className="text-center">Proximo hito</th>
+                      <th className="text-center">Semana actual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disponibilidadTecnicos.map((item) => (
+                      <tr key={item.name}>
+                        <td><strong>{item.name}</strong></td>
+                        <td className="text-center">
+                          <span className={`badge ${item.estadoHoyClase}`}>{item.estadoHoyTexto}</span>
+                        </td>
+                        <td className="text-center">
+                          <span className="small text-muted">{item.proximoHito}</span>
+                        </td>
+                        <td className="text-center">
+                          <div className="week-days-grid">
+                            {(item.semanaDias || []).map((dia) => (
+                              <div key={`${item.name}-${dia.key}`} className={`week-day-card ${dia.tone || ""}`}>
+                                <span className="week-day-name">{dia.dayLabel}</span>
+                                <span className="week-day-status">{dia.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mb-0 text-muted">Sin tecnicos asignados.</p>
+            )}
+          </div>
+          <div className="mt-3">
+            <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 12, flexWrap: "wrap" }}>
+              <div className="d-flex align-items-center" style={{ gap: 10, flexWrap: "wrap" }}>
+                <h6 className="mb-0">Vista 30 días</h6>
+                <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setDisponibilidadOffsetDias((prev) => prev - 30)}
+                    title="Ver 30 días anteriores"
+                  >
+                    <i className="fas fa-chevron-left" />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setDisponibilidadOffsetDias(0)}
+                    title="Volver a hoy"
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setDisponibilidadOffsetDias((prev) => prev + 30)}
+                    title="Ver 30 días siguientes"
+                  >
+                    <i className="fas fa-chevron-right" />
+                  </button>
+                </div>
+              </div>
+              <div className="table-meta" style={{ flex: 1, textAlign: "center", fontWeight: 700, textTransform: "capitalize" }}>
+                {tituloDisponibilidadMes}
+              </div>
+              <div className="availability-legend">
+                <span><i className="fas fa-square text-info" /> Terreno</span>
+                <span><i className="fas fa-square text-warning" /> Armado</span>
+                <span className="pill bloqueo-tipo-vacaciones">Vacaciones</span>
+                <span className="pill bloqueo-tipo-licencia">Licencia</span>
+                <span className="pill bloqueo-tipo-permiso">Permiso</span>
+                <span className="pill bloqueo-tipo-dia-libre">Día libre</span>
+                <span className="pill bloqueo-tipo-compensatorio">Compensatorio</span>
+              </div>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-sm mb-0 disponibilidad-14-table">
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: 170 }}>Tecnico</th>
+                    {disponibilidad30Dias.dias.map((d) => (
+                      <th key={`day-h-${d.key}`} className={`text-center ${d.isSunday ? "disp-week-separator" : ""}`}>
+                        <div>{d.etiqueta}</div>
+                        <small className="text-muted">{d.dia}</small>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {disponibilidad30Dias.rows.map((row) => (
+                    <tr key={`row-14-${row.tecnico}`}>
+                      <td><strong>{row.tecnico}</strong></td>
+                      {row.estados.map((cell, idx) => {
+                        const prev = row.estados[idx - 1];
+                        const next = row.estados[idx + 1];
+                        const diaMeta = disponibilidad30Dias.dias[idx];
+                        const esTerrenoMismaActividad = cell.estado === "terreno" && !!cell.key && cell.key !== "libre";
+                        const samePrev =
+                          esTerrenoMismaActividad &&
+                          !!prev &&
+                          prev.estado === "terreno" &&
+                          prev.key === cell.key;
+                        const sameNext =
+                          esTerrenoMismaActividad &&
+                          !!next &&
+                          next.estado === "terreno" &&
+                          next.key === cell.key;
+                        const segClass =
+                          samePrev && sameNext
+                            ? "disp-seg-mid"
+                            : samePrev
+                            ? "disp-seg-end"
+                            : sameNext
+                            ? "disp-seg-start"
+                            : "disp-seg-single";
+                        return (
+                          <td
+                            key={`cell-${row.tecnico}-${idx}`}
+                            className={`text-center disp-cell ${segClass} ${cell.estado === "terreno" ? "disp-cell-terreno" : ""} ${cell.clienteTone || ""} ${diaMeta?.isSunday ? "disp-week-separator" : ""}`}
+                            title={cell.detalle || ""}
+                          >
+                            <span className={`disp-dot disp-${cell.estado} ${cell.bloqueoTone || ""}`} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -2193,7 +2464,7 @@ function Calendario() {
                     <label>Tecnico</label>
                     <select className="form-control" value={encargadoId} onChange={(e) => setEncargadoId(e.target.value)}>
                       <option value="">Seleccione</option>
-                      {encargados.map((enc) => (
+                      {encargadosDisponiblesActividad.map((enc) => (
                         <option key={enc.id_encargado} value={enc.id_encargado}>
                           {enc.nombre_encargado}
                         </option>

@@ -880,6 +880,7 @@ const ArmadoTecnico = () => {
 
     const historialResumen = useMemo(() => (Array.isArray(historialData?.resumen) ? historialData.resumen : []), [historialData]);
     const historialEventos = useMemo(() => (Array.isArray(historialData?.eventos) ? historialData.eventos : []), [historialData]);
+    const totalEquiposHistorial = useMemo(() => historialResumen.length, [historialResumen]);
 
     const normalizarNombreHistorial = useCallback((nombre = "") => {
         const base = String(nombre || "").replace(/\s*\(reemplazo_mantencion_N\d+\)\s*$/i, "").trim();
@@ -2842,7 +2843,9 @@ const ArmadoTecnico = () => {
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     Historial de equipos
-                                    {historialData?.armado?.centro_nombre ? ` - ${historialData.armado.centro_nombre}` : ""}
+                                    {historialData?.armado?.centro_nombre
+                                        ? ` - ${historialData.armado.centro_nombre} (${totalEquiposHistorial} equipos)`
+                                        : ""}
                                 </h5>
                                 <button type="button" className="close" onClick={() => setHistorialOpen(false)}>
                                     <span>&times;</span>
@@ -2868,7 +2871,9 @@ const ArmadoTecnico = () => {
                                                 <span className="badge badge-pill" style={{ background: "#0ea5e9", color: "#fff" }}>
                                                     Centro
                                                 </span>
-                                                <strong style={{ color: "#0f172a" }}>{historialData?.armado?.centro_nombre || "-"}</strong>
+                                                <strong style={{ color: "#0f172a" }}>
+                                                    {historialData?.armado?.centro_nombre || "-"} ({totalEquiposHistorial} equipos)
+                                                </strong>
                                             </div>
                                             </div>
                                         <div className="row mb-3">
