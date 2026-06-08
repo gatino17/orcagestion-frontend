@@ -561,6 +561,7 @@ const ArmadoTecnico = () => {
     const [clienteSel, setClienteSel] = useState("");
     const [centroSel, setCentroSel] = useState("");
     const [tecnicoSel, setTecnicoSel] = useState("");
+    const [tecnicoSecundarioSel, setTecnicoSecundarioSel] = useState("");
     const [estadoAsignacion, setEstadoAsignacion] = useState("pendiente");
     const [fechaInicioAsignacion, setFechaInicioAsignacion] = useState("");
     const [fechaTerminoAsignacion, setFechaTerminoAsignacion] = useState("");
@@ -594,6 +595,7 @@ const ArmadoTecnico = () => {
     const [historialOpen, setHistorialOpen] = useState(false);
     const [historialLoading, setHistorialLoading] = useState(false);
     const [historialData, setHistorialData] = useState({ armado: null, resumen: [], eventos: [] });
+    const [observacionDetalle, setObservacionDetalle] = useState({ open: false, armadoId: null, centro: "", texto: "", saving: false });
     const [historialTab, setHistorialTab] = useState("resumen");
     const [checklistOpen, setChecklistOpen] = useState(false);
     const [checklistArmado, setChecklistArmado] = useState(null);
@@ -1340,16 +1342,25 @@ const ArmadoTecnico = () => {
             wrap: false,
             grow: 0.8,
             minWidth: "135px",
-            cell: (row) => (
-                <div>
-                    <div>{row.tecnico?.nombre || row.tecnico_nombre || "-"}</div>
-                    {row.tecnicos_historial && row.tecnicos_historial.length > 1 && (
-                        <small className="text-muted">
-                            Previos: {row.tecnicos_historial.slice(0, -1).join(", ")}
-                        </small>
-                    )}
-                                            </div>
-            )
+            cell: (row) => {
+                const activos = Array.isArray(row.tecnicos_asignados) ? row.tecnicos_asignados : [];
+                const apoyo = activos
+                    .filter((tec) => !tec?.principal)
+                    .map((tec) => tec?.nombre)
+                    .filter(Boolean);
+                return (
+                    <div>
+                        <div>{row.tecnico?.nombre || row.tecnico_nombre || "-"}</div>
+                        {apoyo.length ? (
+                            <small className="text-muted">Apoyo: {apoyo.join(", ")}</small>
+                        ) : row.tecnicos_historial && row.tecnicos_historial.length > 1 ? (
+                            <small className="text-muted">
+                                Previos: {row.tecnicos_historial.slice(0, -1).join(", ")}
+                            </small>
+                        ) : null}
+                    </div>
+                );
+            }
         },
         {
             name: "Estado",
@@ -1515,6 +1526,23 @@ const ArmadoTecnico = () => {
                         </button>
                         {rol === "admin" && (
                             <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() =>
+                                    setObservacionDetalle({
+                                        open: true,
+                                        armadoId: row?.id_armado || row?.id || null,
+                                        centro: row?.centro?.nombre || row?.centro_nombre || "Armado",
+                                        texto: String(row?.observacion || "").trim(),
+                                        saving: false
+                                    })
+                                }
+                                title="Ver observación"
+                            >
+                                <i className="fas fa-comment-alt" />
+                            </button>
+                        )}
+                        {rol === "admin" && (
+                            <button
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleEliminarArmado(row)}
                                 title="Eliminar armado"
@@ -1532,6 +1560,7 @@ const ArmadoTecnico = () => {
         setClienteSel("");
         setCentroSel("");
         setTecnicoSel("");
+        setTecnicoSecundarioSel("");
         setEstadoAsignacion("pendiente");
         setFechaInicioAsignacion("");
         setFechaTerminoAsignacion("");
@@ -1648,6 +1677,32 @@ const ArmadoTecnico = () => {
         } catch (err) {
             console.error("No se pudo actualizar estado:", err);
             alert("No se pudo actualizar el estado.");
+        }
+    };
+
+    const handleGuardarObservacionArmado = async () => {
+        const armadoId = Number(observacionDetalle?.armadoId || 0);
+        if (!armadoId) return;
+        try {
+            setObservacionDetalle((prev) => ({ ...prev, saving: true }));
+            await modificarArmado(armadoId, { observacion: observacionDetalle.texto || "" });
+            setArmados((prev) =>
+                prev.map((item) =>
+                    Number(item?.id_armado || item?.id || 0) === armadoId
+                        ? { ...item, observacion: observacionDetalle.texto || "" }
+                        : item
+                )
+            );
+            setArmadoActivo((prev) =>
+                Number(prev?.id_armado || prev?.id || 0) === armadoId
+                    ? { ...prev, observacion: observacionDetalle.texto || "" }
+                    : prev
+            );
+            setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false });
+        } catch (err) {
+            console.error("Error al guardar observación del armado:", err);
+            alert("No se pudo guardar la observación.");
+            setObservacionDetalle((prev) => ({ ...prev, saving: false }));
         }
     };
 
@@ -1917,9 +1972,15 @@ const ArmadoTecnico = () => {
             alert("Selecciona centro y técnico.");
             return;
         }
+        if (tecnicoSecundarioSel && tecnicoSecundarioSel === tecnicoSel) {
+            alert("El segundo técnico no puede ser el mismo técnico principal.");
+            return;
+        }
         const payload = {
             centro_id: Number(centroSel),
             tecnico_id: Number(tecnicoSel),
+            tecnico_secundario_id: tecnicoSecundarioSel ? Number(tecnicoSecundarioSel) : null,
+            tecnicos_ids: [Number(tecnicoSel), tecnicoSecundarioSel ? Number(tecnicoSecundarioSel) : null].filter(Boolean),
             estado: estadoAsignacion,
             fecha_asignacion: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),
             fecha_inicio: fechaInicioAsignacion || null,
@@ -2197,6 +2258,19 @@ const ArmadoTecnico = () => {
                                             </div>
                                                     {rol === "admin" && (
                                                         <div className="col-md-6">
+                                                            <h6>Observación de asignación</h6>
+                                                            <div
+                                                                className="mb-3 p-3"
+                                                                style={{
+                                                                    border: "1px solid #dbeafe",
+                                                                    borderRadius: 12,
+                                                                    background: "#f8fbff",
+                                                                    color: "#334155",
+                                                                    whiteSpace: "pre-wrap"
+                                                                }}
+                                                            >
+                                                                {String(armadoActivo?.observacion || "").trim() || "Sin observación registrada."}
+                                                            </div>
                                                             <h6>Transferir armado</h6>
                                                             <div className="form-group">
                                                         <label>Nuevo técnico</label>
@@ -3062,7 +3136,7 @@ const ArmadoTecnico = () => {
                                     </select>
                                             </div>
                                 <div className="form-group">
-                                    <label>Técnico</label>
+                                    <label>Técnico 1</label>
                                     <select className="form-control" value={tecnicoSel} onChange={(e) => setTecnicoSel(e.target.value)}>
                                         <option value="">Selecciona técnico</option>
                                         {tecnicos.map((tec) => (
@@ -3070,6 +3144,19 @@ const ArmadoTecnico = () => {
                                                 {tec.name || tec.nombre || `ID ${tec.id}`}
                                             </option>
                                         ))}
+                                    </select>
+                                            </div>
+                                <div className="form-group">
+                                    <label>Técnico 2 (opcional)</label>
+                                    <select className="form-control" value={tecnicoSecundarioSel} onChange={(e) => setTecnicoSecundarioSel(e.target.value)}>
+                                        <option value="">Sin segundo técnico</option>
+                                        {tecnicos
+                                            .filter((tec) => String(tec.id) !== String(tecnicoSel || ""))
+                                            .map((tec) => (
+                                                <option key={tec.id} value={tec.id}>
+                                                    {tec.name || tec.nombre || `ID ${tec.id}`}
+                                                </option>
+                                            ))}
                                     </select>
                                             </div>
                                 <div className="form-group">
@@ -3119,7 +3206,56 @@ const ArmadoTecnico = () => {
                                             </div>
                                             </div>
                                             </div>
-                                            </div>
+                </div>
+            )}
+
+            {observacionDetalle.open && (
+                <div className="modal show d-block" tabIndex="-1" role="dialog">
+                    <div className="modal-dialog" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    <i className="fas fa-comment-alt mr-2" />
+                                    Observación · {observacionDetalle.centro || "Armado"}
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="close"
+                                    onClick={() => setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false })}
+                                >
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <label className="mb-2 font-weight-bold">Texto de observación</label>
+                                <textarea
+                                    className="form-control"
+                                    rows="6"
+                                    value={observacionDetalle.texto}
+                                    onChange={(e) => setObservacionDetalle((prev) => ({ ...prev, texto: e.target.value }))}
+                                    placeholder="Escribe la observación del armado..."
+                                />
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false })}
+                                >
+                                    Cerrar
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleGuardarObservacionArmado}
+                                    disabled={observacionDetalle.saving}
+                                >
+                                    {observacionDetalle.saving ? "Guardando..." : "Guardar observación"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {checklistOpen && (

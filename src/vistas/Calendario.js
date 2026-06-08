@@ -170,6 +170,7 @@ function Calendario() {
   const [armadoClienteId, setArmadoClienteId] = useState("");
   const [armadoCentroId, setArmadoCentroId] = useState("");
   const [armadoTecnicoId, setArmadoTecnicoId] = useState("");
+  const [armadoTecnicoSecundarioId, setArmadoTecnicoSecundarioId] = useState("");
   const [armadoEstado, setArmadoEstado] = useState("pendiente");
   const [armadoFechaInicio, setArmadoFechaInicio] = useState("");
   const [armadoFechaTermino, setArmadoFechaTermino] = useState("");
@@ -575,6 +576,11 @@ function Calendario() {
     [tecnicosArmado]
   );
 
+  const tecnicosSecundariosArmado = useMemo(
+    () => tecnicosArmado.filter((tec) => Number(tec.id || 0) !== Number(armadoTecnicoId || 0)),
+    [tecnicosArmado, armadoTecnicoId]
+  );
+
   const filteredAyudantes = encargadosDisponiblesActividad.filter(
     (encargado) => encargado.id_encargado !== parseInt(encargadoId || 0, 10)
   );
@@ -604,6 +610,7 @@ function Calendario() {
     setArmadoClienteId("");
     setArmadoCentroId("");
     setArmadoTecnicoId(ultimoTecnico);
+    setArmadoTecnicoSecundarioId("");
     setArmadoEstado("pendiente");
     setArmadoFechaInicio("");
     setArmadoFechaTermino("");
@@ -615,10 +622,16 @@ function Calendario() {
       alert("Selecciona centro y tecnico para asignar el armado.");
       return;
     }
+    if (armadoTecnicoSecundarioId && armadoTecnicoSecundarioId === armadoTecnicoId) {
+      alert("El segundo técnico no puede ser el mismo técnico principal.");
+      return;
+    }
 
     const payload = {
       centro_id: Number(armadoCentroId),
       tecnico_id: Number(armadoTecnicoId),
+      tecnico_secundario_id: armadoTecnicoSecundarioId ? Number(armadoTecnicoSecundarioId) : null,
+      tecnicos_ids: [Number(armadoTecnicoId), armadoTecnicoSecundarioId ? Number(armadoTecnicoSecundarioId) : null].filter(Boolean),
       estado: armadoEstado || "pendiente",
       fecha_inicio: armadoFechaInicio || null,
       fecha_cierre: armadoFechaTermino || null,
@@ -633,7 +646,7 @@ function Calendario() {
           const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
           return fb - fa;
         });
-        setArmadosCalendario(lista);
+      setArmadosCalendario(lista);
       } catch (error) {
         setArmadosCalendario([]);
       }
@@ -784,11 +797,14 @@ function Calendario() {
   const tecnicoEnArmado = (armado, tecnicoUserId, tecnicoNombre) => {
     const idArmado = Number(armado?.tecnico_id || armado?.tecnico?.id || 0) || null;
     if (tecnicoUserId && idArmado) return idArmado === tecnicoUserId;
+    const activos = Array.isArray(armado?.tecnicos_asignados) ? armado.tecnicos_asignados : [];
+    if (tecnicoUserId && activos.some((tec) => Number(tec?.id || 0) === tecnicoUserId)) return true;
     const nombreArmado = normalizarNombreTecnico(
       armado?.tecnico?.nombre || armado?.tecnico?.name || armado?.tecnico_nombre || ""
     );
     const nombreTecnico = normalizarNombreTecnico(tecnicoNombre);
-    return !!nombreArmado && nombreArmado === nombreTecnico;
+    if (nombreArmado && nombreArmado === nombreTecnico) return true;
+    return activos.some((tec) => normalizarNombreTecnico(tec?.nombre || "") === nombreTecnico);
   };
 
   const disponibilidadTecnicos = useMemo(() => {
@@ -1567,11 +1583,20 @@ function Calendario() {
       selector: (row) => row.tecnico?.nombre || row.tecnico_nombre || "",
       sortable: true,
       width: "130px",
-      cell: (row) => (
-        <div className="text-truncate" style={{ maxWidth: "100%" }} title={row.tecnico?.nombre || row.tecnico_nombre || ""}>
-          {row.tecnico?.nombre || row.tecnico_nombre || "Sin asignar"}
-        </div>
-      )
+      cell: (row) => {
+        const activos = Array.isArray(row.tecnicos_asignados) ? row.tecnicos_asignados : [];
+        const principal = row.tecnico?.nombre || row.tecnico_nombre || "Sin asignar";
+        const apoyo = activos
+          .filter((tec) => !tec?.principal)
+          .map((tec) => tec?.nombre)
+          .filter(Boolean);
+        return (
+          <div className="text-truncate" style={{ maxWidth: "100%" }} title={[principal, ...apoyo].join(", ")}>
+            <div>{principal}</div>
+            {apoyo.length ? <small className="text-muted">Apoyo: {apoyo.join(", ")}</small> : null}
+          </div>
+        );
+      }
     },
     {
       name: "Armado",
@@ -2579,14 +2604,29 @@ function Calendario() {
                     </select>
                   </div>
                   <div className="col-md-6">
-                    <label>Tecnico</label>
+                    <label>Técnico 1</label>
                     <select
                       className="form-control"
                       value={armadoTecnicoId}
                       onChange={(e) => setArmadoTecnicoId(e.target.value)}
                     >
-                      <option value="">Seleccione tecnico</option>
+                      <option value="">Seleccione técnico</option>
                       {tecnicosArmado.map((tec) => (
+                        <option key={tec.id} value={tec.id}>
+                          {tec.name || tec.nombre || `ID ${tec.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label>Técnico 2 (opcional)</label>
+                    <select
+                      className="form-control"
+                      value={armadoTecnicoSecundarioId}
+                      onChange={(e) => setArmadoTecnicoSecundarioId(e.target.value)}
+                    >
+                      <option value="">Sin segundo técnico</option>
+                      {tecnicosSecundariosArmado.map((tec) => (
                         <option key={tec.id} value={tec.id}>
                           {tec.name || tec.nombre || `ID ${tec.id}`}
                         </option>

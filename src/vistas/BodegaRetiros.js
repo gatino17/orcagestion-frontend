@@ -1207,7 +1207,11 @@ export default function BodegaRetiros() {
     const fechaSalida = formGuia.fecha_salida || new Date().toISOString().slice(0, 10);
     const cliente = armadoGuia?.centro?.cliente || "-";
     const centro = armadoGuia?.centro?.nombre || "-";
-    const tecnico = armadoGuia?.tecnico?.nombre || "-";
+    const tecnicoPrincipal = armadoGuia?.tecnico?.nombre || "-";
+    const tecnicoApoyo = Array.isArray(armadoGuia?.tecnicos_asignados)
+      ? armadoGuia.tecnicos_asignados.filter((tec) => !tec?.principal).map((tec) => tec?.nombre).filter(Boolean).join(", ")
+      : "";
+    const tecnico = tecnicoApoyo ? `${tecnicoPrincipal} | Apoyo: ${tecnicoApoyo}` : tecnicoPrincipal;
     const totalCajas = Number((guiaCajasDetalle || []).length || 0);
     const observacion = String(formGuia.observacion || "").trim() || "-";
     const detalleCajasHtml = (guiaCajasDetalle || []).length
@@ -1594,7 +1598,14 @@ export default function BodegaRetiros() {
                         <td>{a.id_armado}</td>
                         <td>{a?.centro?.cliente || "-"}</td>
                         <td>{a?.centro?.nombre || "-"}</td>
-                        <td>{a?.tecnico?.nombre || "-"}</td>
+                        <td>
+                          <div>{a?.tecnico?.nombre || "-"}</div>
+                          {Array.isArray(a?.tecnicos_asignados) && a.tecnicos_asignados.filter((tec) => !tec?.principal).length ? (
+                            <small className="text-muted">
+                              Apoyo: {a.tecnicos_asignados.filter((tec) => !tec?.principal).map((tec) => tec?.nombre).filter(Boolean).join(", ")}
+                            </small>
+                          ) : null}
+                        </td>
                         <td>{formatDate(a?.fecha_inicio || a?.fecha_asignacion)}</td>
                         <td>{formatDate(a?.fecha_cierre)}</td>
                         <td>
@@ -3587,7 +3598,15 @@ export default function BodegaRetiros() {
                   <div className="row">
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Cliente</small><strong>{armadoGuia?.centro?.cliente || "-"}</strong></div>
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Centro destino</small><strong>{armadoGuia?.centro?.nombre || "-"}</strong></div>
-                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Técnico encargado</small><strong>{armadoGuia?.tecnico?.nombre || "-"}</strong></div>
+                    <div className="col-md-6 mb-2">
+                      <small className="text-muted d-block">Técnico encargado</small>
+                      <strong>{armadoGuia?.tecnico?.nombre || "-"}</strong>
+                      {Array.isArray(armadoGuia?.tecnicos_asignados) && armadoGuia.tecnicos_asignados.filter((tec) => !tec?.principal).length ? (
+                        <small className="d-block text-muted">
+                          Apoyo: {armadoGuia.tecnicos_asignados.filter((tec) => !tec?.principal).map((tec) => tec?.nombre).filter(Boolean).join(", ")}
+                        </small>
+                      ) : null}
+                    </div>
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Fecha salida</small><strong>{formatDate(formGuia.fecha_salida)}</strong></div>
                     <div className="col-12"><small className="text-muted d-block">Observación</small><strong>{formGuia.observacion || "-"}</strong></div>
                   </div>
