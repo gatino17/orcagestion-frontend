@@ -53,6 +53,8 @@ body {
 .wrapper {
   min-height: 100vh;
   background: #f5f7fb;
+  display: flex;
+  flex-direction: column;
 }
 
 .wrapper-login {
@@ -73,6 +75,7 @@ body {
   padding: 1rem;
   padding-top: 6rem;
   min-height: calc(100vh - 120px);
+  flex: 1 0 auto;
   background: #f5f7fb;
   transition: margin-left 0.2s ease, padding 0.2s ease;
 }
@@ -90,6 +93,8 @@ body.sidenav-expanded .content-wrapper {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   margin-left: var(--sidenav-collapsed-width);
   width: calc(100% - var(--sidenav-collapsed-width));
+  margin-top: auto;
+  flex-shrink: 0;
   transition: margin-left 0.2s ease;
 }
 

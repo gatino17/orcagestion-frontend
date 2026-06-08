@@ -574,6 +574,7 @@ const ArmadoTecnico = () => {
     const [editingId, setEditingId] = useState(null);
     const [participaciones, setParticipaciones] = useState([]);
     const [transferTecSel, setTransferTecSel] = useState("");
+    const [transferObjetivoSel, setTransferObjetivoSel] = useState("");
     const [transferNota, setTransferNota] = useState("");
     const [materiales, setMateriales] = useState([]);
     const [materialesSnapshot, setMaterialesSnapshot] = useState({});
@@ -604,6 +605,37 @@ const ArmadoTecnico = () => {
     const [checklistAreaActiva, setChecklistAreaActiva] = useState("");
     const [checklistVersion, setChecklistVersion] = useState(0);
     const lastSeenMovIdRef = useRef(0);
+    const movsRequestRef = useRef(0);
+    const recargarMovimientosRecientesRef = useRef(() => {});
+    const esAdmin = rol === "admin";
+    const esTecnico = rol === "tecnico";
+    const puedeGestionarArmados = !esTecnico;
+    const puedeVerObservacionArmado = !esTecnico;
+    const puedeVerHistorialGlobal = !esTecnico;
+    const tecnicosActivosPlanilla = useMemo(() => {
+        const activos = Array.isArray(armadoActivo?.tecnicos_asignados) ? armadoActivo.tecnicos_asignados : [];
+        if (activos.length) return activos;
+        const tecnicoBaseId = Number(armadoActivo?.tecnico?.id || armadoActivo?.tecnico_id || 0);
+        const tecnicoBaseNombre = armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre || "";
+        if (!tecnicoBaseId && !tecnicoBaseNombre) return [];
+        return [{ id: tecnicoBaseId || null, nombre: tecnicoBaseNombre || "—", principal: true }];
+    }, [armadoActivo]);
+    const tecnicoPrincipalPlanilla = useMemo(
+        () => tecnicosActivosPlanilla.find((tec) => tec?.principal) || tecnicosActivosPlanilla[0] || null,
+        [tecnicosActivosPlanilla]
+    );
+    const tecnicosApoyoPlanilla = useMemo(
+        () => tecnicosActivosPlanilla.filter((tec) => !tec?.principal),
+        [tecnicosActivosPlanilla]
+    );
+    const tecnicosDisponiblesTransferencia = useMemo(() => {
+        const activosIds = new Set(
+            tecnicosActivosPlanilla
+                .map((tec) => Number(tec?.id || 0))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        );
+        return (tecnicos || []).filter((tec) => !activosIds.has(Number(tec?.id || 0)));
+    }, [tecnicosActivosPlanilla, tecnicos]);
     const colorTecnico = useCallback((valor) => {
         if (!valor) return "#4b5563";
         const key = String(valor);
@@ -650,7 +682,7 @@ const ArmadoTecnico = () => {
 
     const socketTransports = useMemo(() => {
         const forcePolling = process.env.REACT_APP_SOCKET_POLLING_ONLY === "1";
-        if (forcePolling || window.location.hostname === "localhost") return ["polling"];
+        if (forcePolling) return ["polling"];
         return ["websocket", "polling"];
     }, []);
 
@@ -821,17 +853,36 @@ const ArmadoTecnico = () => {
         navigate(location.pathname, { replace: true, state: null });
     }, [location, navigate]);
 
-    const recargarMovimientosRecientes = useCallback(() => {
+    const recargarMovimientosRecientes = useCallback((pageObjetivo = movsPage) => {
+        const requestId = movsRequestRef.current + 1;
+        movsRequestRef.current = requestId;
         const filtros = {};
         if (movArmadoFiltro) filtros.armado_id = movArmadoFiltro;
         if (movClienteFiltro) filtros.cliente = movClienteFiltro;
         if ((movSerieFiltro || "").trim()) filtros.numero_serie = movSerieFiltro.trim();
-        cargarMovimientosRecientes(setMovimientosRecientes, movsLimit, movsPage, (meta) => {
+        cargarMovimientosRecientes((items) => {
+            if (movsRequestRef.current !== requestId) return;
+            setMovimientosRecientes(items);
+        }, movsLimit, pageObjetivo, (meta) => {
+            if (movsRequestRef.current !== requestId) return;
             setMovsTotal(meta.total || 0);
-            setMovsPage(meta.page || 1);
             setMovsLimit(meta.limit || movsLimit);
+            if (Number(meta.page || pageObjetivo) !== Number(pageObjetivo)) {
+                setMovsPage(meta.page || 1);
+            }
         }, filtros);
     }, [movArmadoFiltro, movClienteFiltro, movSerieFiltro, movsLimit, movsPage]);
+
+    useEffect(() => {
+        recargarMovimientosRecientesRef.current = recargarMovimientosRecientes;
+    }, [recargarMovimientosRecientes]);
+
+    useEffect(() => {
+        const targetId = String(tecnicoPrincipalPlanilla?.id || tecnicosActivosPlanilla[0]?.id || "");
+        setTransferObjetivoSel(targetId);
+        setTransferTecSel("");
+        setTransferNota("");
+    }, [tecnicoPrincipalPlanilla, tecnicosActivosPlanilla, armadoActivo?.id_armado]);
 
     const handleEliminarMovimientoGlobal = useCallback(async (mov) => {
         const id = Number(mov?.id_movimiento || 0);
@@ -933,13 +984,17 @@ const ArmadoTecnico = () => {
         [historialResumen]
     );
 
-    // Historial global: fallback polling (si websocket no conecta)
+    // Historial global: recarga inmediata al cambiar pagina, limite o filtros.
     useEffect(() => {
         recargarMovimientosRecientes();
-        const interval = setInterval(recargarMovimientosRecientes, 30000);
-        const onFocus = () => recargarMovimientosRecientes();
+    }, [recargarMovimientosRecientes]);
+
+    // Historial global: fallback polling (si websocket no conecta)
+    useEffect(() => {
+        const interval = setInterval(() => recargarMovimientosRecientesRef.current?.(), 30000);
+        const onFocus = () => recargarMovimientosRecientesRef.current?.();
         const onVisible = () => {
-            if (document.visibilityState === "visible") recargarMovimientosRecientes();
+            if (document.visibilityState === "visible") recargarMovimientosRecientesRef.current?.();
         };
         window.addEventListener("focus", onFocus);
         document.addEventListener("visibilitychange", onVisible);
@@ -948,7 +1003,7 @@ const ArmadoTecnico = () => {
             window.removeEventListener("focus", onFocus);
             document.removeEventListener("visibilitychange", onVisible);
         };
-    }, [recargarMovimientosRecientes]);
+    }, []);
 
     // Detectar nuevos registros para resaltarlos temporalmente en la parte superior.
     useEffect(() => {
@@ -1090,13 +1145,13 @@ const ArmadoTecnico = () => {
     }, [movClienteFiltro, movArmadoFiltro, movSerieFiltro, movsPage, movsLimit]);
 
     useEffect(() => {
-        if (rol !== "admin") return;
+        if (!puedeGestionarArmados) return;
         cargarUsuarios((lista) => {
             const soloTecnicos = (lista || []).filter((u) => u.rol === "tecnico");
             setTecnicos(soloTecnicos);
         });
         obtenerClientes(setClientes, () => {});
-    }, [rol]);
+    }, [puedeGestionarArmados]);
 
     const handleClienteChange = async (idCliente) => {
         setClienteSel(idCliente);
@@ -1116,7 +1171,7 @@ const ArmadoTecnico = () => {
         if (filtroEstado) params.estado = filtroEstado;
         if (rol === "admin") {
             if (filtroTecnico) params.tecnico_id = filtroTecnico;
-        } else if (userId) {
+        } else if (rol === "tecnico" && userId) {
             params.tecnico_id = userId;
         }
         try {
@@ -1149,7 +1204,7 @@ const ArmadoTecnico = () => {
         });
         const onArmadoUpdated = (evt = {}) => {
             fetchArmados({ silent: true });
-            recargarMovimientosRecientes();
+            recargarMovimientosRecientesRef.current?.();
             if (planillaOpen && armadoActivo && Number(evt.armado_id) === Number(armadoActivo.id_armado)) {
                 cargarMovimientos(armadoActivo.id_armado, setMovimientos);
                 cargarMateriales(armadoActivo.id_armado, (lista) => {
@@ -1163,7 +1218,7 @@ const ArmadoTecnico = () => {
             socket.off("armado_updated", onArmadoUpdated);
             socket.disconnect();
         };
-    }, [rol, socketBaseUrl, socketTransports, fetchArmados, recargarMovimientosRecientes, planillaOpen, armadoActivo, mergeMateriales]);
+    }, [rol, socketBaseUrl, socketTransports, fetchArmados, planillaOpen, armadoActivo, mergeMateriales]);
 
     const renderEstado = (estado) => {
         const normalizado = (estado || "pendiente").toLowerCase();
@@ -1194,10 +1249,19 @@ const ArmadoTecnico = () => {
         return `${dia}/${mes}/${anio}`;
     };
 
+    const parseFechaHoraBackend = (valor) => {
+        if (!valor) return null;
+        const raw = String(valor).trim();
+        if (!raw) return null;
+        const sinZona = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(raw);
+        const fecha = new Date(sinZona ? `${raw}Z` : raw);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    };
+
     const formatearFechaHora = (valor) => {
         if (!valor) return "-";
-        const fecha = new Date(valor);
-        if (Number.isNaN(fecha.getTime())) return "-";
+        const fecha = parseFechaHoraBackend(valor);
+        if (!fecha) return "-";
         const dia = String(fecha.getDate()).padStart(2, "0");
         const mes = String(fecha.getMonth() + 1).padStart(2, "0");
         const anio = fecha.getFullYear();
@@ -1524,7 +1588,7 @@ const ArmadoTecnico = () => {
                             <i className="fas fa-clipboard-check mr-1" />
                             Checklist
                         </button>
-                        {rol === "admin" && (
+                        {puedeVerObservacionArmado && (
                             <button
                                 className="btn btn-sm btn-outline-secondary"
                                 onClick={() =>
@@ -1541,7 +1605,7 @@ const ArmadoTecnico = () => {
                                 <i className="fas fa-comment-alt" />
                             </button>
                         )}
-                        {rol === "admin" && (
+                        {esAdmin && (
                             <button
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleEliminarArmado(row)}
@@ -1996,17 +2060,26 @@ const ArmadoTecnico = () => {
 
     const handleTransferir = async () => {
         if (!armadoActivo?.id_armado) return;
+        if (!transferObjetivoSel) {
+            alert("Selecciona el técnico actual a reemplazar.");
+            return;
+        }
         if (!transferTecSel) {
             alert("Selecciona el nuevo técnico.");
             return;
         }
         await transferirArmado(
             armadoActivo.id_armado,
-            { tecnico_id: Number(transferTecSel), nota: transferNota },
+            {
+                tecnico_id: Number(transferTecSel),
+                reemplaza_tecnico_id: Number(transferObjetivoSel),
+                nota: transferNota
+            },
             async () => {
                 await cargarParticipaciones(armadoActivo.id_armado, setParticipaciones);
                 setTransferNota("");
                 setTransferTecSel("");
+                setTransferObjetivoSel("");
                 await fetchArmados();
             }
         );
@@ -2073,7 +2146,7 @@ const ArmadoTecnico = () => {
                             </select>
                                             </div>
 
-                        {rol === "admin" && (
+                        {puedeGestionarArmados && (
                             <div>
                                 <small className="text-muted text-uppercase d-block mb-1">Técnico (filtro)</small>
                                 <select
@@ -2091,7 +2164,7 @@ const ArmadoTecnico = () => {
                                             </div>
                         )}
 
-                        {rol === "admin" && (
+                        {puedeGestionarArmados && (
                             <button className="btn btn-primary ml-auto" onClick={handleAbrirModal}>
                                 <i className="fas fa-plus mr-2" />
                                 Asignar armado
@@ -2129,19 +2202,33 @@ const ArmadoTecnico = () => {
                                     <span className="badge badge-primary ml-2" title="Total de cajas detectadas">
                                         {cajas.length} cajas
                                     </span>
-                                    {armadoActivo && (
+                                    {tecnicoPrincipalPlanilla && (
                                         <span
                                             className="badge ml-2"
                                             style={{
-                                                backgroundColor: `${colorTecnico(armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre)}22`,
-                                                color: colorTecnico(armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre),
-                                                border: `1px solid ${colorTecnico(armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre)}`
+                                                backgroundColor: `${colorTecnico(tecnicoPrincipalPlanilla?.nombre || tecnicoPrincipalPlanilla?.id)}22`,
+                                                color: colorTecnico(tecnicoPrincipalPlanilla?.nombre || tecnicoPrincipalPlanilla?.id),
+                                                border: `1px solid ${colorTecnico(tecnicoPrincipalPlanilla?.nombre || tecnicoPrincipalPlanilla?.id)}`
                                             }}
-                                            title="Técnico actual"
+                                            title="Técnico principal actual"
                                         >
-                                            Técnico: {armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre || "—"}
+                                            Principal: {tecnicoPrincipalPlanilla?.nombre || "—"}
                                         </span>
                                     )}
+                                    {tecnicosApoyoPlanilla.map((tec, idx) => (
+                                        <span
+                                            key={`head-apoyo-${tec?.id || idx}`}
+                                            className="badge ml-2"
+                                            style={{
+                                                backgroundColor: `${colorTecnico(tec?.nombre || tec?.id)}22`,
+                                                color: colorTecnico(tec?.nombre || tec?.id),
+                                                border: `1px solid ${colorTecnico(tec?.nombre || tec?.id)}`
+                                            }}
+                                            title="Técnico de apoyo actual"
+                                        >
+                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo"}: {tec?.nombre || "—"}
+                                        </span>
+                                    ))}
                                 </h5>
                                 <button type="button" className="close" onClick={() => setPlanillaOpen(false)}>
                                     <span>&times;</span>
@@ -2256,7 +2343,7 @@ const ArmadoTecnico = () => {
                                                             <p className="text-muted mb-0">Sin transferencias aún.</p>
                                                         )}
                                             </div>
-                                                    {rol === "admin" && (
+                                                    {puedeGestionarArmados && (
                                                         <div className="col-md-6">
                                                             <h6>Observación de asignación</h6>
                                                             <div
@@ -2273,14 +2360,34 @@ const ArmadoTecnico = () => {
                                                             </div>
                                                             <h6>Transferir armado</h6>
                                                             <div className="form-group">
-                                                        <label>Nuevo técnico</label>
+                                                        <label>Técnico actual</label>
+                                                                <select
+                                                                    className="form-control"
+                                                                    value={transferObjetivoSel}
+                                                                    onChange={(e) => setTransferObjetivoSel(e.target.value)}
+                                                                >
+                                                                    <option value="">Seleccione técnico actual</option>
+                                                                    {tecnicoPrincipalPlanilla && (
+                                                                        <option value={tecnicoPrincipalPlanilla.id}>
+                                                                            Principal actual: {tecnicoPrincipalPlanilla.nombre || `ID ${tecnicoPrincipalPlanilla.id}`}
+                                                                        </option>
+                                                                    )}
+                                                                    {tecnicosApoyoPlanilla.map((tec, idx) => (
+                                                                        <option key={`transfer-target-${tec?.id || idx}`} value={tec?.id || ""}>
+                                                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo actual"}: {tec?.nombre || `ID ${tec?.id || "-"}`}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                            </div>
+                                                            <div className="form-group">
+                                                        <label>Técnico disponible</label>
                                                                 <select
                                                                     className="form-control"
                                                                     value={transferTecSel}
                                                                     onChange={(e) => setTransferTecSel(e.target.value)}
                                                                 >
-                                                                    <option value="">Seleccione</option>
-                                                                    {tecnicos.map((tec) => (
+                                                                    <option value="">Seleccione técnico disponible</option>
+                                                                    {tecnicosDisponiblesTransferencia.map((tec) => (
                                                                         <option key={tec.id} value={tec.id}>
                                                                             {tec.name || tec.nombre || `ID ${tec.id}`}
                                                                         </option>
@@ -2731,8 +2838,8 @@ const ArmadoTecnico = () => {
                                             </div>
             )}
 
-            {/* Historial global solo para admin */}
-            {rol === "admin" && (
+            {/* Historial global para roles de gestion; eliminacion solo admin */}
+            {puedeVerHistorialGlobal && (
                 <div className="card mt-3">
                     <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center mb-2">
@@ -2790,25 +2897,32 @@ const ArmadoTecnico = () => {
                                     <i className="fas fa-history mr-1" />
                                     Ver historial
                                 </button>
-                                <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    disabled={!movSeleccionados.length || eliminandoSeleccion}
-                                    onClick={handleEliminarSeleccionados}
-                                    title="Eliminar seleccionados"
-                                >
-                                    <i className="fas fa-trash-alt mr-1" />
-                                    {eliminandoSeleccion ? "Eliminando..." : `Eliminar seleccionados (${movSeleccionados.length})`}
-                                </button>
+                                {esAdmin && (
+                                    <button
+                                        className="btn btn-sm btn-outline-danger"
+                                        disabled={!movSeleccionados.length || eliminandoSeleccion}
+                                        onClick={handleEliminarSeleccionados}
+                                        title="Eliminar seleccionados"
+                                    >
+                                        <i className="fas fa-trash-alt mr-1" />
+                                        {eliminandoSeleccion ? "Eliminando..." : `Eliminar seleccionados (${movSeleccionados.length})`}
+                                    </button>
+                                )}
                                 <small className="text-muted mr-2">Mostrar</small>
                                 <select
                                     className="form-control form-control-sm"
                                     style={{ width: 90 }}
                                     value={movsLimit}
-                                    onChange={(e) => setMovsLimit(Number(e.target.value))}
+                                    onChange={(e) => {
+                                        setMovsPage(1);
+                                        setMovsLimit(Number(e.target.value));
+                                    }}
                                 >
                                     <option value={10}>10</option>
                                     <option value={15}>15</option>
                                     <option value={20}>20</option>
+                                    <option value={30}>30</option>
+                                    <option value={50}>50</option>
                                 </select>
                                             </div>
                                             </div>
@@ -2816,14 +2930,16 @@ const ArmadoTecnico = () => {
                             <table className="table table-sm table-striped mb-0">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: 36 }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={allVisibleSelected}
-                                                onChange={toggleSeleccionVisibles}
-                                                title="Seleccionar visibles"
-                                            />
-                                        </th>
+                                        {esAdmin && (
+                                            <th style={{ width: 36 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allVisibleSelected}
+                                                    onChange={toggleSeleccionVisibles}
+                                                    title="Seleccionar visibles"
+                                                />
+                                            </th>
+                                        )}
                                         <th>Fecha</th>
                                         <th>Tipo</th>
                                         <th>Ítem</th>
@@ -2844,13 +2960,15 @@ const ArmadoTecnico = () => {
                                                     : undefined
                                             }
                                         >
-                                            <td>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={movSeleccionados.includes(Number(mov.id_movimiento))}
-                                                    onChange={() => toggleSeleccionMovimiento(mov.id_movimiento)}
-                                                />
-                                            </td>
+                                            {esAdmin && (
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={movSeleccionados.includes(Number(mov.id_movimiento))}
+                                                        onChange={() => toggleSeleccionMovimiento(mov.id_movimiento)}
+                                                    />
+                                                </td>
+                                            )}
                                             <td>{formatearFechaHora(mov.fecha)}</td>
                                             <td className="text-capitalize">{mov.tipo}</td>
                                             <td>{mov.nombre_item}</td>
@@ -2863,21 +2981,23 @@ const ArmadoTecnico = () => {
                                                     <span style={{ color: colorTecnico(mov.tecnico_nombre || mov.tecnico_id) }}>
                                                         {mov.tecnico_nombre || `ID ${mov.tecnico_id || "-"}`}
                                                     </span>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        title="Eliminar movimiento"
-                                                        onClick={() => handleEliminarMovimientoGlobal(mov)}
-                                                    >
-                                                        <i className="fas fa-trash-alt" />
-                                                    </button>
+                                                    {esAdmin && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            title="Eliminar movimiento"
+                                                            onClick={() => handleEliminarMovimientoGlobal(mov)}
+                                                        >
+                                                            <i className="fas fa-trash-alt" />
+                                                        </button>
+                                                    )}
                                             </div>
                                             </td>
                                         </tr>
                                     ))}
                                     {movimientosVisibles.length === 0 && (
                                         <tr>
-                                            <td colSpan="9" className="text-center text-muted">
+                                            <td colSpan={esAdmin ? "9" : "8"} className="text-center text-muted">
                                                 Sin movimientos registrados todavía.
                                             </td>
                                         </tr>

@@ -86,15 +86,15 @@ function SideNav() {
   return (
     <aside className={`app-sidenav ${collapsed ? "collapsed" : ""}`}>
       <div className="sidenav-wrapper">
-        <Link to="/" className="sidenav-logo" title="OrcaGest">
-          <i className="fas fa-water" />
-          <span>OrcaGest</span>
-        </Link>
-
         <div className="sidenav-user">
-          <small>Bienvenido</small>
-          <h4>{usuario}</h4>
-          <small>Rol: {rol || "N/A"}</small>
+          <div className="sidenav-user-icon">
+            <i className="fas fa-user-circle" />
+          </div>
+          <div className="sidenav-user-copy">
+            <small>Bienvenido</small>
+            <h4>{usuario}</h4>
+            <small className="sidenav-role-text">Rol: {rol || "N/A"}</small>
+          </div>
         </div>
 
         <div className="sidenav-menu">

@@ -30,6 +30,81 @@ import Tecnicos from "./vistas/Tecnicos";
 import RegistrosDocumentos from './vistas/RegistrosDocumentos';
 import ArmadoTecnico from "./vistas/ArmadoTecnico";
 
+const PAGE_ROUTE_MAP = {
+    inicio: "/",
+    consulta_centro: "/consulta-centro",
+    soporte: "/soporte",
+    soporte_detalle: "/soporte/detalle",
+    mantencion_preventiva: "/mantencion-preventiva",
+    informes_centros: "/informes-centros",
+    bodega_retiros: "/bodega-retiros",
+    revision_equipos: "/revision-equipos",
+    rendiciones: "/rendiciones",
+    armados: "/armados",
+    calendario: "/calendario",
+    historial_trabajos: "/historial-trabajos",
+    historial_centro: "/historial-centro",
+    datos_ip: "/datos-ip",
+    clientes: "/clientes",
+    centros: "/centros",
+    registrosdocumentos: "/registrosdocumentos",
+    usuarios: "/usuarios",
+    tecnicos: "/tecnicos"
+};
+
+const PAGE_PRIORITY = [
+    "inicio",
+    "consulta_centro",
+    "armados",
+    "revision_equipos",
+    "calendario",
+    "datos_ip",
+    "soporte",
+    "informes_centros",
+    "bodega_retiros",
+    "historial_trabajos",
+    "historial_centro",
+    "clientes",
+    "centros",
+    "registrosdocumentos",
+    "tecnicos",
+    "usuarios",
+    "rendiciones"
+];
+
+const getDefaultAuthenticatedPath = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return '/login';
+    try {
+        const decodedToken = jwtDecode(token);
+        const paginas = Array.isArray(decodedToken.paginas) ? decodedToken.paginas : [];
+        const ordered = [
+            ...PAGE_PRIORITY.filter((key) => paginas.includes(key)),
+            ...paginas.filter((key) => !PAGE_PRIORITY.includes(key))
+        ];
+        for (const key of ordered) {
+            const route = PAGE_ROUTE_MAP[key];
+            if (route) return route;
+        }
+    } catch (error) {
+        console.error("Error al resolver ruta por defecto:", error);
+    }
+    return '/consulta-centro';
+};
+
+const tokenHasPage = (pageKey) => {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+    try {
+        const decodedToken = jwtDecode(token);
+        const paginas = Array.isArray(decodedToken.paginas) ? decodedToken.paginas : [];
+        return paginas.includes(pageKey);
+    } catch (error) {
+        console.error("Error al revisar paginas del token:", error);
+        return false;
+    }
+};
+
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
     //const [userRole, setUserRole] = useState(null);
@@ -70,14 +145,20 @@ function App() {
 
                 <div className="content-wrapper">
                     <Routes>
-                        <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" />} />
+                        <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to={getDefaultAuthenticatedPath()} />} />
 
                         <Route
                             path="/"
                             element={
-                              <PrivateRoute requiredPage="inicio" allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
-                                    <Home />
-                                </PrivateRoute>
+                                tokenHasPage("inicio") ? (
+                                    <PrivateRoute requiredPage="inicio" allowedRoles={['admin', 'tecnico', 'soporte', 'operaciones', 'finanzas']}>
+                                        <Home />
+                                    </PrivateRoute>
+                                ) : isAuthenticated ? (
+                                    <Navigate to={getDefaultAuthenticatedPath()} replace />
+                                ) : (
+                                    <Navigate to="/login" replace />
+                                )
                             }
                         />
                         {/* Rutas protegidas */}
@@ -135,7 +216,6 @@ function App() {
                               <PrivateRoute
                                 requiredPage="rendiciones"
                                 allowedRoles={['admin']}
-                                enforceAllowedRoles
                               >
                                     <Rendiciones />
                                 </PrivateRoute>
@@ -230,7 +310,7 @@ function App() {
                             }
                         />
 
-                        <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
+                        <Route path="*" element={<Navigate to={isAuthenticated ? getDefaultAuthenticatedPath() : "/login"} replace />} />
                     </Routes>
                 </div>
 

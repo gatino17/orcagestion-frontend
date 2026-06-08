@@ -9,6 +9,53 @@ const AREAS_SUPERVISOR = [
     { key: 'energia', label: 'Energia' }
 ];
 
+const ROLE_STYLES = {
+    admin: {
+        background: 'linear-gradient(135deg, #ef4444, #f97316)',
+        boxShadow: '0 10px 22px rgba(239, 68, 68, 0.24)'
+    },
+    tecnico: {
+        background: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
+        boxShadow: '0 10px 22px rgba(37, 99, 235, 0.24)'
+    },
+    soporte: {
+        background: 'linear-gradient(135deg, #14b8a6, #0f766e)',
+        boxShadow: '0 10px 22px rgba(15, 118, 110, 0.24)'
+    },
+    operaciones: {
+        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+        boxShadow: '0 10px 22px rgba(217, 119, 6, 0.24)'
+    },
+    finanzas: {
+        background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+        boxShadow: '0 10px 22px rgba(109, 40, 217, 0.24)'
+    },
+    supervisor: {
+        background: 'linear-gradient(135deg, #22c55e, #15803d)',
+        boxShadow: '0 10px 22px rgba(21, 128, 61, 0.24)'
+    }
+};
+
+const normalizarRol = (valor) => String(valor || '').trim().toLowerCase();
+
+const getRolePillStyle = (roleName) => {
+    const key = normalizarRol(roleName);
+    if (ROLE_STYLES[key]) {
+        return ROLE_STYLES[key];
+    }
+    let hash = 0;
+    for (let i = 0; i < key.length; i += 1) {
+        hash = key.charCodeAt(i) + ((hash << 5) - hash);
+        hash |= 0;
+    }
+    const hue = Math.abs(hash) % 360;
+    const hueAlt = (hue + 32) % 360;
+    return {
+        background: `linear-gradient(135deg, hsl(${hue}, 76%, 54%), hsl(${hueAlt}, 72%, 40%))`,
+        boxShadow: `0 10px 22px hsla(${hue}, 70%, 38%, 0.28)`
+    };
+};
+
 function Usuarios() {
     const [usuarios, setUsuarios] = useState([]);
     const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
@@ -379,7 +426,7 @@ function Usuarios() {
                                             <td>{usuario.name}</td>
                                             <td>{usuario.email}</td>
                                             <td>
-                                                <span className={`role-pill role-${usuario.rol}`}>
+                                                <span className="role-pill" style={getRolePillStyle(usuario.rol)}>
                                                     <i className="fas fa-id-badge" /> {usuario.rol}
                                                 </span>
                                             </td>
@@ -452,7 +499,7 @@ function Usuarios() {
                                 {paginasPorRol.map((item) => (
                                     <tr key={`perm-${item.rol}`}>
                                         <td>
-                                            <span className={`role-pill role-${item.rol}`}>
+                                            <span className="role-pill" style={getRolePillStyle(item.rol)}>
                                                 <i className="fas fa-id-badge" /> {item.rol}
                                             </span>
                                         </td>
