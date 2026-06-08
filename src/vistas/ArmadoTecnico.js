@@ -1443,7 +1443,7 @@ const ArmadoTecnico = () => {
                 };
                 const { bg, text } = colorMap[normalizado] || colorMap.pendiente;
 
-                return rol === "admin" ? (
+                return puedeGestionarArmados ? (
                     <div style={{ width: "80px", maxWidth: "100%", overflow: "hidden" }}>
                         <select
                             className="form-control form-control-sm"
@@ -1714,7 +1714,7 @@ const ArmadoTecnico = () => {
     };
 
     const handleEstadoRapido = async (row, nuevoEstado) => {
-        if (rol !== "admin") return;
+        if (!puedeGestionarArmados) return;
         const id = row.id_armado || row.id;
         if (!id) return;
         try {
