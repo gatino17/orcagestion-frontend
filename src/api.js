@@ -1731,6 +1731,26 @@ export const guardarGuiaSalidaArmado = async (armadoId, data) => {
     }
 };
 
+export const crearGuiaSalidaArmado = async (data) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/armados/guias-salida`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear guia de salida:", error);
+        throw error;
+    }
+};
+
+export const actualizarGuiaSalidaArmadoPorId = async (idGuiaSalida, data) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/armados/guias-salida/${idGuiaSalida}`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar guia de salida:", error);
+        throw error;
+    }
+};
+
 export const marcarRecepcionCentroGuiaArmado = async (armadoId, data = {}) => {
     try {
         const response = await axios.post(`${BASE_URL}/armados/${armadoId}/guia-salida/recepcion-centro`, data);
@@ -1741,12 +1761,32 @@ export const marcarRecepcionCentroGuiaArmado = async (armadoId, data = {}) => {
     }
 };
 
+export const marcarRecepcionCentroGuiaArmadoPorId = async (idGuiaSalida, data = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/armados/guias-salida/${idGuiaSalida}/recepcion-centro`, data);
+        return response.data;
+    } catch (error) {
+        console.error("Error al marcar recepcion de guia por id:", error);
+        throw error;
+    }
+};
+
 export const eliminarGuiaSalidaArmado = async (armadoId) => {
     try {
         const response = await axios.delete(`${BASE_URL}/armados/${armadoId}/guia-salida`);
         return response.data;
     } catch (error) {
         console.error("Error al eliminar guia de salida:", error);
+        throw error;
+    }
+};
+
+export const eliminarGuiaSalidaArmadoPorId = async (idGuiaSalida) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/armados/guias-salida/${idGuiaSalida}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al eliminar guia de salida por id:", error);
         throw error;
     }
 };

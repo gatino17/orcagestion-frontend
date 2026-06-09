@@ -1130,7 +1130,7 @@ export default function RevisionEquipos() {
                       <tr>
                         <th>Equipo</th>
                         <th>Modelo</th>
-                        <th>N° Serie</th>
+                        <th>N Serie</th>
                         <th>Diagnostico</th>
                         <th>Estado</th>
                       </tr>

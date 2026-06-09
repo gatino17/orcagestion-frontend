@@ -1,4 +1,4 @@
-Ôªøimport React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { jwtDecode } from "jwt-decode";
 import { io } from "socket.io-client";
@@ -41,6 +41,52 @@ const escapeHtml = (value) =>
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 
+const labelAccionMovimientoMaterial = (mov) => {
+    const accion = String(mov?.accion || "").toLowerCase().trim();
+    if (accion === "creacion") return "Material creado";
+    if (accion === "ajuste") return "Cantidad ajustada";
+    if (accion === "incremento") return "Cantidad agregada";
+    return String(mov?.tipo || "");
+};
+
+const renderTipoMovimiento = (mov) => {
+    const tipo = String(mov?.tipo || "").toLowerCase().trim();
+    if (tipo !== "material") return <span className="text-capitalize">{mov?.tipo || "-"}</span>;
+
+    const accion = String(mov?.accion || "").toLowerCase().trim();
+    const anterior = Number(mov?.cantidad_anterior ?? 0);
+    const nueva = Number(mov?.cantidad_nueva ?? 0);
+    const delta = nueva - anterior;
+    const label = labelAccionMovimientoMaterial(mov);
+
+    if (accion === "ajuste") {
+        const subio = delta > 0;
+        const bajo = delta < 0;
+        return (
+            <span style={{ color: "#ca8a04" }}>
+                {label}
+                {subio ? <i className="fas fa-arrow-up" style={{ marginLeft: 6, color: "#15803d", fontWeight: 900 }} /> : null}
+                {bajo ? <i className="fas fa-arrow-down" style={{ marginLeft: 6, color: "#dc2626", fontWeight: 900 }} /> : null}
+            </span>
+        );
+    }
+
+    if (accion === "incremento") {
+        return (
+            <span style={{ color: "#2563eb" }}>
+                {label}
+                <i className="fas fa-arrow-up" style={{ marginLeft: 6, color: "#15803d", fontWeight: 900 }} />
+            </span>
+        );
+    }
+
+    if (accion === "creacion") {
+        return <span style={{ fontWeight: 800, color: "#475569" }}>{label}</span>;
+    }
+
+    return <span className="text-capitalize">{label}</span>;
+};
+
 const ORDEN_EQUIPOS = [
     "pc",
     "monitor",
@@ -60,7 +106,7 @@ const ORDEN_EQUIPOS = [
     "zapatilla rack",
     "parlantes",
     "sensor magnetico",
-    "sensor magn√©tico",
+    "sensor magnÈtico",
     "tablero 500x400x200",
     "baliza interior",
     "bocina interior",
@@ -110,7 +156,7 @@ const SINONIMOS_EQUIPOS = {
     "ip pc nvr": "pc",
     "puerta de enlace": "router",
     "router (puerta de enlace)": "router",
-    "m√°stil": "mastil",
+    "m·stil": "mastil",
     "switch cisco + adaptador": "switch (cisco)",
     "switch cisco": "switch (cisco)"
 };
@@ -307,22 +353,22 @@ const EQUIPOS_PREDEF = [
     "Switch 4",
 ];
 const MATERIALES_PREDEF = [
-    "Cable El√©ctrico 3 x 1,5mm",
-    "Cable El√©ctrico 3 x 0,75mm",
-    "Cable El√©ctrico 2 x 0,75mm",
+    "Cable ElÈctrico 3 x 1,5mm",
+    "Cable ElÈctrico 3 x 0,75mm",
+    "Cable ElÈctrico 2 x 0,75mm",
     "Cable UTP CAT 5e",
     "CABLE UTP BLINDADO",
     "Enchufes Macho",
     "Enchufes Hembra",
-    "Autom√°tico 16A",
+    "Autom·tico 16A",
     "Cinta Aislante Super 33",
     "Cinta Engomada",
     "Cable Power",
     "Cable UPS",
     "Regleta 6-8mm",
-    "Amarras Pl√°sticas 4,5x300mm (med)",
-    "Amarras Pl√°sticas 7,5x500mm (gran)",
-    "Pernos M8 C√°mara",
+    "Amarras Pl·sticas 4,5x300mm (med)",
+    "Amarras Pl·sticas 7,5x500mm (gran)",
+    "Pernos M8 C·mara",
     "Pernos M6 Platina",
     "Pernos M5 tablero interior",
     'Corrugado 1"',
@@ -354,20 +400,20 @@ const MATERIALES_PREDEF = [
     "Guardacabos",
     "Tirafondos",
     "Prensas",
-    "C√°ncamo",
-    "Platina o √°ngulo (Tira)",
+    "C·ncamo",
+    "Platina o ·ngulo (Tira)",
     "Disco Corte",
     "PG 21",
     "PG 16",
     "Cinta doble contacto",
-    "Caja de Uni√≥n Foco 89x89x52",
-    "Caja de C√°mara Interior 153x110x65",
+    "Caja de UniÛn Foco 89x89x52",
+    "Caja de C·mara Interior 153x110x65",
     "Caja interior 175x151x95",
     "Caja de Panel Victron 184x255x99",
     "Canaletas 40x16x2000 (chicas)",
     "Canaletas 100x50x2000 (grandes)",
     "Pernos de rack (tuerca enjaulada)",
-    "Extensi√≥n USB",
+    "ExtensiÛn USB",
     "Cable HDMI",
     "Conectores RJ45",
     "Conector hembra red (RJ45)",
@@ -383,13 +429,13 @@ const MATERIALES_PREDEF = [
     "PatchCore 5 Mts.",
     "PatchCore 10 Mts.",
     "Sellos",
-    "Puente bater√≠a",
+    "Puente baterÌa",
     "Bolsas de Basura Grandes",
     "Cajas (fondo + tapa)",
     "Cinta embalaje",
     "Logos",
     "Brazo Ubiquiti",
-    "M√°stil",
+    "M·stil",
     "Riel U",
     "Perno Pasado"
 ];
@@ -618,7 +664,7 @@ const ArmadoTecnico = () => {
         const tecnicoBaseId = Number(armadoActivo?.tecnico?.id || armadoActivo?.tecnico_id || 0);
         const tecnicoBaseNombre = armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre || "";
         if (!tecnicoBaseId && !tecnicoBaseNombre) return [];
-        return [{ id: tecnicoBaseId || null, nombre: tecnicoBaseNombre || "‚Äî", principal: true }];
+        return [{ id: tecnicoBaseId || null, nombre: tecnicoBaseNombre || "ó", principal: true }];
     }, [armadoActivo]);
     const tecnicoPrincipalPlanilla = useMemo(
         () => tecnicosActivosPlanilla.find((tec) => tec?.principal) || tecnicosActivosPlanilla[0] || null,
@@ -751,7 +797,7 @@ const ArmadoTecnico = () => {
         return idxContains >= 0 ? idxContains : ORDEN_EQUIPOS.length + 100; // enviar al final
     }, []);
 
-    // Esc√°ner desactivado: N¬∞ serie se ingresa manualmente
+    // Esc·ner desactivado: N∞ serie se ingresa manualmente
 
     const equiposOrdenados = useMemo(
         () =>
@@ -761,7 +807,7 @@ const ArmadoTecnico = () => {
         [equipos, prioridadEquipo]
     );
 
-    // Arma una lista combinada con filas de t√≠tulo + filas de √≠tems para mostrar secciones
+    // Arma una lista combinada con filas de tÌtulo + filas de Ìtems para mostrar secciones
     const equiposConTitulos = useMemo(() => {
         const lista = [];
         const usado = new Set();
@@ -1400,7 +1446,7 @@ const ArmadoTecnico = () => {
             }
         },
         {
-            name: "T√©cnico",
+            name: "Tecnico",
             selector: (row) => row.tecnico?.nombre || row.tecnico_nombre || "-",
             sortable: true,
             wrap: false,
@@ -1600,7 +1646,7 @@ const ArmadoTecnico = () => {
                                         saving: false
                                     })
                                 }
-                                title="Ver observaci√≥n"
+                                title="Ver observaciÛn"
                             >
                                 <i className="fas fa-comment-alt" />
                             </button>
@@ -1702,7 +1748,7 @@ const ArmadoTecnico = () => {
                     const digitos = (value || "").replace(/\D+/g, "");
                     return { ...eq, numero_serie: value, codigo: digitos.slice(0, 5) };
                 }
-                // si se cambia algo relevante, asigna t√©cnico actual para colorear
+                // si se cambia algo relevante, asigna tÈcnico actual para colorear
                 const updated = { ...eq, [field]: value };
                 if (["numero_serie", "codigo", "ip", "observacion", "caja"].includes(field)) {
                     updated.caja_tecnico_id = userId;
@@ -1764,8 +1810,8 @@ const ArmadoTecnico = () => {
             );
             setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false });
         } catch (err) {
-            console.error("Error al guardar observaci√≥n del armado:", err);
-            alert("No se pudo guardar la observaci√≥n.");
+            console.error("Error al guardar observaciÛn del armado:", err);
+            alert("No se pudo guardar la observaciÛn.");
             setObservacionDetalle((prev) => ({ ...prev, saving: false }));
         }
     };
@@ -1776,7 +1822,7 @@ const ArmadoTecnico = () => {
         if (!id) return;
 
         const centro = row?.centro?.nombre || row?.centro_nombre || "este centro";
-        const ok = window.confirm(`¬øEliminar la asignaci√≥n de armado para ${centro}? Esta acci√≥n no se puede deshacer.`);
+        const ok = window.confirm(`øEliminar la asignaciÛn de armado para ${centro}? Esta acciÛn no se puede deshacer.`);
         if (!ok) return;
 
         try {
@@ -1996,7 +2042,7 @@ const ArmadoTecnico = () => {
                     armado_id: armadoActivo?.id_armado
                 });
             }
-            // marcar en estado local qui√©n lo guard√≥ para mostrar badge coloreado
+            // marcar en estado local quiÈn lo guardÛ para mostrar badge coloreado
             setEquipos((prev) =>
                 prev.map((eq) =>
                     (eq.id_equipo && eq.id_equipo === (equipo.id_equipo || existente?.id_equipo)) || eq.__idx === equipo.__idx
@@ -2020,7 +2066,7 @@ const ArmadoTecnico = () => {
 
     const handleEliminarEquipo = async (equipo) => {
         if (!equipo.id_equipo) return;
-        if (!window.confirm("¬øEliminar este equipo?")) return;
+        if (!window.confirm("øEliminar este equipo?")) return;
         try {
             await borrarEquipo(equipo.id_equipo);
             setEquipos((prev) => prev.filter((e) => e.id_equipo !== equipo.id_equipo));
@@ -2033,11 +2079,11 @@ const ArmadoTecnico = () => {
 
     const handleGuardarAsignacion = async () => {
         if (!centroSel || !tecnicoSel) {
-            alert("Selecciona centro y t√©cnico.");
+            alert("Selecciona centro y tÈcnico.");
             return;
         }
         if (tecnicoSecundarioSel && tecnicoSecundarioSel === tecnicoSel) {
-            alert("El segundo t√©cnico no puede ser el mismo t√©cnico principal.");
+            alert("El segundo tÈcnico no puede ser el mismo tÈcnico principal.");
             return;
         }
         const payload = {
@@ -2061,11 +2107,11 @@ const ArmadoTecnico = () => {
     const handleTransferir = async () => {
         if (!armadoActivo?.id_armado) return;
         if (!transferObjetivoSel) {
-            alert("Selecciona el t√©cnico actual a reemplazar.");
+            alert("Selecciona el tÈcnico actual a reemplazar.");
             return;
         }
         if (!transferTecSel) {
-            alert("Selecciona el nuevo t√©cnico.");
+            alert("Selecciona el nuevo tÈcnico.");
             return;
         }
         await transferirArmado(
@@ -2101,7 +2147,7 @@ const ArmadoTecnico = () => {
         <div className="container-fluid armado-page">
             <div className="d-flex align-items-center justify-content-between flex-wrap mb-3 responsive-header">
                 <div>
-                    <p className="text-muted mb-1">Armado t√©cnico</p>
+                    <p className="text-muted mb-1">Armado tecnico</p>
                     <h3 className="mb-0">Asignaciones de armado</h3>
                                             </div>
                 <div className="d-flex gap-2 summary-wrap">
@@ -2148,7 +2194,7 @@ const ArmadoTecnico = () => {
 
                         {puedeGestionarArmados && (
                             <div>
-                                <small className="text-muted text-uppercase d-block mb-1">T√©cnico (filtro)</small>
+                                <small className="text-muted text-uppercase d-block mb-1">Tecnico (filtro)</small>
                                 <select
                                     className="form-control"
                                     value={filtroTecnico}
@@ -2198,7 +2244,7 @@ const ArmadoTecnico = () => {
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">
-                                    Planilla de armado ¬∑ {armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre || "Centro"}{" "}
+                                    Planilla de armado - {armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre || "Centro"}{" "}
                                     <span className="badge badge-primary ml-2" title="Total de cajas detectadas">
                                         {cajas.length} cajas
                                     </span>
@@ -2210,9 +2256,9 @@ const ArmadoTecnico = () => {
                                                 color: colorTecnico(tecnicoPrincipalPlanilla?.nombre || tecnicoPrincipalPlanilla?.id),
                                                 border: `1px solid ${colorTecnico(tecnicoPrincipalPlanilla?.nombre || tecnicoPrincipalPlanilla?.id)}`
                                             }}
-                                            title="T√©cnico principal actual"
+                                            title="Tecnico principal actual"
                                         >
-                                            Principal: {tecnicoPrincipalPlanilla?.nombre || "‚Äî"}
+                                            Principal: {tecnicoPrincipalPlanilla?.nombre || "ó"}
                                         </span>
                                     )}
                                     {tecnicosApoyoPlanilla.map((tec, idx) => (
@@ -2224,9 +2270,9 @@ const ArmadoTecnico = () => {
                                                 color: colorTecnico(tec?.nombre || tec?.id),
                                                 border: `1px solid ${colorTecnico(tec?.nombre || tec?.id)}`
                                             }}
-                                            title="T√©cnico de apoyo actual"
+                                            title="Tecnico de apoyo actual"
                                         >
-                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo"}: {tec?.nombre || "‚Äî"}
+                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo"}: {tec?.nombre || "ó"}
                                         </span>
                                     ))}
                                 </h5>
@@ -2279,7 +2325,7 @@ const ArmadoTecnico = () => {
                                                     <div className="col-md-6">
                                                         <h6 className="d-flex align-items-center mb-2">
                                                             <i className="fas fa-user-friends mr-2 text-primary" />
-                                                            Historial de t√©cnicos
+                                                            Historial de tecnicos
                                                         </h6>
                                                         {participaciones.length ? (
                                                             <div className="hist-tech-list">
@@ -2307,7 +2353,7 @@ const ArmadoTecnico = () => {
                                                                             className="btn btn-sm btn-outline-danger"
                                                                             title="Eliminar del historial"
                                                                             onClick={async () => {
-                                                                                if (!window.confirm("¬øEliminar esta participaci√≥n del historial?")) return;
+                                                                                if (!window.confirm("øEliminar esta participaciÛn del historial?")) return;
                                                                                 try {
                                                                                     await borrarParticipacion(
                                                                                         p.id_participacion,
@@ -2323,11 +2369,11 @@ const ArmadoTecnico = () => {
                                                                                         await fetchArmados({ silent: true });
                                                                                     }
                                                                                 } catch (err) {
-                                                                                    console.error("No se pudo eliminar participaci√≥n:", err);
+                                                                                    console.error("No se pudo eliminar participaciÛn:", err);
                                                                                     const msg =
                                                                                         err?.response?.data?.message ||
                                                                                         err?.response?.data?.detail ||
-                                                                                        "No se pudo eliminar la participaci√≥n.";
+                                                                                        "No se pudo eliminar la participaciÛn.";
                                                                                     alert(msg);
                                                                                 }
                                                                             }}
@@ -2340,12 +2386,12 @@ const ArmadoTecnico = () => {
                                                         })}
                                             </div>
                                                         ) : (
-                                                            <p className="text-muted mb-0">Sin transferencias a√∫n.</p>
+                                                            <p className="text-muted mb-0">Sin transferencias a˙n.</p>
                                                         )}
                                             </div>
                                                     {puedeGestionarArmados && (
                                                         <div className="col-md-6">
-                                                            <h6>Observaci√≥n de asignaci√≥n</h6>
+                                                            <h6>Observacion de asignacion</h6>
                                                             <div
                                                                 className="mb-3 p-3"
                                                                 style={{
@@ -2356,17 +2402,17 @@ const ArmadoTecnico = () => {
                                                                     whiteSpace: "pre-wrap"
                                                                 }}
                                                             >
-                                                                {String(armadoActivo?.observacion || "").trim() || "Sin observaci√≥n registrada."}
+                                                                {String(armadoActivo?.observacion || "").trim() || "Sin observacion registrada."}
                                                             </div>
                                                             <h6>Transferir armado</h6>
                                                             <div className="form-group">
-                                                        <label>T√©cnico actual</label>
+                                                        <label>Tecnico actual</label>
                                                                 <select
                                                                     className="form-control"
                                                                     value={transferObjetivoSel}
                                                                     onChange={(e) => setTransferObjetivoSel(e.target.value)}
                                                                 >
-                                                                    <option value="">Seleccione t√©cnico actual</option>
+                                                                    <option value="">Seleccione tecnico actual</option>
                                                                     {tecnicoPrincipalPlanilla && (
                                                                         <option value={tecnicoPrincipalPlanilla.id}>
                                                                             Principal actual: {tecnicoPrincipalPlanilla.nombre || `ID ${tecnicoPrincipalPlanilla.id}`}
@@ -2380,13 +2426,13 @@ const ArmadoTecnico = () => {
                                                                 </select>
                                             </div>
                                                             <div className="form-group">
-                                                        <label>T√©cnico disponible</label>
+                                                        <label>Tecnico disponible</label>
                                                                 <select
                                                                     className="form-control"
                                                                     value={transferTecSel}
                                                                     onChange={(e) => setTransferTecSel(e.target.value)}
                                                                 >
-                                                                    <option value="">Seleccione t√©cnico disponible</option>
+                                                                    <option value="">Seleccione tecnico disponible</option>
                                                                     {tecnicosDisponiblesTransferencia.map((tec) => (
                                                                         <option key={tec.id} value={tec.id}>
                                                                             {tec.name || tec.nombre || `ID ${tec.id}`}
@@ -2417,8 +2463,8 @@ const ArmadoTecnico = () => {
                                                             <th>Equipo</th>
                                                             <th style={{ minWidth: esMovil ? "50px" : "75px" }}>Caja</th>
                                                             {!esMovil && <th>IP</th>}
-                                                            {!esMovil && <th>Observaci√≥n</th>}
-                                                            {!esMovil && <th>C√≥digo</th>}
+                                                            {!esMovil && <th>Observacion</th>}
+                                                            {!esMovil && <th>Codigo</th>}
                                                             <th>N Serie</th>
                                                             {!esMovil && <th>Estado</th>}
                                                             <th>Acciones</th>
@@ -2455,7 +2501,7 @@ const ArmadoTecnico = () => {
                                                                                     ) : null}
                                                                                     {eq.numero_serie ? (
                                                                                         <span style={{ color: "#dc2626", fontWeight: 800 }}>
-                                                                                            N¬∞ Serie: {eq.numero_serie}
+                                                                                            N Serie: {eq.numero_serie}
                                                                                         </span>
                                                                                     ) : null}
                                             </div>
@@ -2787,7 +2833,7 @@ const ArmadoTecnico = () => {
                     <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <h6 className="mb-0">Movimientos recientes (armado)</h6>
-                            <small className="text-muted">√öltimos 10</small>
+                            <small className="text-muted">⁄ltimos 10</small>
                                             </div>
                         <div className="table-responsive">
                             <table className="table table-sm table-striped mb-0">
@@ -2803,18 +2849,18 @@ const ArmadoTecnico = () => {
                                         </th>
                                         <th>Fecha</th>
                                         <th>Tipo</th>
-                                        <th>√çtem</th>
-                                        <th>N¬∞ Serie</th>
+                                        <th>Item</th>
+                                        <th>N Serie</th>
                                         <th>Caja</th>
                                         <th>Cant.</th>
-                                        <th>T√©cnico</th>
+                                        <th>Tecnico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {movimientos.slice(0, 10).map((mov) => (
                                         <tr key={mov.id_movimiento}>
                                             <td>{formatearFecha(mov.fecha)}</td>
-                                            <td className="text-capitalize">{mov.tipo}</td>
+                                            <td>{renderTipoMovimiento(mov)}</td>
                                             <td>{mov.nombre_item}</td>
                                             <td>{mov.numero_serie || "-"}</td>
                                             <td>{mov.caja}</td>
@@ -2827,7 +2873,7 @@ const ArmadoTecnico = () => {
                                     {movimientos.length === 0 && (
                                         <tr>
                                             <td colSpan="7" className="text-center text-muted">
-                                                Sin movimientos registrados todav√≠a.
+                                                Sin movimientos registrados todavÌa.
                                             </td>
                                         </tr>
                                     )}
@@ -2881,7 +2927,7 @@ const ArmadoTecnico = () => {
                                 <input
                                     className="form-control form-control-sm"
                                     style={{ width: 180 }}
-                                    placeholder="Buscar N¬∞ serie..."
+                                    placeholder="Buscar N serie..."
                                     value={movSerieFiltro}
                                     onChange={(e) => {
                                         setMovSerieFiltro(e.target.value);
@@ -2942,12 +2988,12 @@ const ArmadoTecnico = () => {
                                         )}
                                         <th>Fecha</th>
                                         <th>Tipo</th>
-                                        <th>√çtem</th>
-                                        <th>N¬∞ Serie</th>
+                                        <th>Item</th>
+                                        <th>N Serie</th>
                                         <th>Caja</th>
                                         <th>Cant.</th>
                                         <th>Armado</th>
-                                        <th>T√©cnico</th>
+                                        <th>Tecnico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2970,7 +3016,7 @@ const ArmadoTecnico = () => {
                                                 </td>
                                             )}
                                             <td>{formatearFechaHora(mov.fecha)}</td>
-                                            <td className="text-capitalize">{mov.tipo}</td>
+                                            <td>{renderTipoMovimiento(mov)}</td>
                                             <td>{mov.nombre_item}</td>
                                             <td>{mov.numero_serie || "-"}</td>
                                             <td>{mov.caja}</td>
@@ -2998,7 +3044,7 @@ const ArmadoTecnico = () => {
                                     {movimientosVisibles.length === 0 && (
                                         <tr>
                                             <td colSpan={esAdmin ? "9" : "8"} className="text-center text-muted">
-                                                Sin movimientos registrados todav√≠a.
+                                                Sin movimientos registrados todavÌa.
                                             </td>
                                         </tr>
                                     )}
@@ -3007,7 +3053,7 @@ const ArmadoTecnico = () => {
                                             </div>
                         <div className="d-flex justify-content-between align-items-center mt-2">
                             <small className="text-muted">
-                                P√°gina {Math.min(movsPage, movsTotalPaginasVista)} ‚Äî {movsTotalPaginasVista} en total
+                                Pagina {Math.min(movsPage, movsTotalPaginasVista)} - {movsTotalPaginasVista} en total
                             </small>
                             <div>
                                 <button
@@ -3196,7 +3242,7 @@ const ArmadoTecnico = () => {
                                                                         <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
                                                                         <small className="text-muted" style={{ fontSize: "0.72rem" }}>
                                                                             {formatearFecha(r?.serie_actual_fecha)}
-                                                                            {r?.correlativo_ultimo ? ` ¬∑ N${r.correlativo_ultimo}` : ""}
+                                                                            {r?.correlativo_ultimo ? ` ∑ N${r.correlativo_ultimo}` : ""}
                                                                         </small>
                                                                     </td>
                                                                     <td>{r?.cambios || 0}</td>
@@ -3256,9 +3302,9 @@ const ArmadoTecnico = () => {
                                     </select>
                                             </div>
                                 <div className="form-group">
-                                    <label>T√©cnico 1</label>
+                                    <label>Tecnico 1</label>
                                     <select className="form-control" value={tecnicoSel} onChange={(e) => setTecnicoSel(e.target.value)}>
-                                        <option value="">Selecciona t√©cnico</option>
+                                        <option value="">Selecciona tecnico</option>
                                         {tecnicos.map((tec) => (
                                             <option key={tec.id} value={tec.id}>
                                                 {tec.name || tec.nombre || `ID ${tec.id}`}
@@ -3267,9 +3313,9 @@ const ArmadoTecnico = () => {
                                     </select>
                                             </div>
                                 <div className="form-group">
-                                    <label>T√©cnico 2 (opcional)</label>
+                                    <label>Tecnico 2 (opcional)</label>
                                     <select className="form-control" value={tecnicoSecundarioSel} onChange={(e) => setTecnicoSecundarioSel(e.target.value)}>
-                                        <option value="">Sin segundo t√©cnico</option>
+                                        <option value="">Sin segundo tecnico</option>
                                         {tecnicos
                                             .filter((tec) => String(tec.id) !== String(tecnicoSel || ""))
                                             .map((tec) => (
@@ -3298,7 +3344,7 @@ const ArmadoTecnico = () => {
                                     />
                                             </div>
                                 <div className="form-group">
-                                    <label>Fecha t√©rmino</label>
+                                    <label>Fecha tÈrmino</label>
                                     <input
                                         type="date"
                                         className="form-control"
@@ -3307,7 +3353,7 @@ const ArmadoTecnico = () => {
                                     />
                                             </div>
                                 <div className="form-group">
-                                    <label>Observaci√≥n</label>
+                                    <label>Observacion</label>
                                     <textarea
                                         className="form-control"
                                         rows="2"
@@ -3321,7 +3367,7 @@ const ArmadoTecnico = () => {
                                     Cancelar
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleGuardarAsignacion}>
-                                    Guardar asignaci√≥n
+                                    Guardar asignaciÛn
                                 </button>
                                             </div>
                                             </div>
@@ -3336,7 +3382,7 @@ const ArmadoTecnico = () => {
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     <i className="fas fa-comment-alt mr-2" />
-                                    Observaci√≥n ¬∑ {observacionDetalle.centro || "Armado"}
+                                    Observacion - {observacionDetalle.centro || "Armado"}
                                 </h5>
                                 <button
                                     type="button"
@@ -3347,13 +3393,13 @@ const ArmadoTecnico = () => {
                                 </button>
                             </div>
                             <div className="modal-body">
-                                <label className="mb-2 font-weight-bold">Texto de observaci√≥n</label>
+                                <label className="mb-2 font-weight-bold">Texto de observacion</label>
                                 <textarea
                                     className="form-control"
                                     rows="6"
                                     value={observacionDetalle.texto}
                                     onChange={(e) => setObservacionDetalle((prev) => ({ ...prev, texto: e.target.value }))}
-                                    placeholder="Escribe la observaci√≥n del armado..."
+                                    placeholder="Escribe la observacion del armado..."
                                 />
                             </div>
                             <div className="modal-footer">
@@ -3370,7 +3416,7 @@ const ArmadoTecnico = () => {
                                     onClick={handleGuardarObservacionArmado}
                                     disabled={observacionDetalle.saving}
                                 >
-                                    {observacionDetalle.saving ? "Guardando..." : "Guardar observaci√≥n"}
+                                    {observacionDetalle.saving ? "Guardando..." : "Guardar observacion"}
                                 </button>
                             </div>
                         </div>
@@ -3384,7 +3430,7 @@ const ArmadoTecnico = () => {
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">
-                                    Checklist de armado ¬∑ {checklistArmado?.centro?.nombre || checklistArmado?.centro_nombre || "Centro"}
+                                    Checklist de armado - {checklistArmado?.centro?.nombre || checklistArmado?.centro_nombre || "Centro"}
                                 </h5>
                                 <button type="button" className="close" onClick={() => setChecklistOpen(false)}>
                                     <span>&times;</span>
@@ -3393,10 +3439,10 @@ const ArmadoTecnico = () => {
                             <div className="modal-body">
                                 <div className="armado-checklist-head">
                                     <div>
-                                        <strong>Armado N¬∞:</strong> {checklistArmado?.id_armado || "-"}
+                                        <strong>Armado N:</strong> {checklistArmado?.id_armado || "-"}
                                             </div>
                                     <div>
-                                        <strong>T√©cnico:</strong> {checklistArmado?.tecnico?.nombre || checklistArmado?.tecnico_nombre || "-"}
+                                        <strong>Tecnico:</strong> {checklistArmado?.tecnico?.nombre || checklistArmado?.tecnico_nombre || "-"}
                                             </div>
                                     <div>
                                         <strong>Progreso:</strong>{" "}
@@ -3463,7 +3509,7 @@ const ArmadoTecnico = () => {
                                                 <th>Punto de chequeo</th>
                                                 <th style={{ width: 150 }}>Estado</th>
                                                 <th style={{ width: 155 }}>Fecha</th>
-                                                <th style={{ width: 260 }}>Observaci√≥n</th>
+                                                <th style={{ width: 260 }}>Observacion</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -3528,7 +3574,7 @@ const ArmadoTecnico = () => {
                                                                         onChange={(e) =>
                                                                             actualizarChecklistItem(itemKey, { observacion: e.target.value })
                                                                         }
-                                                                        placeholder="Observaci√≥n por item..."
+                                                                        placeholder="Observacion por item..."
                                                                     />
                                                                 </td>
                                                             </tr>
@@ -3541,7 +3587,7 @@ const ArmadoTecnico = () => {
                                             </div>
 
                                 <div className="form-group mt-3 mb-0">
-                                    <label>Observaci√≥n general</label>
+                                    <label>Observacion general</label>
                                     <textarea
                                         className="form-control"
                                         rows="3"
@@ -3569,6 +3615,10 @@ const ArmadoTecnico = () => {
 };
 
 export default ArmadoTecnico;
+
+
+
+
 
 
 

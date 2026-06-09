@@ -1,4 +1,4 @@
-Ôªøimport React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import {
   fetchClientes,
@@ -21,9 +21,12 @@ import {
   obtenerMovimientosArmado,
   obtenerHistorialEquiposArmado,
   obtenerGuiasSalidaArmado,
-  guardarGuiaSalidaArmado,
+  crearGuiaSalidaArmado,
+  actualizarGuiaSalidaArmadoPorId,
   marcarRecepcionCentroGuiaArmado,
+  marcarRecepcionCentroGuiaArmadoPorId,
   eliminarGuiaSalidaArmado,
+  eliminarGuiaSalidaArmadoPorId,
 } from "../api";
 import "./BodegaRetiros.css";
 
@@ -32,7 +35,7 @@ function formatDate(value) {
   const raw = String(value).trim();
   const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoDate) {
-    // Evita desfase por zona horaria cuando la API env√≠a fecha o fecha+hora ISO.
+    // Evita desfase por zona horaria cuando la API envÌa fecha o fecha+hora ISO.
     return `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}`;
   }
   const d = new Date(value);
@@ -203,14 +206,18 @@ export default function BodegaRetiros() {
   const [guiasSalida, setGuiasSalida] = useState([]);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [armadoGuia, setArmadoGuia] = useState(null);
+  const [guiaSeleccionadaId, setGuiaSeleccionadaId] = useState(null);
   const [verCodigoGuia, setVerCodigoGuia] = useState(false);
   const [modoEdicionGuia, setModoEdicionGuia] = useState(false);
   const [formGuia, setFormGuia] = useState({
     numero_guia: "",
     fecha_salida: new Date().toISOString().slice(0, 10),
     observacion: "",
+    modalidad_salida: "guia",
   });
   const [guiaCajasDetalle, setGuiaCajasDetalle] = useState([]);
+  const [cajasDisponiblesGuia, setCajasDisponiblesGuia] = useState([]);
+  const [cajasSeleccionadasGuia, setCajasSeleccionadasGuia] = useState([]);
   const [loadingGuiaCajas, setLoadingGuiaCajas] = useState(false);
 
   const normalizeText = (value) =>
@@ -219,6 +226,13 @@ export default function BodegaRetiros() {
       .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+
+  const esCajaValida = (valor) => {
+    const raw = String(valor || "").trim();
+    const norm = normalizeText(raw);
+    if (!raw || !norm || norm === "sin caja") return false;
+    return /^caja\s*\d+/i.test(raw);
+  };
 
   const obtenerRevisionChecklistArmado = (armadoId) => {
     const id = Number(armadoId || 0);
@@ -437,18 +451,18 @@ export default function BodegaRetiros() {
     Array.isArray(retiro?.equipos) ? retiro.equipos.filter((e) => !!e.retirado).length : 0;
   const labelArea = (area) => {
     const a = String(area || "").toLowerCase();
-    if (a === "camaras") return "C√°maras";
+    if (a === "camaras") return "C·maras";
     if (a === "pc") return "PC";
-    if (a === "energia") return "Energ√≠a";
+    if (a === "energia") return "EnergÌa";
     return "-";
   };
 
   const historialLogistico = useMemo(() => {
     const areaLabel = (area) => {
       const a = String(area || "").toLowerCase();
-      if (a === "camaras") return "C√°maras";
+      if (a === "camaras") return "C·maras";
       if (a === "pc") return "PC";
-      if (a === "energia") return "Energ√≠a";
+      if (a === "energia") return "EnergÌa";
       return area || "-";
     };
     const flujoRevisionByRetiro = new Map();
@@ -572,10 +586,10 @@ export default function BodegaRetiros() {
         .forEach((eq) => {
           const rev = detalleRevisionPorEquipo.get(Number(eq?.id_retiro_equipo || 0));
           let ubicacion = `Centro: ${r?.centro || "-"}`;
-          if (estadoLog === "en_transito") ubicacion = "En tr√°nsito a bodega central";
+          if (estadoLog === "en_transito") ubicacion = "En tr·nsito a bodega central";
           if (estadoLog === "en_bodega") ubicacion = "Bodega central";
           if (rev?.area && !rev?.disponible_bodega && rev?.estadoOrden !== "cerrado") {
-            ubicacion = `En revisi√≥n (${labelArea(rev.area)})`;
+            ubicacion = `En revisiÛn (${labelArea(rev.area)})`;
           } else if (rev?.disponible_bodega) {
             ubicacion = "Bodega central";
           }
@@ -742,11 +756,25 @@ export default function BodegaRetiros() {
     });
   }, [equiposBaja, filtroSerieBaja, clientes, centros, clienteId, centroId]);
 
-  const guiaPorArmado = useMemo(() => {
+  const guiasPorArmado = useMemo(() => {
     const map = new Map();
     (guiasSalida || []).forEach((g) => {
       const id = Number(g?.armado_id || 0);
-      if (id) map.set(id, g);
+      if (!id) return;
+      const lista = map.get(id) || [];
+      lista.push(g);
+      map.set(id, lista);
+    });
+    map.forEach((lista, id) => {
+      map.set(
+        id,
+        [...lista].sort((a, b) => {
+          const fechaA = new Date(a?.updated_at || a?.created_at || 0).getTime();
+          const fechaB = new Date(b?.updated_at || b?.created_at || 0).getTime();
+          if (fechaA !== fechaB) return fechaB - fechaA;
+          return Number(b?.id_guia_salida || 0) - Number(a?.id_guia_salida || 0);
+        })
+      );
     });
     return map;
   }, [guiasSalida]);
@@ -765,6 +793,46 @@ export default function BodegaRetiros() {
     [guiasSalida]
   );
 
+  const guiaCajasDetalleVisible = useMemo(() => {
+    const seleccion = new Set((cajasSeleccionadasGuia || []).map((item) => String(item || "").trim()));
+    return (guiaCajasDetalle || []).filter((row) => seleccion.has(String(row?.caja || "").trim()));
+  }, [guiaCajasDetalle, cajasSeleccionadasGuia]);
+
+  const despachoRows = useMemo(() => {
+    return (armadosDespachoFiltrados || []).flatMap((armado) => {
+      const armadoId = Number(armado?.id_armado || 0);
+      const guiasArmado = Array.isArray(guiasPorArmado.get(armadoId)) ? guiasPorArmado.get(armadoId) : [];
+      const cajasDespachadas = new Set();
+      guiasArmado.forEach((guia) => {
+        (Array.isArray(guia?.cajas) ? guia.cajas : []).forEach((caja) => {
+          const valor = String(caja || "").trim();
+          if (valor) cajasDespachadas.add(valor);
+        });
+      });
+      const totalCajas = Number(armado?.total_cajas || 0);
+      const cajasPendientes = Math.max(totalCajas - cajasDespachadas.size, 0);
+      const rows = guiasArmado.map((guia) => ({
+        tipoFila: "guia",
+        rowKey: `desp-${armadoId}-${guia?.id_guia_salida || guia?.numero_guia || Math.random()}`,
+        armado,
+        guia,
+        totalCajas,
+        cajasFila: Number(guia?.total_cajas_despacho || (Array.isArray(guia?.cajas) ? guia.cajas.length : 0)),
+      }));
+      if (!guiasArmado.length || cajasPendientes > 0) {
+        rows.unshift({
+          tipoFila: "pendiente",
+          rowKey: `desp-pend-${armadoId}`,
+          armado,
+          guia: null,
+          totalCajas,
+          cajasFila: cajasPendientes || totalCajas,
+        });
+      }
+      return rows;
+    });
+  }, [armadosDespachoFiltrados, guiasPorArmado]);
+
   const algunToggleLogisticaActivo =
     mostrarTablaTransito || mostrarTablaBodega || mostrarTablaAsignaciones || mostrarTablaBajas || mostrarTablaDespachos;
 
@@ -777,7 +845,7 @@ export default function BodegaRetiros() {
 
   const canGestionarAsignaciones = useMemo(() => {
     const rol = String(usuario?.rol || "").toLowerCase();
-    return ["admin", "superadmin", "bodega", "operaciones", "almacen", "logistica", "log√≠stico"].includes(rol);
+    return ["admin", "superadmin", "bodega", "operaciones", "almacen", "logistica", "logÌstico"].includes(rol);
   }, [usuario]);
 
   const esAdminBodega = useMemo(() => {
@@ -1037,26 +1105,23 @@ export default function BodegaRetiros() {
 
   const abrirModalGuia = async (armado, guiaExistente = null, modoEdicion = false) => {
     setArmadoGuia(armado);
+    setGuiaSeleccionadaId(Number(guiaExistente?.id_guia_salida || 0) || null);
     setVerCodigoGuia(false);
     setModoEdicionGuia(modoEdicion);
     setFormGuia({
       numero_guia:
         String(guiaExistente?.numero_guia || "").trim() ||
-        `GS-${String(armado?.id_armado || "").padStart(4, "0")}`,
+        `GS-${String(armado?.id_armado || "").padStart(4, "0")}-${((Array.isArray(guiasPorArmado.get(Number(armado?.id_armado || 0))) ? guiasPorArmado.get(Number(armado?.id_armado || 0)).length : 0) + 1)
+          .toString()
+          .padStart(2, "0")}`,
       fecha_salida:
         String(guiaExistente?.fecha_salida || "").trim() ||
         new Date().toISOString().slice(0, 10),
       observacion: String(guiaExistente?.observacion || "").trim(),
+      modalidad_salida: String(guiaExistente?.modalidad_salida || "guia").trim() || "guia",
     });
     setLoadingGuiaCajas(true);
     try {
-      const esCajaValida = (valor) => {
-        const raw = String(valor || "").trim();
-        const norm = normalizeText(raw);
-        if (!raw || !norm || norm === "sin caja") return false;
-        // Solo aceptar cajas reales: "Caja 1", "Caja 2", etc.
-        return /^caja\s*\d+/i.test(raw);
-      };
       const [materiales, movimientos, equiposCentro, historialEquipos] = await Promise.all([
         obtenerMaterialesArmado(Number(armado?.id_armado || 0)),
         obtenerMovimientosArmado(Number(armado?.id_armado || 0)),
@@ -1092,7 +1157,7 @@ export default function BodegaRetiros() {
           serie: "",
         });
       });
-      // Equipos del armado: prioriza movimientos con caja v√°lida (evita arrastrar "sin caja").
+      // Equipos del armado: prioriza movimientos con caja v·lida (evita arrastrar "sin caja").
       const vistos = new Set();
       (Array.isArray(movimientos) ? movimientos : [])
         .filter((m) => String(m?.tipo || "").toLowerCase() === "equipo" && Number(m?.cantidad || 0) > 0)
@@ -1107,7 +1172,6 @@ export default function BodegaRetiros() {
           vistos.add(key);
           const caja = cajaRaw;
           if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
-          const extra = [serie ? `serie ${serie}` : ""].filter(Boolean).join(" ¬∑ ");
           grouped[caja].equipos.push({
             nombre,
             cantidad: Number(m?.cantidad || 0) || 1,
@@ -1115,7 +1179,7 @@ export default function BodegaRetiros() {
             codigo: String(m?.codigo || "").trim(),
           });
         });
-      // Fallback: si no hay movimientos, usa equipos actuales del centro con caja v√°lida.
+      // Fallback: si no hay movimientos, usa equipos actuales del centro con caja v·lida.
       if (!Object.values(grouped).some((x) => (x.equipos || []).length > 0)) {
         (Array.isArray(equiposCentro) ? equiposCentro : []).forEach((e) => {
           const cajaRaw = String(e?.caja || "").trim();
@@ -1124,7 +1188,6 @@ export default function BodegaRetiros() {
           if (!grouped[caja]) grouped[caja] = { materiales: [], equipos: [] };
           let serie = String(e?.numero_serie || e?.serie || e?.n_serie || "").trim();
           if (!serie) serie = tomarSerieHistorial(e?.nombre || "Equipo");
-          const extra = [serie ? `serie ${serie}` : ""].filter(Boolean).join(" ¬∑ ");
           grouped[caja].equipos.push({
             nombre: e?.nombre || "Equipo",
             cantidad: 1,
@@ -1141,20 +1204,55 @@ export default function BodegaRetiros() {
           equipos: grouped[caja]?.equipos || [],
         }));
       setGuiaCajasDetalle(rows);
+      const cajasPropias = new Set(
+        (Array.isArray(guiaExistente?.cajas) ? guiaExistente.cajas : [])
+          .map((caja) => String(caja || "").trim())
+          .filter(Boolean)
+      );
+      const cajasOcupadas = new Set();
+      (Array.isArray(guiasPorArmado.get(Number(armado?.id_armado || 0))) ? guiasPorArmado.get(Number(armado?.id_armado || 0)) : [])
+        .filter((item) => Number(item?.id_guia_salida || 0) !== Number(guiaExistente?.id_guia_salida || 0))
+        .forEach((item) => {
+          (Array.isArray(item?.cajas) ? item.cajas : []).forEach((caja) => {
+            const valor = String(caja || "").trim();
+            if (valor) cajasOcupadas.add(valor);
+          });
+        });
+      const disponibles = rows
+        .map((row) => String(row?.caja || "").trim())
+        .filter((caja) => caja && (!cajasOcupadas.has(caja) || cajasPropias.has(caja)));
+      const seleccionInicial = modoEdicion
+        ? cajasPropias.size
+          ? disponibles.filter((caja) => cajasPropias.has(caja))
+          : [...disponibles]
+        : cajasPropias.size
+          ? rows.map((row) => String(row?.caja || "").trim()).filter((caja) => cajasPropias.has(caja))
+          : [...disponibles];
+      setCajasDisponiblesGuia(disponibles);
+      setCajasSeleccionadasGuia(seleccionInicial);
     } catch {
       setGuiaCajasDetalle([]);
+      setCajasDisponiblesGuia([]);
+      setCajasSeleccionadasGuia([]);
     } finally {
       setLoadingGuiaCajas(false);
     }
     setShowGuiaModal(true);
   };
 
-  const eliminarGuiaSalida = async (armadoId) => {
+  const eliminarGuiaSalida = async (guia) => {
     if (!esAdminBodega) return;
-    if (!window.confirm("¬øEliminar este despacho? Se quitar√° la gu√≠a guardada del armado.")) return;
+    if (!window.confirm("øEliminar este despacho? Se quitar· la guÌa guardada del armado.")) return;
     try {
-      await eliminarGuiaSalidaArmado(armadoId);
-      setGuiasSalida((prev) => (prev || []).filter((g) => Number(g?.armado_id || 0) !== Number(armadoId)));
+      const idGuia = Number(guia?.id_guia_salida || 0);
+      if (idGuia) {
+        await eliminarGuiaSalidaArmadoPorId(idGuia);
+        setGuiasSalida((prev) => (prev || []).filter((g) => Number(g?.id_guia_salida || 0) !== idGuia));
+      } else {
+        const armadoId = Number(guia?.armado_id || 0);
+        await eliminarGuiaSalidaArmado(armadoId);
+        setGuiasSalida((prev) => (prev || []).filter((g) => Number(g?.armado_id || 0) !== armadoId));
+      }
     } catch {
       alert("No se pudo eliminar el despacho.");
     }
@@ -1163,41 +1261,63 @@ export default function BodegaRetiros() {
   const guardarGuiaSalida = async () => {
     if (!armadoGuia?.id_armado) return;
     const armadoId = Number(armadoGuia.id_armado);
+    const cajas = (cajasSeleccionadasGuia || []).map((caja) => String(caja || "").trim()).filter(Boolean);
+    if (!cajas.length) {
+      alert("Debes seleccionar al menos una caja para el despacho.");
+      return;
+    }
     const payload = {
       armado_id: armadoId,
       numero_guia: String(formGuia.numero_guia || "").trim() || `GS-${String(armadoId).padStart(4, "0")}`,
       fecha_salida: formGuia.fecha_salida || new Date().toISOString().slice(0, 10),
       observacion: String(formGuia.observacion || "").trim(),
       estado: "en_transito_centro",
+      tipo_despacho: cajas.length === (guiaCajasDetalle || []).length ? "total" : "parcial",
+      modalidad_salida: String(formGuia.modalidad_salida || "guia").trim() || "guia",
+      cajas,
       centro: armadoGuia?.centro?.nombre || "",
       cliente: armadoGuia?.centro?.cliente || "",
       updated_at: new Date().toISOString(),
     };
     try {
-      const guardada = await guardarGuiaSalidaArmado(armadoId, payload);
+      const guardada = guiaSeleccionadaId
+        ? await actualizarGuiaSalidaArmadoPorId(guiaSeleccionadaId, payload)
+        : await crearGuiaSalidaArmado(payload);
       setGuiasSalida((prev) => {
-        const sinActual = (prev || []).filter((g) => Number(g?.armado_id || 0) !== armadoId);
-        return [guardada, ...sinActual];
+        const lista = prev || [];
+        if (guiaSeleccionadaId) {
+          return lista.map((g) => (Number(g?.id_guia_salida || 0) === guiaSeleccionadaId ? guardada : g));
+        }
+        return [guardada, ...lista];
       });
       setShowGuiaModal(false);
       setArmadoGuia(null);
+      setGuiaSeleccionadaId(null);
     } catch {
-      alert("No se pudo guardar la gu√≠a de despacho.");
+      alert("No se pudo guardar la guÌa de despacho.");
     }
   };
 
-  const marcarRecepcionCentro = async (armadoId) => {
+  const marcarRecepcionCentro = async (guia) => {
     try {
-      const actualizada = await marcarRecepcionCentroGuiaArmado(armadoId, {
+      const idGuia = Number(guia?.id_guia_salida || 0);
+      const actualizada = idGuia
+        ? await marcarRecepcionCentroGuiaArmadoPorId(idGuia, {
+            fecha_recepcion_centro: new Date().toISOString(),
+          })
+        : await marcarRecepcionCentroGuiaArmado(Number(guia?.armado_id || 0), {
         fecha_recepcion_centro: new Date().toISOString(),
       });
       setGuiasSalida((prev) =>
         (prev || []).map((g) =>
-          Number(g?.armado_id || 0) === Number(armadoId) ? actualizada : g
+          Number(g?.id_guia_salida || 0) === Number(actualizada?.id_guia_salida || 0) ||
+          (!idGuia && Number(g?.armado_id || 0) === Number(guia?.armado_id || 0))
+            ? actualizada
+            : g
         )
       );
     } catch {
-      alert("No se pudo marcar la recepci√≥n en centro.");
+      alert("No se pudo marcar la recepciÛn en centro.");
     }
   };
 
@@ -1212,16 +1332,16 @@ export default function BodegaRetiros() {
       ? armadoGuia.tecnicos_asignados.filter((tec) => !tec?.principal).map((tec) => tec?.nombre).filter(Boolean).join(", ")
       : "";
     const tecnico = tecnicoApoyo ? `${tecnicoPrincipal} | Apoyo: ${tecnicoApoyo}` : tecnicoPrincipal;
-    const totalCajas = Number((guiaCajasDetalle || []).length || 0);
+    const totalCajas = Number((guiaCajasDetalleVisible || []).length || 0);
     const observacion = String(formGuia.observacion || "").trim() || "-";
-    const detalleCajasHtml = (guiaCajasDetalle || []).length
-      ? guiaCajasDetalle
+    const detalleCajasHtml = (guiaCajasDetalleVisible || []).length
+      ? guiaCajasDetalleVisible
           .map((row) => {
             const mats = (row.materiales || []).map((it) => `<li>${escHtml(it.nombre)} x${escHtml(it.cantidad)}</li>`).join("");
             const eqs = (row.equipos || [])
               .map((it) => {
                 const serieTxt = String(it?.serie || "").trim();
-                return `<li>${escHtml(it.nombre)} x${escHtml(it.cantidad)}${serieTxt ? ` ¬∑ N¬∞ Serie: ${escHtml(serieTxt)}` : ""}</li>`;
+                return `<li>${escHtml(it.nombre)} x${escHtml(it.cantidad)}${serieTxt ? ` ∑ N Serie: ${escHtml(serieTxt)}` : ""}</li>`;
               })
               .join("");
             const totalEquipos = (row.equipos || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
@@ -1286,12 +1406,12 @@ export default function BodegaRetiros() {
             </div>
             <div>
               <div class="title">GUIA DE SALIDA A CENTRO</div>
-              <div class="meta">N¬∞ guia: ${escHtml(numeroGuia)}</div>
+              <div class="meta">N∞ guia: ${escHtml(numeroGuia)}</div>
               <div class="meta">Fecha salida: ${escHtml(formatDate(fechaSalida))}</div>
             </div>
             <div class="orca">
               <b>Orca Tecnologia</b><br/>
-              Via Azul N¬∞ 1051<br/>
+              Via Azul N∞ 1051<br/>
               Puerto Montt
             </div>
           </div>
@@ -1364,13 +1484,13 @@ export default function BodegaRetiros() {
           <div>
             <h4 className="mb-2">Bodega</h4>
             <p className="text-muted mb-0">
-              Flujo: retirado del centro ‚Üí en tr√°nsito ‚Üí en bodega ‚Üí revisi√≥n.
+              Flujo: retirado del centro ? en tr·nsito ? en bodega ? revisiÛn.
             </p>
           </div>
           <div className="bodega-kpis-inline bodega-hero-kpis">
             <span className="bodega-kpi-chip bodega-kpi-transito">
               <i className="fas fa-route" />
-              En tr√°nsito: {totalPendienteTransito}
+              En tr·nsito: {totalPendienteTransito}
             </span>
             <span className="bodega-kpi-chip bodega-kpi-hoy">
               <i className="fas fa-check-circle" />
@@ -1378,7 +1498,7 @@ export default function BodegaRetiros() {
             </span>
             <span className="bodega-kpi-chip">
               <i className="fas fa-stethoscope" />
-              En revisi√≥n: {totalRevisionActiva}
+              En revisiÛn: {totalRevisionActiva}
             </span>
             <span className="bodega-kpi-chip">
               <i className="fas fa-box-open" />
@@ -1492,7 +1612,7 @@ export default function BodegaRetiros() {
           <div className="btn w-100 text-left bodega-toggle-card bodega-toggle-centros">
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <div className="small text-uppercase text-muted">Operaci√≥n</div>
+                <div className="small text-uppercase text-muted">OperaciÛn</div>
                 <div className="h5 mb-0">
                   <i className="fas fa-broadcast-tower mr-2 text-primary" />
                   Equipos trabajando
@@ -1513,7 +1633,7 @@ export default function BodegaRetiros() {
           >
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <div className="small text-uppercase text-muted">Recepci√≥n</div>
+                <div className="small text-uppercase text-muted">RecepciÛn</div>
                 <div className="h5 mb-0">
                   <i className="fas fa-warehouse mr-2 text-success" />
                   En bodega
@@ -1557,7 +1677,7 @@ export default function BodegaRetiros() {
             Armados en seguimiento
           </strong>
           <div className="d-flex align-items-center" style={{ gap: 8 }}>
-            <span className="badge badge-info">En preparaci√≥n: {armadosSeguimientoResumen.enPreparacion.length}</span>
+            <span className="badge badge-info">En preparaciÛn: {armadosSeguimientoResumen.enPreparacion.length}</span>
             <span className="badge badge-success">Listos despacho: {armadosSeguimientoResumen.listos.length}</span>
             <button className="btn btn-outline-primary btn-sm" onClick={cargarArmadosFinalizados}>
               <i className="fas fa-sync-alt mr-1" />
@@ -1573,12 +1693,12 @@ export default function BodegaRetiros() {
                   <th>ID armado</th>
                   <th>Cliente</th>
                   <th>Centro</th>
-                  <th>T√©cnico encargado</th>
+                  <th>Tecnico encargado</th>
                   <th>Inicio</th>
-                  <th>T√©rmino</th>
+                  <th>TÈrmino</th>
                   <th>Armado</th>
-                  <th>Revisi√≥n checklist</th>
-                  <th className="text-center">Acci√≥n</th>
+                  <th>RevisiÛn checklist</th>
+                  <th className="text-center">AcciÛn</th>
                 </tr>
               </thead>
               <tbody>
@@ -1612,7 +1732,7 @@ export default function BodegaRetiros() {
                           {finalizado ? (
                             <span className="badge badge-success">Finalizado</span>
                           ) : (
-                            <span className="badge badge-info">En preparaci√≥n</span>
+                            <span className="badge badge-info">En preparaciÛn</span>
                           )}
                         </td>
                         <td>
@@ -1707,7 +1827,7 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N¬∞</th>
+                  <th>N∞</th>
                   <th>Correlativo</th>
                   <th>Fecha retiro</th>
                   <th>Cliente</th>
@@ -1741,7 +1861,7 @@ export default function BodegaRetiros() {
                       <td>{r.centro || "-"}</td>
                       <td>{r.tipo_retiro === "completo" ? "Completo" : "Parcial"}</td>
                       <td>
-                        <span className="badge badge-warning">En tr√°nsito</span>
+                        <span className="badge badge-warning">En tr·nsito</span>
                       </td>
                       <td>{totalEquiposRetirados(r)}</td>
                       <td>
@@ -1813,7 +1933,7 @@ export default function BodegaRetiros() {
             <input
               className="form-control form-control-sm d-inline-block"
               style={{ width: 190 }}
-              placeholder="Buscar N¬∞ serie / c√≥digo"
+              placeholder="Buscar N∞ serie / cÛdigo"
               value={filtroSerieBodega}
               onChange={(e) => setFiltroSerieBodega(e.target.value)}
             />
@@ -1828,7 +1948,7 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N¬∞</th>
+                  <th>N∞</th>
                   <th>Correlativo</th>
                   <th>Fecha retiro</th>
                   <th>Centro</th>
@@ -1941,8 +2061,8 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N¬∞ serie</th>
-                  <th>C√≥digo</th>
+                  <th>N∞ serie</th>
+                  <th>CÛdigo</th>
                   <th>Equipo</th>
                   <th>Tecnico</th>
                   <th>Fecha asignacion</th>
@@ -2031,7 +2151,7 @@ export default function BodegaRetiros() {
             <input
               className="form-control form-control-sm d-inline-block"
               style={{ width: 190 }}
-              placeholder="Buscar N¬∞ serie / c√≥digo"
+              placeholder="Buscar N∞ serie / cÛdigo"
               value={filtroSerieBaja}
               onChange={(e) => setFiltroSerieBaja(e.target.value)}
             />
@@ -2042,13 +2162,13 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N¬∞ serie</th>
-                  <th>C√≥digo</th>
+                  <th>N∞ serie</th>
+                  <th>CÛdigo</th>
                   <th>Equipo</th>
                   <th>Modelo</th>
-                  <th>Ubicaci√≥n</th>
+                  <th>UbicaciÛn</th>
                   <th>Estado</th>
-                  <th>√ölt. actualizaci√≥n</th>
+                  <th>⁄lt. actualizaciÛn</th>
                 </tr>
               </thead>
               <tbody>
@@ -2083,7 +2203,7 @@ export default function BodegaRetiros() {
         <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
           <strong>
             <i className="fas fa-shipping-fast mr-2 text-primary" />
-            Despachos a centro ({armadosDespachoFiltrados.length})
+            Despachos a centro ({despachoRows.length})
           </strong>
           <div className="d-flex align-items-center flex-wrap" style={{ gap: 6 }}>
             <input
@@ -2109,48 +2229,61 @@ export default function BodegaRetiros() {
 	                  <th>Centro</th>
 	                  <th>Fecha cierre</th>
 	                  <th>Fecha despacho</th>
-	                  <th>Fecha recepci√≥n</th>
-	                  <th>Total cajas</th>
-	                  <th>Gu√≠a salida</th>
+	                  <th>Fecha recepciÛn</th>
+	                  <th>Cajas despacho</th>
+	                  <th>GuÌa salida</th>
+                    <th>Tipo</th>
 	                  <th>Estado despacho</th>
-	                  <th className="text-center">Acci√≥n</th>
+	                  <th className="text-center">AcciÛn</th>
 	                </tr>
               </thead>
               <tbody>
-                {!armadosDespachoFiltrados.length ? (
+                {!despachoRows.length ? (
                   <tr>
-	                    <td colSpan={10} className="text-center py-3 text-muted">
+	                    <td colSpan={11} className="text-center py-3 text-muted">
 	                      Sin armados finalizados para despacho.
 	                    </td>
 	                  </tr>
                 ) : (
-                  armadosDespachoFiltrados.map((a) => {
-                    const guia = guiaPorArmado.get(Number(a?.id_armado || 0));
+                  despachoRows.map((row) => {
+                    const a = row.armado;
+                    const guia = row.guia;
                     const estado = normalizeText(guia?.estado || "");
                     return (
-                      <tr key={`desp-${a.id_armado}`}>
+                      <tr key={row.rowKey}>
                         <td>{a.id_armado}</td>
 	                        <td>{a?.centro?.cliente || "-"}</td>
 	                        <td>{a?.centro?.nombre || "-"}</td>
 	                        <td>{formatDate(a.fecha_cierre || a.fecha_inicio || a.fecha_asignacion)}</td>
 	                        <td>{formatDate(guia?.fecha_salida)}</td>
 	                        <td>{formatDate(guia?.fecha_recepcion_centro)}</td>
-	                        <td>{a.total_cajas || 0}</td>
+	                        <td>{row.cajasFila || 0}</td>
 	                        <td>{guia?.numero_guia || "-"}</td>
                         <td>
+                          {guia ? (
+                            <span className={`badge ${normalizeText(guia?.tipo_despacho || "") === "parcial" ? "badge-warning" : "badge-info"}`}>
+                              {normalizeText(guia?.tipo_despacho || "") === "parcial" ? "Parcial" : "Total"}
+                            </span>
+                          ) : (
+                            <span className="badge badge-secondary">Pendiente</span>
+                          )}
+                        </td>
+                        <td>
                           {!guia ? (
-                            <span className="badge badge-secondary">Pendiente gu√≠a</span>
+                            <span className="badge badge-secondary">Pendiente despacho</span>
                           ) : estado === "recepcionado_en_centro" ? (
                             <span className="badge badge-success">Recepcionado en centro</span>
                           ) : (
-                            <span className="badge badge-warning">En tr√°nsito hacia centro</span>
+                            <span className="badge badge-warning">En tr·nsito hacia centro</span>
                           )}
                         </td>
                         <td className="text-center">
                           {!guia ? (
                             <button className="btn btn-sm btn-primary" onClick={() => abrirModalGuia(a, null, true)}>
                               <i className="fas fa-file-export mr-1" />
-                              Generar gu√≠a
+                              {Array.isArray(guiasPorArmado.get(Number(a?.id_armado || 0))) && guiasPorArmado.get(Number(a?.id_armado || 0)).length
+                                ? "Nuevo despacho"
+                                : "Generar guÌa"}
                             </button>
                           ) : estado !== "recepcionado_en_centro" ? (
                             <div className="d-flex justify-content-center" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -2158,9 +2291,9 @@ export default function BodegaRetiros() {
                                 <i className="fas fa-eye mr-1" />
                                 Ver despacho
                               </button>
-                              <button className="btn btn-sm btn-outline-success" onClick={() => marcarRecepcionCentro(a.id_armado)}>
+                              <button className="btn btn-sm btn-outline-success" onClick={() => marcarRecepcionCentro(guia)}>
                                 <i className="fas fa-check mr-1" />
-                                Recepci√≥n en centro
+                                RecepciÛn en centro
                               </button>
                               {esAdminBodega ? (
                                 <button
@@ -2174,7 +2307,7 @@ export default function BodegaRetiros() {
                               {esAdminBodega ? (
                                 <button
                                   className="btn btn-sm btn-outline-danger"
-                                  onClick={() => eliminarGuiaSalida(a.id_armado)}
+                                  onClick={() => eliminarGuiaSalida(guia)}
                                   title="Eliminar despacho"
                                 >
                                   <i className="fas fa-trash-alt" />
@@ -2199,7 +2332,7 @@ export default function BodegaRetiros() {
                               {esAdminBodega ? (
                                 <button
                                   className="btn btn-sm btn-outline-danger"
-                                  onClick={() => eliminarGuiaSalida(a.id_armado)}
+                                  onClick={() => eliminarGuiaSalida(guia)}
                                   title="Eliminar despacho"
                                 >
                                   <i className="fas fa-trash-alt" />
@@ -2302,16 +2435,16 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N¬∞ serie</th>
-                  <th>C√≥digo</th>
+                  <th>N∞ serie</th>
+                  <th>CÛdigo</th>
                   <th>Equipo</th>
                   <th>Cliente</th>
                   <th>Centro</th>
                   <th>Estado equipo</th>
-                  <th>Asignaci√≥n</th>
-                  <th>Ubicaci√≥n actual</th>
-                  <th>√ölt. actualizaci√≥n</th>
-                  <th className="text-center">Acci√≥n</th>
+                  <th>AsignaciÛn</th>
+                  <th>UbicaciÛn actual</th>
+                  <th>⁄lt. actualizaciÛn</th>
+                  <th className="text-center">AcciÛn</th>
                 </tr>
               </thead>
               <tbody>
@@ -2414,7 +2547,7 @@ export default function BodegaRetiros() {
                               onClick={async () => {
                                 const id = r.id_bodega_equipo || r.id_retiro_equipo;
                                 if (!id) return;
-                                if (!window.confirm("¬øEliminar este equipo del inventario?")) return;
+                                if (!window.confirm("øEliminar este equipo del inventario?")) return;
                                 try {
                                   await eliminarInventarioBodegaEquipo(id);
                                   await cargarInventarioManual();
@@ -2445,12 +2578,12 @@ export default function BodegaRetiros() {
         <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap">
           <strong>
             <i className="fas fa-history mr-2 text-info" />
-            Historial log√≠stico de equipos
+            Historial logÌstico de equipos
           </strong>
           <input
             className="form-control form-control-sm"
             style={{ maxWidth: 360 }}
-            placeholder="Buscar por centro, equipo, t√©cnico, N serie o correlativo"
+            placeholder="Buscar por centro, equipo, tÈcnico, N serie o correlativo"
             value={filtroHistorial}
             onChange={(e) => setFiltroHistorial(e.target.value)}
           />
@@ -2465,7 +2598,7 @@ export default function BodegaRetiros() {
                   <th>Equipo</th>
                   <th>N serie</th>
                   <th>Centro</th>
-                  <th>T√©cnico</th>
+                  <th>Tecnico</th>
                   <th>Flujo</th>
                   <th>Accion</th>
                 </tr>
@@ -2505,16 +2638,16 @@ export default function BodegaRetiros() {
                                   (eq) => normalizeText(eq?.nombre) === normalizeText(row?.equipo_nombre)
                                 );
                                 const serieActual = String(actual?.numero_serie || "").trim() || "-";
-                                let estadoCambio = "Sin informaci√≥n";
+                                let estadoCambio = "Sin informaciÛn";
                                 let estadoCambioTipo = "sin-info";
                                 if (serieActual === "-") {
                                   estadoCambio = "Equipo retirado, sin serie actual en el centro.";
                                   estadoCambioTipo = "sin-actual";
                                 } else if (String(row?.numero_serie || "-").trim() === serieActual) {
-                                  estadoCambio = "Este equipo no tuvo modificaci√≥n desde su instalaci√≥n inicial.";
+                                  estadoCambio = "Este equipo no tuvo modificaciÛn desde su instalaciÛn inicial.";
                                   estadoCambioTipo = "sin-cambio";
                                 } else {
-                                  estadoCambio = "Equipo con modificaci√≥n de serie respecto al retiro.";
+                                  estadoCambio = "Equipo con modificaciÛn de serie respecto al retiro.";
                                   estadoCambioTipo = "modificado";
                                 }
                                 return {
@@ -2583,7 +2716,7 @@ export default function BodegaRetiros() {
                 <p className="text-muted mb-2">
                   Equipos retirados: {totalEquiposRetirados(seleccionado)}
                 </p>
-                <label className="form-label">Checklist equipos (equipo / c√≥digo)</label>
+                <label className="form-label">Checklist equipos (equipo / cÛdigo)</label>
                 <div className="border rounded p-2 mb-3" style={{ maxHeight: 220, overflowY: "auto" }}>
                   {!equiposRecepcion.length ? (
                     <div className="text-muted small">Sin equipos retirados para validar.</div>
@@ -2610,7 +2743,7 @@ export default function BodegaRetiros() {
                         <div>
                           <div style={{ fontWeight: 700 }}>{eq.equipo_nombre || "-"}</div>
                           <div className="small text-muted">
-                            Serie: {eq.numero_serie || "-"} | C√≥digo: {eq.codigo || "-"}
+                            Serie: {eq.numero_serie || "-"} | CÛdigo: {eq.codigo || "-"}
                           </div>
                         </div>
                       </label>
@@ -2659,16 +2792,16 @@ export default function BodegaRetiros() {
                   <strong>{retiroRevision.centro || "-"}</strong> ({retiroRevision.empresa || retiroRevision.cliente || "-"})
                 </p>
                 <p className="text-muted small mb-2">
-                  Selecciona el √°rea por equipo. Se crea una orden por cada √°rea con equipos asignados.
+                  Selecciona el ·rea por equipo. Se crea una orden por cada ·rea con equipos asignados.
                 </p>
                 <div className="table-responsive border rounded">
                   <table className="table table-sm mb-0">
                     <thead className="thead-light">
                       <tr>
                         <th>Equipo</th>
-                        <th>N¬∞ serie</th>
-                        <th>C√≥digo</th>
-                        <th>√Årea revisi√≥n</th>
+                        <th>N∞ serie</th>
+                        <th>CÛdigo</th>
+                        <th>¡rea revisiÛn</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2704,9 +2837,9 @@ export default function BodegaRetiros() {
                                   }
                                 >
                                   <option value="">Sin asignar</option>
-                                  <option value="camaras">C√°maras</option>
+                                  <option value="camaras">C·maras</option>
                                   <option value="pc">PC</option>
-                                  <option value="energia">Energ√≠a</option>
+                                  <option value="energia">EnergÌa</option>
                                 </select>
                               )}
                             </td>
@@ -2737,8 +2870,8 @@ export default function BodegaRetiros() {
                         .slice(0, 4)
                         .map((eq) => eq.equipo_nombre || "Equipo")
                         .join(", ");
-                      const extra = pendientesSinArea.length > 4 ? ` y ${pendientesSinArea.length - 4} m√°s` : "";
-                      alert(`Debes asignar √°rea a todos los equipos retirados. Pendientes: ${nombres}${extra}.`);
+                      const extra = pendientesSinArea.length > 4 ? ` y ${pendientesSinArea.length - 4} m·s` : "";
+                      alert(`Debes asignar ·rea a todos los equipos retirados. Pendientes: ${nombres}${extra}.`);
                       return;
                     }
                     const seleccionados = revisionEquiposArea.filter(
@@ -2976,12 +3109,12 @@ export default function BodegaRetiros() {
                           {nuevoEquipo.imagen_nombre || "Sin archivo"}
                         </span>
                       </div>
-                      <small className="text-muted d-block mt-1">Ubicaci√≥n fija: Bodega central</small>
+                      <small className="text-muted d-block mt-1">UbicaciÛn fija: Bodega central</small>
                     </div>
                   </div>
                   <div className="form-row">
                     <div className="form-group col-md-8">
-                      <label>Descripci√≥n del producto</label>
+                      <label>DescripciÛn del producto</label>
                       <textarea
                         className="form-control"
                         rows={2}
@@ -3006,7 +3139,7 @@ export default function BodegaRetiros() {
                 <div className="bodega-inv-block">
                   <div className="bodega-inv-block-title">
                     <i className="bi bi-geo-alt mr-1" />
-                    Estado, ubicaci√≥n e identificaci√≥n
+                    Estado, ubicaciÛn e identificaciÛn
                   </div>
                   <div className="form-row">
                     <div className="form-group col-md-8">
@@ -3061,7 +3194,7 @@ export default function BodegaRetiros() {
                       </small>
                     </div>
                     <div className="form-group col-md-4">
-                      <label>C√≥digo</label>
+                      <label>CÛdigo</label>
                       <input
                         className="form-control"
                         value={nuevoEquipo.codigo}
@@ -3073,7 +3206,7 @@ export default function BodegaRetiros() {
                     <div className="bodega-inv-extra-codes">
                       <div className="d-flex justify-content-between align-items-center mb-2" style={{ gap: 8 }}>
                         <small className="font-weight-bold text-muted mb-0">
-                          C√≥digos adicionales (mismo ingreso)
+                          CÛdigos adicionales (mismo ingreso)
                         </small>
                         <button
                           type="button"
@@ -3086,13 +3219,13 @@ export default function BodegaRetiros() {
                           }
                         >
                           <i className="bi bi-plus-circle mr-1" />
-                          Agregar c√≥digo
+                          Agregar cÛdigo
                         </button>
                       </div>
                       {codigosAdicionales.map((row, idx) => (
                         <div className="form-row align-items-end" key={`extra-cod-${row.id}`}>
                           <div className="form-group col-md-7 mb-2">
-                            <label className="mb-1">C√≥digo adicional #{idx + 1}</label>
+                            <label className="mb-1">CÛdigo adicional #{idx + 1}</label>
                             <input
                               className="form-control"
                               value={row.codigo}
@@ -3164,7 +3297,7 @@ export default function BodegaRetiros() {
                       />
                     </div>
                     <div className="form-group col-md-4">
-                      <label>N¬∞ serie</label>
+                      <label>N∞ serie</label>
                       <div className="input-group">
                         <input
                           className="form-control"
@@ -3209,10 +3342,10 @@ export default function BodegaRetiros() {
                       {esCodigoFamilia(nuevoEquipo.codigo) && Array.isArray(seriesSeleccionadas) && seriesSeleccionadas.length ? (
                         <div className="alert alert-success py-2 px-2 mt-2 mb-0">
                           <small className="d-block font-weight-bold">
-                            Se incorporar√°n {seriesSeleccionadas.length} equipo{seriesSeleccionadas.length === 1 ? "" : "s"}.
+                            Se incorporar·n {seriesSeleccionadas.length} equipo{seriesSeleccionadas.length === 1 ? "" : "s"}.
                           </small>
                           <small className="d-block">
-                            N¬∞ serie seleccionados:{" "}
+                            N∞ serie seleccionados:{" "}
                             <strong>
                               {seriesSeleccionadas.slice(0, 6).join(", ")}
                               {seriesSeleccionadas.length > 6 ? " ..." : ""}
@@ -3226,7 +3359,7 @@ export default function BodegaRetiros() {
                   !esCodigoFamilia(nuevoEquipo.codigo) &&
                   codigoExiste(nuevoEquipo.codigo) ? (
                     <small className="text-warning d-block mt-1">
-                      Este c√≥digo ya existe. √öltimo registro: <strong>{ultimoCodigoRegistrado(nuevoEquipo.codigo)}</strong>
+                      Este cÛdigo ya existe. ⁄ltimo registro: <strong>{ultimoCodigoRegistrado(nuevoEquipo.codigo)}</strong>
                     </small>
                   ) : null}
                 </div>
@@ -3234,7 +3367,7 @@ export default function BodegaRetiros() {
                 {!!codigosSugeridosIngreso.length && (
                   <div className="alert alert-light border py-2 bodega-inv-codes">
                     <small className="d-block">
-                      {esCodigoFamilia(nuevoEquipo.codigo) ? "Series a crear" : "C√≥digos a crear"} ({codigosSugeridosIngreso.length}):{" "}
+                      {esCodigoFamilia(nuevoEquipo.codigo) ? "Series a crear" : "CÛdigos a crear"} ({codigosSugeridosIngreso.length}):{" "}
                       <strong>
                         {codigosSugeridosIngreso.slice(0, 6).join(", ")}
                         {codigosSugeridosIngreso.length > 6 ? " ..." : ""}
@@ -3263,7 +3396,7 @@ export default function BodegaRetiros() {
                     const equipo = String(nuevoEquipo.equipo_nombre || "").trim();
                     const usaSeriesPorCodigo = esCodigoFamilia(codigo);
                     if ((!serie && !usaSeriesPorCodigo) || !codigo || !equipo) {
-                      alert("Completa codigo y equipo. Si el codigo no es de familia numerica, tambien debes ingresar N¬∞ serie.");
+                      alert("Completa codigo y equipo. Si el codigo no es de familia numerica, tambien debes ingresar N∞ serie.");
                       return;
                     }
                     try {
@@ -3291,11 +3424,11 @@ export default function BodegaRetiros() {
                         });
                         const hayDuplicado = Array.from(codigosRepetidos).some((x) => String(x).startsWith("dup:"));
                         if (hayDuplicado) {
-                          alert("Hay c√≥digos repetidos en este ingreso. Usa c√≥digos distintos.");
+                          alert("Hay cÛdigos repetidos en este ingreso. Usa cÛdigos distintos.");
                           return;
                         }
                         if (adicionales.some((x) => !esCodigoFamilia(x.codigo))) {
-                          alert("Los c√≥digos adicionales deben ser num√©ricos de familia (ej: 31308).");
+                          alert("Los cÛdigos adicionales deben ser numÈricos de familia (ej: 31308).");
                           return;
                         }
 
@@ -3310,7 +3443,7 @@ export default function BodegaRetiros() {
                           alert(
                             usaSeriesPorCodigo
                               ? "No se pudo generar serie disponible. Ajusta el codigo base."
-                              : "No se pudo generar c√≥digo disponible. Ajusta el c√≥digo base."
+                              : "No se pudo generar cÛdigo disponible. Ajusta el cÛdigo base."
                           );
                           return;
                         }
@@ -3331,7 +3464,7 @@ export default function BodegaRetiros() {
                         for (const add of adicionales) {
                           const seriesAdd = generarSeriesDisponiblesPorCodigo(add.codigo, add.cantidad);
                           if (!seriesAdd.length) {
-                            alert(`No se pudieron generar series para el c√≥digo adicional ${add.codigo}.`);
+                            alert(`No se pudieron generar series para el cÛdigo adicional ${add.codigo}.`);
                             return;
                           }
                           seriesAdd.forEach((serieAdd) => {
@@ -3398,8 +3531,8 @@ export default function BodegaRetiros() {
               <div className="modal-body bodega-inv-modal-body">
                 <div className="bodega-inv-block">
                   <div className="small text-muted mb-2">
-                    <strong>{equipoAsignacionModal.equipo_nombre || "-"}</strong> ¬∑ Serie:{" "}
-                    {equipoAsignacionModal.numero_serie || "-"} ¬∑ C√≥digo: {equipoAsignacionModal.codigo || "-"}
+                    <strong>{equipoAsignacionModal.equipo_nombre || "-"}</strong> ∑ Serie:{" "}
+                    {equipoAsignacionModal.numero_serie || "-"} ∑ CÛdigo: {equipoAsignacionModal.codigo || "-"}
                   </div>
                   <div className="form-group">
                     <label>Tecnico</label>
@@ -3537,9 +3670,17 @@ export default function BodegaRetiros() {
               <div className="modal-header">
                 <h5 className="modal-title">
                   <i className="fas fa-file-export mr-2 text-primary" />
-                  Gu√≠a de salida a centro
+                  GuÌa de salida a centro
                 </h5>
-                <button type="button" className="close" onClick={() => setShowGuiaModal(false)}>
+                <button
+                  type="button"
+                  className="close"
+                  onClick={() => {
+                    setShowGuiaModal(false);
+                    setArmadoGuia(null);
+                    setGuiaSeleccionadaId(null);
+                  }}
+                >
                   <span>&times;</span>
                 </button>
               </div>
@@ -3550,7 +3691,7 @@ export default function BodegaRetiros() {
                     <div className="mb-2"><strong>Cliente:</strong> {armadoGuia?.centro?.cliente || "-"}</div>
                     <div className="mb-3"><strong>Centro:</strong> {armadoGuia?.centro?.nombre || "-"}</div>
                     <div className="form-group">
-                      <label className="small text-muted mb-1">N¬∞ gu√≠a</label>
+                      <label className="small text-muted mb-1">N∞ guÌa</label>
                       <input
                         className="form-control"
                         value={formGuia.numero_guia}
@@ -3564,7 +3705,58 @@ export default function BodegaRetiros() {
                         className="form-control"
                         value={formGuia.fecha_salida}
                         onChange={(e) => setFormGuia((p) => ({ ...p, fecha_salida: e.target.value }))}
-                      />
+                        />
+                    </div>
+                    <div className="form-group">
+                      <label className="small text-muted mb-1">Modalidad de salida</label>
+                      <select
+                        className="form-control"
+                        value={formGuia.modalidad_salida}
+                        disabled={!modoEdicionGuia}
+                        onChange={(e) => setFormGuia((p) => ({ ...p, modalidad_salida: e.target.value }))}
+                      >
+                        <option value="guia">GuÌa despacho</option>
+                        <option value="por_mano">Entrega por mano</option>
+                        <option value="retiro_cliente">Retira cliente</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="small text-muted mb-1">
+                        {modoEdicionGuia ? "Cajas para este despacho" : "Cajas incluidas"}
+                      </label>
+                      <div className="border rounded p-2" style={{ maxHeight: 220, overflowY: "auto", background: "#f8fafc" }}>
+                        {loadingGuiaCajas ? (
+                          <div className="text-muted small">Cargando cajas...</div>
+                        ) : !cajasDisponiblesGuia.length && !cajasSeleccionadasGuia.length ? (
+                          <div className="text-muted small">No hay cajas disponibles para despachar.</div>
+                        ) : (
+                          (modoEdicionGuia ? cajasDisponiblesGuia : cajasSeleccionadasGuia).map((caja) => {
+                            const checked = cajasSeleccionadasGuia.includes(caja);
+                            return (
+                              <label
+                                key={`caja-sel-${caja}`}
+                                className="d-flex align-items-center justify-content-between mb-2 px-2 py-1 rounded"
+                                style={{ background: checked ? "rgba(37,99,235,.08)" : "#fff", border: "1px solid #dbeafe", cursor: modoEdicionGuia ? "pointer" : "default" }}
+                              >
+                                <span className="font-weight-600">{caja}</span>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={!modoEdicionGuia}
+                                  onChange={() =>
+                                    setCajasSeleccionadasGuia((prev) =>
+                                      checked ? prev.filter((item) => item !== caja) : [...prev, caja].sort((a, b) => a.localeCompare(b, "es", { numeric: true }))
+                                    )
+                                  }
+                                />
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                      <small className="text-muted d-block mt-1">
+                        Seleccionadas: {cajasSeleccionadasGuia.length}
+                      </small>
                     </div>
                     <div className="form-group mb-3">
                       <button
@@ -3573,11 +3765,11 @@ export default function BodegaRetiros() {
                         onClick={() => setVerCodigoGuia((v) => !v)}
                       >
                         <i className="fas fa-barcode mr-1" />
-                        {verCodigoGuia ? "Ocultar N¬∞ serie" : "Ver N¬∞ serie"}
+                        {verCodigoGuia ? "Ocultar N∞ serie" : "Ver N∞ serie"}
                       </button>
                     </div>
                     <div className="form-group mb-0">
-                      <label className="small text-muted mb-1">Observaci√≥n</label>
+                      <label className="small text-muted mb-1">ObservaciÛn</label>
                       <textarea
                         className="form-control"
                         rows={4}
@@ -3591,7 +3783,7 @@ export default function BodegaRetiros() {
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <strong style={{ color: "#1e3a8a" }}>
                       <i className="fas fa-file-alt mr-2" />
-                      Vista previa gu√≠a
+                      Vista previa guÌa
                     </strong>
                     <span className="badge badge-primary px-2 py-1">{formGuia.numero_guia || "-"}</span>
                   </div>
@@ -3599,7 +3791,7 @@ export default function BodegaRetiros() {
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Cliente</small><strong>{armadoGuia?.centro?.cliente || "-"}</strong></div>
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Centro destino</small><strong>{armadoGuia?.centro?.nombre || "-"}</strong></div>
                     <div className="col-md-6 mb-2">
-                      <small className="text-muted d-block">T√©cnico encargado</small>
+                      <small className="text-muted d-block">Tecnico encargado</small>
                       <strong>{armadoGuia?.tecnico?.nombre || "-"}</strong>
                       {Array.isArray(armadoGuia?.tecnicos_asignados) && armadoGuia.tecnicos_asignados.filter((tec) => !tec?.principal).length ? (
                         <small className="d-block text-muted">
@@ -3608,16 +3800,18 @@ export default function BodegaRetiros() {
                       ) : null}
                     </div>
                     <div className="col-md-6 mb-2"><small className="text-muted d-block">Fecha salida</small><strong>{formatDate(formGuia.fecha_salida)}</strong></div>
-                    <div className="col-12"><small className="text-muted d-block">Observaci√≥n</small><strong>{formGuia.observacion || "-"}</strong></div>
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Modalidad</small><strong>{String(formGuia.modalidad_salida || "guia").replace(/_/g, " ")}</strong></div>
+                    <div className="col-md-6 mb-2"><small className="text-muted d-block">Tipo</small><strong>{cajasSeleccionadasGuia.length === (guiaCajasDetalle || []).length ? "Total" : "Parcial"}</strong></div>
+                    <div className="col-12"><small className="text-muted d-block">ObservaciÛn</small><strong>{formGuia.observacion || "-"}</strong></div>
                   </div>
                   <hr />
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <strong style={{ color: "#1e3a8a" }}>Detalle de cajas y contenido</strong>
-                    <span className="badge badge-info">Cajas con contenido: {(guiaCajasDetalle || []).length}</span>
+                    <span className="badge badge-info">Cajas despacho: {guiaCajasDetalleVisible.length}</span>
                   </div>
                   {loadingGuiaCajas ? (
                     <div className="text-muted small">Cargando contenido...</div>
-                  ) : !guiaCajasDetalle.length ? (
+                  ) : !guiaCajasDetalleVisible.length ? (
                     <div className="text-muted small">Sin detalle de contenido registrado.</div>
                   ) : (
                     <div className="table-responsive">
@@ -3630,7 +3824,7 @@ export default function BodegaRetiros() {
                           </tr>
                         </thead>
                         <tbody>
-                          {guiaCajasDetalle.map((row) => {
+                          {guiaCajasDetalleVisible.map((row) => {
                             const totalEquipos = (row.equipos || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
                             const totalMateriales = (row.materiales || []).reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
                             const totalItems = totalEquipos + totalMateriales;
@@ -3650,7 +3844,7 @@ export default function BodegaRetiros() {
                                         {(row.equipos || []).map((it, idx) => (
                                           <li key={`eq-${row.caja}-${idx}`}>
                                             {it.nombre} x{it.cantidad}
-                                            {verCodigoGuia && it.serie ? ` ¬∑ N¬∞ Serie: ${it.serie}` : ""}
+                                            {verCodigoGuia && it.serie ? ` ∑ N Serie: ${it.serie}` : ""}
                                           </li>
                                         ))}
                                       </ul>
@@ -3681,7 +3875,15 @@ export default function BodegaRetiros() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-light" onClick={() => setShowGuiaModal(false)}>
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={() => {
+                    setShowGuiaModal(false);
+                    setArmadoGuia(null);
+                    setGuiaSeleccionadaId(null);
+                  }}
+                >
                   Cancelar
                 </button>
                 <button type="button" className="btn btn-outline-secondary" onClick={imprimirGuiaSalida}>
@@ -3691,7 +3893,7 @@ export default function BodegaRetiros() {
                 {modoEdicionGuia ? (
                   <button type="button" className="btn btn-primary" onClick={guardarGuiaSalida}>
                     <i className="fas fa-save mr-1" />
-                    Guardar gu√≠a
+                    Guardar guÌa
                   </button>
                 ) : null}
               </div>
