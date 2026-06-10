@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { jwtDecode } from "jwt-decode";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { agregarConexion, modificarConexion, borrarConexion } from "../controllers/conexionesControllers";
@@ -20,6 +21,8 @@ const DatosIP = () => {
     const [centroSeleccionado, setCentroSeleccionado] = useState("");
     const [error, setError] = useState(null);
     const [cargandoCentro, setCargandoCentro] = useState(false);
+    const [rolUsuario, setRolUsuario] = useState("");
+    const [equiposSeleccionados, setEquiposSeleccionados] = useState([]);
 
     const equiposDefinidos = [
         "PC", "Mascara", "Router", "Netio", "Camara PTZ Laser",
@@ -29,8 +32,23 @@ const DatosIP = () => {
         "Camara Popa", "Camara acceso 1", "Camara acceso 2", "Camara acceso 3", "Camara acceso 4",
         "Enlace Ubiquiti"
     ];
+
+    const esAdmin = rolUsuario === "admin";
+
     useEffect(() => {
         obtenerClientes(setClientes, setError);
+    }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        try {
+            const decoded = jwtDecode(token);
+            setRolUsuario(String(decoded.role || decoded.rol || "").toLowerCase());
+        } catch (decodeError) {
+            console.error("Error al decodificar token en Datos IP:", decodeError);
+            setRolUsuario("");
+        }
     }, []);
 
 
@@ -53,6 +71,7 @@ const DatosIP = () => {
         setCentroSeleccionado("");
         setCentro(null);
         setEquipos([]);
+        setEquiposSeleccionados([]);
         setConexiones([]);
         if (!clienteId) {
             setCentros([]);
@@ -89,6 +108,7 @@ const DatosIP = () => {
         } else {
             setCentro(null);
             setEquipos([]);
+            setEquiposSeleccionados([]);
             setConexiones([]);
         }
     };
@@ -117,11 +137,13 @@ const DatosIP = () => {
                   nombre: canonizarNombreEquipo(equipo.nombre || "")
               }));
               setEquipos(equiposNormalizados);
+              setEquiposSeleccionados([]);
               setConexiones(centroData.conexiones || []);
               setCentroSeleccionado(String(centroData.id_centro));
           } else {
               setCentro(null);
               setEquipos([]);
+              setEquiposSeleccionados([]);
               setConexiones([]);
               alert("Centro no encontrado.");
           }
@@ -162,6 +184,12 @@ const DatosIP = () => {
     const equiposConDatos = equiposCompletos.filter(
         (equipo) => (equipo.ip || "").trim() || (equipo.codigo || "").trim()
     );
+    const equiposPersistidos = useMemo(
+        () => equiposCompletos.filter((equipo) => Boolean(equipo.id_equipo)),
+        [equiposCompletos]
+    );
+    const totalSeleccionables = equiposPersistidos.length;
+    const todosEquiposSeleccionados = totalSeleccionables > 0 && equiposSeleccionados.length === totalSeleccionables;
     const estadoColors = {
         activo: "#16a34a",
         cese: "#f97316",
@@ -241,7 +269,40 @@ const DatosIP = () => {
 
     const handleEliminarEquipo = async (id_equipo) => {
         await borrarEquipo(id_equipo);
+        setEquiposSeleccionados((prev) => prev.filter((id) => id !== String(id_equipo)));
         cargarCentroSeleccionado();
+    };
+
+    const toggleSeleccionEquipo = (idEquipo) => {
+        if (!idEquipo) return;
+        const equipoId = String(idEquipo);
+        setEquiposSeleccionados((prev) =>
+            prev.includes(equipoId) ? prev.filter((id) => id !== equipoId) : [...prev, equipoId]
+        );
+    };
+
+    const toggleSeleccionTodosEquipos = () => {
+        if (todosEquiposSeleccionados) {
+            setEquiposSeleccionados([]);
+            return;
+        }
+        setEquiposSeleccionados(equiposPersistidos.map((equipo) => String(equipo.id_equipo)));
+    };
+
+    const handleEliminarEquiposSeleccionados = async () => {
+        if (!esAdmin || !equiposSeleccionados.length) return;
+        const confirmar = window.confirm(
+            `Se eliminaran ${equiposSeleccionados.length} equipos seleccionados. Esta accion no se puede deshacer.`
+        );
+        if (!confirmar) return;
+        try {
+            await Promise.all(equiposSeleccionados.map((idEquipo) => borrarEquipo(idEquipo)));
+            setEquiposSeleccionados([]);
+            await cargarCentroSeleccionado();
+        } catch (bulkError) {
+            console.error("Error al eliminar equipos seleccionados:", bulkError);
+            alert("No se pudieron eliminar todos los equipos seleccionados.");
+        }
     };
 
     const handleCrearConexion = () => {
@@ -689,6 +750,15 @@ const DatosIP = () => {
                                     <i className="fas fa-layer-group" /> {equiposConDatos.length} equipos
                                 </span>
                             )}
+                            {esAdmin && !!equiposSeleccionados.length && (
+                                <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={handleEliminarEquiposSeleccionados}
+                                    title="Eliminar equipos seleccionados"
+                                >
+                                    <i className="fas fa-trash-alt" /> Eliminar seleccionados ({equiposSeleccionados.length})
+                                </button>
+                            )}
                             <button
                                 className="btn btn-sm btn-success me-2"
                                 onClick={handleDescargarInventario}
@@ -709,6 +779,17 @@ const DatosIP = () => {
                             <table className="table table-bordered datosip-table">
                                 <thead>
                                     <tr>
+                                        {esAdmin && (
+                                            <th className="datosip-check-column text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={todosEquiposSeleccionados}
+                                                    onChange={toggleSeleccionTodosEquipos}
+                                                    disabled={!totalSeleccionables}
+                                                    aria-label="Seleccionar todos los equipos"
+                                                />
+                                            </th>
+                                        )}
                                         <th>Nombre del equipo</th>
                                         <th>IP</th>
                                         <th>Observacion</th>
@@ -721,6 +802,20 @@ const DatosIP = () => {
                                 <tbody>
                                     {equiposCompletos.map((equipo, index) => (
                                         <tr key={equipo.id_equipo || equipo.nombre}>
+                                            {esAdmin && (
+                                                <td className="text-center datosip-check-column">
+                                                    {equipo.id_equipo ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={equiposSeleccionados.includes(String(equipo.id_equipo))}
+                                                            onChange={() => toggleSeleccionEquipo(equipo.id_equipo)}
+                                                            aria-label={`Seleccionar ${equipo.nombre}`}
+                                                        />
+                                                    ) : (
+                                                        <span className="datosip-check-placeholder">-</span>
+                                                    )}
+                                                </td>
+                                            )}
                                             <td>{equipo.nombre}</td>
                                             <td>
                                                 {editMode?.tipo === "equipo" && editMode?.id === equipo.id_equipo ? (
