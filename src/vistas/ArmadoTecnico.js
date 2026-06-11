@@ -18,7 +18,7 @@ import {
     borrarMovimientoGlobal,
     cargarHistorialEquiposArmado
 } from "../controllers/armadosControllers";
-import { obtenerDetallesCentro, obtenerMaterialesArmado, validarSerieEquipo } from "../api";
+import { obtenerDetallesCentro, obtenerMaterialesArmado, obtenerMovimientosArmado, validarSerieEquipo } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
@@ -32,6 +32,57 @@ const estadosOptions = [
     { value: "prefinalizado", label: "Prefinalizado" },
     { value: "finalizado", label: "Finalizado" }
 ];
+
+const DEFAULT_PENDING_BOX = "Pendiente de caja";
+const DEFAULT_FIRST_BOX = "Caja 1";
+
+const nombreCajaSeguro = (value) => {
+    const limpio = String(value ?? "").trim();
+    return limpio || DEFAULT_PENDING_BOX;
+};
+
+const normalizarCajaEquipoInicial = (caja, equipo = {}) => {
+    const limpio = String(caja ?? "").trim();
+    if (!limpio) return DEFAULT_PENDING_BOX;
+    if (limpio !== DEFAULT_FIRST_BOX) return limpio;
+    const tieneContenido = Boolean(
+        String(equipo?.numero_serie || "").trim() ||
+        String(equipo?.codigo || "").trim() ||
+        String(equipo?.ip || "").trim() ||
+        String(equipo?.observacion || "").trim() ||
+        String(equipo?.estado || "").trim()
+    );
+    return tieneContenido ? DEFAULT_FIRST_BOX : DEFAULT_PENDING_BOX;
+};
+
+const normalizarCajaMaterialInicial = (caja, material = {}) => {
+    const limpio = String(caja ?? "").trim();
+    if (!limpio) return DEFAULT_PENDING_BOX;
+    if (limpio !== DEFAULT_FIRST_BOX) return limpio;
+    return Number(material?.cantidad ?? 0) > 0 ? DEFAULT_FIRST_BOX : DEFAULT_PENDING_BOX;
+};
+
+const obtenerCajasDetectadas = (...listas) =>
+    Array.from(
+        new Set(
+            listas
+                .flat()
+                .map((value) => nombreCajaSeguro(value))
+                .filter(Boolean)
+        )
+    );
+
+const siguienteNombreCaja = (lista = []) => {
+    const numeros = obtenerCajasDetectadas(lista)
+        .map((nombre) => {
+            const match = /^Caja\s+(\d+)$/i.exec(nombre);
+            return match ? Number(match[1]) : 0;
+        })
+        .filter((numero) => Number.isFinite(numero) && numero > 0);
+    return `Caja ${numeros.length ? Math.max(...numeros) + 1 : 1}`;
+};
+
+const contarCajasReales = (lista = []) => obtenerCajasDetectadas(lista).filter((nombre) => nombre !== DEFAULT_PENDING_BOX).length;
 
 const escapeHtml = (value) =>
     String(value ?? "")
@@ -106,7 +157,7 @@ const ORDEN_EQUIPOS = [
     "zapatilla rack",
     "parlantes",
     "sensor magnetico",
-    "sensor magnético",
+    "sensor magnÃ©tico",
     "tablero 500x400x200",
     "baliza interior",
     "bocina interior",
@@ -156,7 +207,7 @@ const SINONIMOS_EQUIPOS = {
     "ip pc nvr": "pc",
     "puerta de enlace": "router",
     "router (puerta de enlace)": "router",
-    "mástil": "mastil",
+    "mÃ¡stil": "mastil",
     "switch cisco + adaptador": "switch (cisco)",
     "switch cisco": "switch (cisco)"
 };
@@ -353,22 +404,22 @@ const EQUIPOS_PREDEF = [
     "Switch 4",
 ];
 const MATERIALES_PREDEF = [
-    "Cable Eléctrico 3 x 1,5mm",
-    "Cable Eléctrico 3 x 0,75mm",
-    "Cable Eléctrico 2 x 0,75mm",
+    "Cable ElÃ©ctrico 3 x 1,5mm",
+    "Cable ElÃ©ctrico 3 x 0,75mm",
+    "Cable ElÃ©ctrico 2 x 0,75mm",
     "Cable UTP CAT 5e",
     "CABLE UTP BLINDADO",
     "Enchufes Macho",
     "Enchufes Hembra",
-    "Automático 16A",
+    "AutomÃ¡tico 16A",
     "Cinta Aislante Super 33",
     "Cinta Engomada",
     "Cable Power",
     "Cable UPS",
     "Regleta 6-8mm",
-    "Amarras Plásticas 4,5x300mm (med)",
-    "Amarras Plásticas 7,5x500mm (gran)",
-    "Pernos M8 Cámara",
+    "Amarras PlÃ¡sticas 4,5x300mm (med)",
+    "Amarras PlÃ¡sticas 7,5x500mm (gran)",
+    "Pernos M8 CÃ¡mara",
     "Pernos M6 Platina",
     "Pernos M5 tablero interior",
     'Corrugado 1"',
@@ -400,20 +451,20 @@ const MATERIALES_PREDEF = [
     "Guardacabos",
     "Tirafondos",
     "Prensas",
-    "Cáncamo",
-    "Platina o ángulo (Tira)",
+    "CÃ¡ncamo",
+    "Platina o Ã¡ngulo (Tira)",
     "Disco Corte",
     "PG 21",
     "PG 16",
     "Cinta doble contacto",
-    "Caja de Unión Foco 89x89x52",
-    "Caja de Cámara Interior 153x110x65",
+    "Caja de UniÃ³n Foco 89x89x52",
+    "Caja de CÃ¡mara Interior 153x110x65",
     "Caja interior 175x151x95",
     "Caja de Panel Victron 184x255x99",
     "Canaletas 40x16x2000 (chicas)",
     "Canaletas 100x50x2000 (grandes)",
     "Pernos de rack (tuerca enjaulada)",
-    "Extensión USB",
+    "ExtensiÃ³n USB",
     "Cable HDMI",
     "Conectores RJ45",
     "Conector hembra red (RJ45)",
@@ -429,13 +480,13 @@ const MATERIALES_PREDEF = [
     "PatchCore 5 Mts.",
     "PatchCore 10 Mts.",
     "Sellos",
-    "Puente batería",
+    "Puente baterÃ­a",
     "Bolsas de Basura Grandes",
     "Cajas (fondo + tapa)",
     "Cinta embalaje",
     "Logos",
     "Brazo Ubiquiti",
-    "Mástil",
+    "MÃ¡stil",
     "Riel U",
     "Perno Pasado"
 ];
@@ -626,7 +677,7 @@ const ArmadoTecnico = () => {
     const [materialesSnapshot, setMaterialesSnapshot] = useState({});
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
     const [verCodigoPlanilla, setVerCodigoPlanilla] = useState(false);
-    const [cajas, setCajas] = useState(["Caja 1"]);
+    const [cajas, setCajas] = useState([DEFAULT_PENDING_BOX]);
     const [movimientos, setMovimientos] = useState([]);
     const [movimientosRecientes, setMovimientosRecientes] = useState([]);
     const [movsLimit, setMovsLimit] = useState(10);
@@ -642,6 +693,10 @@ const ArmadoTecnico = () => {
     const [historialOpen, setHistorialOpen] = useState(false);
     const [historialLoading, setHistorialLoading] = useState(false);
     const [historialData, setHistorialData] = useState({ armado: null, resumen: [], eventos: [] });
+    const [cajasResumenOpen, setCajasResumenOpen] = useState(false);
+    const [cajasResumenLoading, setCajasResumenLoading] = useState(false);
+    const [cajasResumenError, setCajasResumenError] = useState("");
+    const [cajasResumenData, setCajasResumenData] = useState([]);
     const [observacionDetalle, setObservacionDetalle] = useState({ open: false, armadoId: null, centro: "", texto: "", saving: false });
     const [historialTab, setHistorialTab] = useState("resumen");
     const [checklistOpen, setChecklistOpen] = useState(false);
@@ -664,12 +719,13 @@ const ArmadoTecnico = () => {
         const tecnicoBaseId = Number(armadoActivo?.tecnico?.id || armadoActivo?.tecnico_id || 0);
         const tecnicoBaseNombre = armadoActivo?.tecnico?.nombre || armadoActivo?.tecnico?.name || armadoActivo?.tecnico_nombre || "";
         if (!tecnicoBaseId && !tecnicoBaseNombre) return [];
-        return [{ id: tecnicoBaseId || null, nombre: tecnicoBaseNombre || "—", principal: true }];
+        return [{ id: tecnicoBaseId || null, nombre: tecnicoBaseNombre || "â€”", principal: true }];
     }, [armadoActivo]);
     const tecnicoPrincipalPlanilla = useMemo(
         () => tecnicosActivosPlanilla.find((tec) => tec?.principal) || tecnicosActivosPlanilla[0] || null,
         [tecnicosActivosPlanilla]
     );
+    const totalCajasRealesPlanilla = useMemo(() => contarCajasReales(cajas), [cajas]);
     const tecnicosApoyoPlanilla = useMemo(
         () => tecnicosActivosPlanilla.filter((tec) => !tec?.principal),
         [tecnicosActivosPlanilla]
@@ -701,7 +757,7 @@ const ArmadoTecnico = () => {
         const base = MATERIALES_PREDEF.map((nombre) => {
             const found = mapa.get(nombre.toLowerCase());
             const cantidad = found && found.cantidad !== undefined && found.cantidad !== null ? found.cantidad : "";
-            const caja = found?.caja || "Caja 1";
+            const caja = normalizarCajaMaterialInicial(found?.caja, found || {});
             const caja_tecnico_id = found?.caja_tecnico_id;
             const caja_tecnico_nombre = found?.caja_tecnico_nombre;
             return { nombre, cantidad, caja, caja_tecnico_id, caja_tecnico_nombre };
@@ -712,7 +768,7 @@ const ArmadoTecnico = () => {
         const extrasNormalizados = extras.map((m) => ({
             nombre: m.nombre,
             cantidad: m.cantidad ?? "",
-            caja: m.caja || "Caja 1",
+            caja: normalizarCajaMaterialInicial(m.caja, m),
             caja_tecnico_id: m.caja_tecnico_id,
             caja_tecnico_nombre: m.caja_tecnico_nombre
         }));
@@ -735,7 +791,7 @@ const ArmadoTecnico = () => {
     const materialKey = useCallback((m = {}) => String(m.nombre || "").trim().toLowerCase(), []);
     const materialHash = useCallback((m = {}) => {
         const cantidad = Number(m.cantidad) || 0;
-        const caja = String(m.caja || "Caja 1").trim();
+        const caja = nombreCajaSeguro(m.caja);
         return `${cantidad}|${caja}`;
     }, []);
     const crearSnapshotMateriales = useCallback((lista = []) => {
@@ -771,7 +827,7 @@ const ArmadoTecnico = () => {
                 codigo: found?.codigo || "",
                 numero_serie: found?.numero_serie || "",
                 estado: found?.estado || "",
-                caja: found?.caja || "Caja 1",
+                caja: normalizarCajaEquipoInicial(found?.caja, found || {}),
                 id_equipo: found?.id_equipo,
                 centro_id: found?.centro_id
             };
@@ -781,7 +837,7 @@ const ArmadoTecnico = () => {
         );
         const extrasNorm = extras.map((e) => ({
             ...e,
-            caja: e.caja || "Caja 1",
+            caja: normalizarCajaEquipoInicial(e.caja, e),
             nombre: e.nombre
         }));
         return [...base, ...extrasNorm];
@@ -797,7 +853,7 @@ const ArmadoTecnico = () => {
         return idxContains >= 0 ? idxContains : ORDEN_EQUIPOS.length + 100; // enviar al final
     }, []);
 
-    // Escáner desactivado: N° serie se ingresa manualmente
+    // EscÃ¡ner desactivado: NÂ° serie se ingresa manualmente
 
     const equiposOrdenados = useMemo(
         () =>
@@ -807,7 +863,7 @@ const ArmadoTecnico = () => {
         [equipos, prioridadEquipo]
     );
 
-    // Arma una lista combinada con filas de título + filas de ítems para mostrar secciones
+    // Arma una lista combinada con filas de tÃ­tulo + filas de Ã­tems para mostrar secciones
     const equiposConTitulos = useMemo(() => {
         const lista = [];
         const usado = new Set();
@@ -977,6 +1033,135 @@ const ArmadoTecnico = () => {
         }
     }, [movArmadoFiltro]);
 
+    const armadoHistorialSeleccionado = useMemo(
+        () => (armados || []).find((a) => String(a?.id_armado) === String(movArmadoFiltro)) || null,
+        [armados, movArmadoFiltro]
+    );
+
+    const cajasEstadoHistorial = useMemo(() => {
+        const raw = armadoHistorialSeleccionado?.cajas_estado;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+        const estadoMap = {};
+        Object.entries(raw).forEach(([nombre, estado]) => {
+            const cajaNombre = String(nombre || "").trim();
+            if (!cajaNombre) return;
+            estadoMap[cajaNombre] = String(estado || "").trim().toLowerCase() === "cerrada" ? "cerrada" : "abierta";
+        });
+        return estadoMap;
+    }, [armadoHistorialSeleccionado]);
+
+    const construirResumenCajas = useCallback((listaMovimientos = []) => {
+        const porCaja = new Map();
+        const asegurarCaja = (nombreCaja) => {
+            const limpio = nombreCajaSeguro(nombreCaja);
+            if (!porCaja.has(limpio)) {
+                porCaja.set(limpio, {
+                    nombre: limpio,
+                    estado: cajasEstadoHistorial[limpio] || "abierta",
+                    equipos: 0,
+                    materiales: 0,
+                    ultimaFecha: null,
+                    items: []
+                });
+            }
+            return porCaja.get(limpio);
+        };
+
+        Object.keys(cajasEstadoHistorial).forEach((nombreCaja) => asegurarCaja(nombreCaja));
+
+        const ultimosItems = new Map();
+        [...(Array.isArray(listaMovimientos) ? listaMovimientos : [])]
+            .sort((a, b) => {
+                const fechaA = new Date(a?.fecha || 0).getTime();
+                const fechaB = new Date(b?.fecha || 0).getTime();
+                if (fechaB !== fechaA) return fechaB - fechaA;
+                return Number(b?.id_movimiento || 0) - Number(a?.id_movimiento || 0);
+            })
+            .forEach((mov) => {
+                const tipo = String(mov?.tipo || "").trim().toLowerCase();
+                const nombreCaja = nombreCajaSeguro(mov?.caja);
+                const itemBase = tipo === "material"
+                    ? String(mov?.nombre_item || "").trim().toLowerCase()
+                    : String(mov?.item_id || mov?.numero_serie || mov?.nombre_item || "").trim().toLowerCase();
+                const itemKey = `${tipo}:${itemBase}`;
+                if (!itemBase || ultimosItems.has(itemKey)) return;
+                ultimosItems.set(itemKey, { ...mov, tipo, caja: nombreCaja });
+            });
+
+        ultimosItems.forEach((mov) => {
+            const caja = asegurarCaja(mov.caja);
+            const fechaMov = mov?.fecha || null;
+            if (fechaMov && (!caja.ultimaFecha || new Date(fechaMov).getTime() > new Date(caja.ultimaFecha).getTime())) {
+                caja.ultimaFecha = fechaMov;
+            }
+
+            if (mov.tipo === "material") {
+                const cantidad = Number(mov?.cantidad || 0);
+                if (cantidad <= 0) return;
+                caja.materiales += 1;
+                caja.items.push({
+                    key: `material-${mov?.id_movimiento || mov?.nombre_item || caja.items.length}`,
+                    tipo: "material",
+                    nombre: mov?.nombre_item || "Material",
+                    detalle: `Cantidad: ${cantidad}`
+                });
+                return;
+            }
+
+            caja.equipos += 1;
+            caja.items.push({
+                key: `equipo-${mov?.id_movimiento || mov?.item_id || caja.items.length}`,
+                tipo: "equipo",
+                nombre: mov?.nombre_item || "Equipo",
+                detalle: mov?.numero_serie ? `N Serie: ${mov.numero_serie}` : "Sin N Serie"
+            });
+        });
+
+        return Array.from(porCaja.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity: "base" }));
+    }, [cajasEstadoHistorial]);
+
+    const cajasResumenOrdenado = useMemo(() => {
+        const lista = Array.isArray(cajasResumenData) ? [...cajasResumenData] : [];
+        return lista.sort((a, b) => {
+            const aPendiente = String(a?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
+            const bPendiente = String(b?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
+            if (aPendiente !== bPendiente) return aPendiente ? -1 : 1;
+            return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), undefined, { numeric: true, sensitivity: "base" });
+        });
+    }, [cajasResumenData]);
+
+    const cajasResumenMeta = useMemo(() => {
+        const pendiente = cajasResumenOrdenado.filter(
+            (caja) => String(caja?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase()
+        ).length;
+        const reales = cajasResumenOrdenado.filter(
+            (caja) => String(caja?.nombre || "").trim().toLowerCase() !== DEFAULT_PENDING_BOX.toLowerCase()
+        );
+        const cerradas = reales.filter((caja) => String(caja?.estado || "").trim().toLowerCase() === "cerrada").length;
+        const abiertas = reales.length - cerradas;
+        return {
+            pendiente,
+            totalReal: reales.length,
+            abiertas,
+            cerradas
+        };
+    }, [cajasResumenOrdenado]);
+
+    const handleVerResumenCajas = useCallback(async () => {
+        if (!movArmadoFiltro) return;
+        setCajasResumenOpen(true);
+        setCajasResumenLoading(true);
+        setCajasResumenError("");
+        try {
+            const data = await obtenerMovimientosArmado(movArmadoFiltro);
+            setCajasResumenData(construirResumenCajas(Array.isArray(data) ? data : []));
+        } catch (error) {
+            setCajasResumenData([]);
+            setCajasResumenError("No se pudo cargar el detalle de cajas.");
+        } finally {
+            setCajasResumenLoading(false);
+        }
+    }, [movArmadoFiltro, construirResumenCajas]);
     const historialResumen = useMemo(() => (Array.isArray(historialData?.resumen) ? historialData.resumen : []), [historialData]);
     const historialEventos = useMemo(() => (Array.isArray(historialData?.eventos) ? historialData.eventos : []), [historialData]);
     const totalEquiposHistorial = useMemo(() => historialResumen.length, [historialResumen]);
@@ -1646,7 +1831,7 @@ const ArmadoTecnico = () => {
                                         saving: false
                                     })
                                 }
-                                title="Ver observación"
+                                title="Ver observaciÃ³n"
                             >
                                 <i className="fas fa-comment-alt" />
                             </button>
@@ -1698,12 +1883,12 @@ const ArmadoTecnico = () => {
             await cargarParticipaciones(armado.id_armado, setParticipaciones);
             await cargarMateriales(armado.id_armado, async (lista) => {
                 const merged = mergeMateriales(lista);
-                const cajasMateriales = merged.map((m) => (m.caja || "Caja 1").trim());
-                const cajasEquipos = equiposNorm.map((e) => (e.caja || "Caja 1").trim());
-                const cajasDetectadas = Array.from(new Set([...cajasMateriales, ...cajasEquipos]));
+                const cajasMateriales = merged.map((m) => nombreCajaSeguro(m.caja));
+                const cajasEquipos = equiposNorm.map((e) => nombreCajaSeguro(e.caja));
+                const cajasDetectadas = obtenerCajasDetectadas(cajasMateriales, cajasEquipos);
                 setMateriales(merged);
                 setMaterialesSnapshot(crearSnapshotMateriales(merged));
-                setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
+                setCajas(cajasDetectadas.length ? cajasDetectadas : [DEFAULT_PENDING_BOX]);
                 await cargarMovimientos(armado.id_armado, setMovimientos);
             });
             setTabPlanilla("equipos");
@@ -1716,7 +1901,7 @@ const ArmadoTecnico = () => {
     };
 
     const handleAgregarCaja = () => {
-        const propuesta = `Caja ${cajas.length + 1}`;
+        const propuesta = siguienteNombreCaja(cajas);
         const nueva = window.prompt("Nombre de la caja", propuesta);
         if (!nueva) return;
         if (cajas.includes(nueva)) return;
@@ -1731,10 +1916,10 @@ const ArmadoTecnico = () => {
             const detalles = await cargarDetallesCentro(nombreCentro);
             const equiposNorm = mergeEquiposPredef(detalles?.equipos || []);
             setEquipos(equiposNorm);
-            const cajasEquipos = equiposNorm.map((e) => (e.caja || "Caja 1").trim());
-            const cajasMateriales = materiales.map((m) => (m.caja || "Caja 1").trim());
-            const cajasDetectadas = Array.from(new Set([...cajasEquipos, ...cajasMateriales]));
-            setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
+            const cajasEquipos = equiposNorm.map((e) => nombreCajaSeguro(e.caja));
+            const cajasMateriales = materiales.map((m) => nombreCajaSeguro(m.caja));
+            const cajasDetectadas = obtenerCajasDetectadas(cajasEquipos, cajasMateriales);
+            setCajas(cajasDetectadas.length ? cajasDetectadas : [DEFAULT_PENDING_BOX]);
         } catch (err) {
             console.error("Error al recargar planilla:", err);
         }
@@ -1748,7 +1933,7 @@ const ArmadoTecnico = () => {
                     const digitos = (value || "").replace(/\D+/g, "");
                     return { ...eq, numero_serie: value, codigo: digitos.slice(0, 5) };
                 }
-                // si se cambia algo relevante, asigna técnico actual para colorear
+                // si se cambia algo relevante, asigna tÃ©cnico actual para colorear
                 const updated = { ...eq, [field]: value };
                 if (["numero_serie", "codigo", "ip", "observacion", "caja"].includes(field)) {
                     updated.caja_tecnico_id = userId;
@@ -1810,8 +1995,8 @@ const ArmadoTecnico = () => {
             );
             setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false });
         } catch (err) {
-            console.error("Error al guardar observación del armado:", err);
-            alert("No se pudo guardar la observación.");
+            console.error("Error al guardar observaciÃ³n del armado:", err);
+            alert("No se pudo guardar la observaciÃ³n.");
             setObservacionDetalle((prev) => ({ ...prev, saving: false }));
         }
     };
@@ -1822,7 +2007,7 @@ const ArmadoTecnico = () => {
         if (!id) return;
 
         const centro = row?.centro?.nombre || row?.centro_nombre || "este centro";
-        const ok = window.confirm(`¿Eliminar la asignación de armado para ${centro}? Esta acción no se puede deshacer.`);
+        const ok = window.confirm(`Â¿Eliminar la asignaciÃ³n de armado para ${centro}? Esta acciÃ³n no se puede deshacer.`);
         if (!ok) return;
 
         try {
@@ -2042,7 +2227,7 @@ const ArmadoTecnico = () => {
                     armado_id: armadoActivo?.id_armado
                 });
             }
-            // marcar en estado local quién lo guardó para mostrar badge coloreado
+            // marcar en estado local quiÃ©n lo guardÃ³ para mostrar badge coloreado
             setEquipos((prev) =>
                 prev.map((eq) =>
                     (eq.id_equipo && eq.id_equipo === (equipo.id_equipo || existente?.id_equipo)) || eq.__idx === equipo.__idx
@@ -2066,7 +2251,7 @@ const ArmadoTecnico = () => {
 
     const handleEliminarEquipo = async (equipo) => {
         if (!equipo.id_equipo) return;
-        if (!window.confirm("¿Eliminar este equipo?")) return;
+        if (!window.confirm("Â¿Eliminar este equipo?")) return;
         try {
             await borrarEquipo(equipo.id_equipo);
             setEquipos((prev) => prev.filter((e) => e.id_equipo !== equipo.id_equipo));
@@ -2079,11 +2264,11 @@ const ArmadoTecnico = () => {
 
     const handleGuardarAsignacion = async () => {
         if (!centroSel || !tecnicoSel) {
-            alert("Selecciona centro y técnico.");
+            alert("Selecciona centro y tÃ©cnico.");
             return;
         }
         if (tecnicoSecundarioSel && tecnicoSecundarioSel === tecnicoSel) {
-            alert("El segundo técnico no puede ser el mismo técnico principal.");
+            alert("El segundo tÃ©cnico no puede ser el mismo tÃ©cnico principal.");
             return;
         }
         const payload = {
@@ -2107,11 +2292,11 @@ const ArmadoTecnico = () => {
     const handleTransferir = async () => {
         if (!armadoActivo?.id_armado) return;
         if (!transferObjetivoSel) {
-            alert("Selecciona el técnico actual a reemplazar.");
+            alert("Selecciona el tÃ©cnico actual a reemplazar.");
             return;
         }
         if (!transferTecSel) {
-            alert("Selecciona el nuevo técnico.");
+            alert("Selecciona el nuevo tÃ©cnico.");
             return;
         }
         await transferirArmado(
@@ -2245,8 +2430,8 @@ const ArmadoTecnico = () => {
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     Planilla de armado - {armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre || "Centro"}{" "}
-                                    <span className="badge badge-primary ml-2" title="Total de cajas detectadas">
-                                        {cajas.length} cajas
+                                    <span className="badge badge-primary ml-2" title="Total de cajas reales">
+                                        {totalCajasRealesPlanilla} cajas
                                     </span>
                                     {tecnicoPrincipalPlanilla && (
                                         <span
@@ -2258,7 +2443,7 @@ const ArmadoTecnico = () => {
                                             }}
                                             title="Tecnico principal actual"
                                         >
-                                            Principal: {tecnicoPrincipalPlanilla?.nombre || "—"}
+                                            Principal: {tecnicoPrincipalPlanilla?.nombre || "â€”"}
                                         </span>
                                     )}
                                     {tecnicosApoyoPlanilla.map((tec, idx) => (
@@ -2272,7 +2457,7 @@ const ArmadoTecnico = () => {
                                             }}
                                             title="Tecnico de apoyo actual"
                                         >
-                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo"}: {tec?.nombre || "—"}
+                                            {tecnicosApoyoPlanilla.length > 1 ? `Apoyo ${idx + 1}` : "Apoyo"}: {tec?.nombre || "â€”"}
                                         </span>
                                     ))}
                                 </h5>
@@ -2353,7 +2538,7 @@ const ArmadoTecnico = () => {
                                                                             className="btn btn-sm btn-outline-danger"
                                                                             title="Eliminar del historial"
                                                                             onClick={async () => {
-                                                                                if (!window.confirm("¿Eliminar esta participación del historial?")) return;
+                                                                                if (!window.confirm("Â¿Eliminar esta participaciÃ³n del historial?")) return;
                                                                                 try {
                                                                                     await borrarParticipacion(
                                                                                         p.id_participacion,
@@ -2369,11 +2554,11 @@ const ArmadoTecnico = () => {
                                                                                         await fetchArmados({ silent: true });
                                                                                     }
                                                                                 } catch (err) {
-                                                                                    console.error("No se pudo eliminar participación:", err);
+                                                                                    console.error("No se pudo eliminar participaciÃ³n:", err);
                                                                                     const msg =
                                                                                         err?.response?.data?.message ||
                                                                                         err?.response?.data?.detail ||
-                                                                                        "No se pudo eliminar la participación.";
+                                                                                        "No se pudo eliminar la participaciÃ³n.";
                                                                                     alert(msg);
                                                                                 }
                                                                             }}
@@ -2386,7 +2571,7 @@ const ArmadoTecnico = () => {
                                                         })}
                                             </div>
                                                         ) : (
-                                                            <p className="text-muted mb-0">Sin transferencias aún.</p>
+                                                            <p className="text-muted mb-0">Sin transferencias aÃºn.</p>
                                                         )}
                                             </div>
                                                     {puedeGestionarArmados && (
@@ -2511,7 +2696,7 @@ const ArmadoTecnico = () => {
                                                                                 {enEdicion ? (
                                                                                     <select
                                                                                         className="form-control form-control-sm"
-                                                                                        value={eq.caja || "Caja 1"}
+                                                                                        value={nombreCajaSeguro(eq.caja)}
                                                                                     onChange={(e) => handleEquipoChange(eq.__idx, "caja", e.target.value)}
                                                                                 >
                                                                                     {cajas.map((caja) => (
@@ -2544,7 +2729,7 @@ const ArmadoTecnico = () => {
                                                                                                     className="badge badge-light"
                                                                                                     style={{ border: `1px solid ${border}`, color }}
                                                                                                 >
-                                                                                                    {eq.caja || "Caja 1"}
+                                                                                                    {nombreCajaSeguro(eq.caja)}
                                                                                                 </span>
                                                                                                 {hasTec && displayName && (
                                                                                                     <small className="d-block" style={{ color }}>
@@ -2689,7 +2874,7 @@ const ArmadoTecnico = () => {
                                                             const payload = cambios.map((m) => ({
                                                                 nombre: m.nombre,
                                                                 cantidad: Number(m.cantidad) || 0,
-                                                                caja: m.caja || "Caja 1"
+                                                                caja: nombreCajaSeguro(m.caja)
                                                             }));
                                                             await guardarMateriales(
                                                                 armadoActivo.id_armado,
@@ -2700,10 +2885,10 @@ const ArmadoTecnico = () => {
                                                                         const merged = mergeMateriales(lista);
                                                                         setMateriales(merged);
                                                                         setMaterialesSnapshot(crearSnapshotMateriales(merged));
-                                                                        const cajasMateriales = merged.map((m) => (m.caja || "Caja 1").trim());
-                                                                        const cajasEquipos = (equipos || []).map((e) => (e.caja || "Caja 1").trim());
-                                                                        const cajasDetectadas = Array.from(new Set([...cajasMateriales, ...cajasEquipos]));
-                                                                        setCajas(cajasDetectadas.length ? cajasDetectadas : ["Caja 1"]);
+                                                                        const cajasMateriales = merged.map((m) => nombreCajaSeguro(m.caja));
+                                                                        const cajasEquipos = (equipos || []).map((e) => nombreCajaSeguro(e.caja));
+                                                                        const cajasDetectadas = obtenerCajasDetectadas(cajasMateriales, cajasEquipos);
+                                                                        setCajas(cajasDetectadas.length ? cajasDetectadas : [DEFAULT_PENDING_BOX]);
                                                                     });
                                                                     await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
                                                                     recargarMovimientosRecientes();
@@ -2745,7 +2930,7 @@ const ArmadoTecnico = () => {
                                                                                     className="badge badge-light d-inline-block"
                                                                                     style={{ border: `1px solid ${border}`, color }}
                                                                                 >
-                                                                                    {mat.caja || "Caja 1"}
+                                                                                    {nombreCajaSeguro(mat.caja)}
                                                                                 </span>
                                                                                 {hasTec && displayName && (
                                                                                     <small className="d-block" style={{ color }}>
@@ -2762,7 +2947,7 @@ const ArmadoTecnico = () => {
                                                                     <label className="text-muted small mb-1">Caja</label>
                                                                     <select
                                                                         className="form-control form-control-sm"
-                                                                        value={mat.caja || "Caja 1"}
+                                                                        value={nombreCajaSeguro(mat.caja)}
                             onChange={(e) =>
                                 setMateriales((prev) =>
                                     prev.map((m, i) =>
@@ -2833,7 +3018,7 @@ const ArmadoTecnico = () => {
                     <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                             <h6 className="mb-0">Movimientos recientes (armado)</h6>
-                            <small className="text-muted">Últimos 10</small>
+                            <small className="text-muted">Ãšltimos 10</small>
                                             </div>
                         <div className="table-responsive">
                             <table className="table table-sm table-striped mb-0">
@@ -2873,7 +3058,7 @@ const ArmadoTecnico = () => {
                                     {movimientos.length === 0 && (
                                         <tr>
                                             <td colSpan="7" className="text-center text-muted">
-                                                Sin movimientos registrados todavía.
+                                                Sin movimientos registrados todavÃ­a.
                                             </td>
                                         </tr>
                                     )}
@@ -2942,6 +3127,15 @@ const ArmadoTecnico = () => {
                                 >
                                     <i className="fas fa-history mr-1" />
                                     Ver historial
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-outline-info"
+                                    disabled={!movArmadoFiltro}
+                                    onClick={handleVerResumenCajas}
+                                    title={movArmadoFiltro ? "Ver cajas y contenido del armado seleccionado" : "Selecciona un centro primero"}
+                                >
+                                    <i className="fas fa-boxes mr-1" />
+                                    Cajas
                                 </button>
                                 {esAdmin && (
                                     <button
@@ -3044,7 +3238,7 @@ const ArmadoTecnico = () => {
                                     {movimientosVisibles.length === 0 && (
                                         <tr>
                                             <td colSpan={esAdmin ? "9" : "8"} className="text-center text-muted">
-                                                Sin movimientos registrados todavía.
+                                                Sin movimientos registrados todavÃ­a.
                                             </td>
                                         </tr>
                                     )}
@@ -3242,7 +3436,7 @@ const ArmadoTecnico = () => {
                                                                         <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
                                                                         <small className="text-muted" style={{ fontSize: "0.72rem" }}>
                                                                             {formatearFecha(r?.serie_actual_fecha)}
-                                                                            {r?.correlativo_ultimo ? ` · N${r.correlativo_ultimo}` : ""}
+                                                                            {r?.correlativo_ultimo ? ` Â· N${r.correlativo_ultimo}` : ""}
                                                                         </small>
                                                                     </td>
                                                                     <td>{r?.cambios || 0}</td>
@@ -3268,6 +3462,147 @@ const ArmadoTecnico = () => {
                                             </div>
             )}
 
+            {cajasResumenOpen && (
+                <div className="modal show d-block" tabIndex="-1" role="dialog">
+                    <div className="modal-dialog modal-lg" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    <i className="fas fa-boxes mr-2" />
+                                    Detalle de cajas
+                                    {armadoHistorialSeleccionado?.centro?.nombre || armadoHistorialSeleccionado?.centro_nombre
+                                        ? ` - ${armadoHistorialSeleccionado?.centro?.nombre || armadoHistorialSeleccionado?.centro_nombre}`
+                                        : ""}
+                                </h5>
+                                <button type="button" className="close" onClick={() => setCajasResumenOpen(false)}>
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <div
+                                    className="mb-3 p-2 px-3 rounded"
+                                    style={{
+                                        background: "linear-gradient(90deg, rgba(14,165,233,0.12) 0%, rgba(37,99,235,0.08) 100%)",
+                                        border: "1px solid rgba(14,165,233,0.22)"
+                                    }}
+                                >
+                                    <div className="d-flex flex-wrap align-items-center" style={{ gap: 10 }}>
+                                        <span className="badge badge-pill" style={{ background: "#0284c7", color: "#fff" }}>
+                                            Cliente
+                                        </span>
+                                        <strong style={{ color: "#0f172a" }}>
+                                            {armadoHistorialSeleccionado?.centro?.cliente || armadoHistorialSeleccionado?.cliente || armadoHistorialSeleccionado?.cliente_nombre || "-"}
+                                        </strong>
+                                        <span className="badge badge-pill" style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.18)" }}>
+                                            Pendiente de caja
+                                        </span>
+                                        <strong style={{ color: "#b91c1c" }}>{cajasResumenMeta.pendiente}</strong>
+                                        <span className="badge badge-pill" style={{ background: "#1d4ed8", color: "#fff" }}>
+                                            Total real
+                                        </span>
+                                        <strong style={{ color: "#1e3a8a" }}>{cajasResumenMeta.totalReal}</strong>
+                                        <span className="badge badge-pill" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
+                                            Abiertas
+                                        </span>
+                                        <strong style={{ color: "#1d4ed8" }}>{cajasResumenMeta.abiertas}</strong>
+                                        <span className="badge badge-pill" style={{ background: "#ffedd5", color: "#9a3412" }}>
+                                            Cerradas
+                                        </span>
+                                        <strong style={{ color: "#9a3412" }}>{cajasResumenMeta.cerradas}</strong>
+                                    </div>
+                                </div>
+
+                                {cajasResumenLoading ? (
+                                    <div className="text-muted">Cargando cajas...</div>
+                                ) : cajasResumenError ? (
+                                    <div className="alert alert-warning mb-0">{cajasResumenError}</div>
+                                ) : !cajasResumenData.length ? (
+                                    <div className="text-muted">No hay cajas registradas para este armado.</div>
+                                ) : (
+                                    <div className="row">
+                                        {cajasResumenOrdenado.map((caja) => {
+                                            const cerrada = caja.estado === "cerrada";
+                                            const esPendiente = String(caja?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
+                                            return (
+                                                <div key={caja.nombre} className="col-md-6 mb-3">
+                                                    <div
+                                                        className="h-100 p-3 rounded border"
+                                                        style={{
+                                                            background: esPendiente
+                                                                ? "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)"
+                                                                : cerrada
+                                                                ? "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)"
+                                                                : "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
+                                                            borderColor: esPendiente ? "#fda4af" : cerrada ? "#fdba74" : "#93c5fd",
+                                                            boxShadow: "0 14px 30px rgba(15, 23, 42, 0.08)"
+                                                        }}
+                                                    >
+                                                        <div className="d-flex justify-content-between align-items-start mb-2" style={{ gap: 10 }}>
+                                                            <div>
+                                                                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem" }}>{caja.nombre}</div>
+                                                                <small className="text-muted">
+                                                                    {caja.equipos} equipos / {caja.materiales} materiales
+                                                                </small>
+                                                            </div>
+                                                            <span
+                                                                className="badge badge-pill"
+                                                                style={{
+                                                                    background: esPendiente ? "#fee2e2" : cerrada ? "#fed7aa" : "#bfdbfe",
+                                                                    color: esPendiente ? "#b91c1c" : cerrada ? "#9a3412" : "#1d4ed8",
+                                                                    fontWeight: 700
+                                                                }}
+                                                            >
+                                                                {esPendiente ? "Temporal" : cerrada ? "Cerrada" : "Abierta"}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="small text-muted mb-2">
+                                                            Ultimo movimiento: {caja.ultimaFecha ? formatearFechaHora(caja.ultimaFecha) : "Sin movimientos"}
+                                                        </div>
+
+                                                        <div className="border rounded bg-white px-2 py-2" style={{ maxHeight: 220, overflowY: "auto" }}>
+                                                            {caja.items.length ? (
+                                                                caja.items.map((item) => (
+                                                                    <div
+                                                                        key={item.key}
+                                                                        className="d-flex justify-content-between align-items-start py-2"
+                                                                        style={{ borderBottom: "1px solid rgba(148, 163, 184, 0.18)", gap: 10 }}
+                                                                    >
+                                                                        <div>
+                                                                            <div style={{ fontWeight: 700, color: "#1e293b" }}>
+                                                                                <i className={`fas ${item.tipo === "material" ? "fa-tools" : "fa-desktop"} mr-2`} />
+                                                                                {item.nombre}
+                                                                            </div>
+                                                                            <small className="text-muted">{item.detalle}</small>
+                                                                        </div>
+                                                                        <span
+                                                                            className="badge badge-light"
+                                                                            style={{ color: item.tipo === "material" ? "#1d4ed8" : "#0f766e", border: "1px solid rgba(148, 163, 184, 0.25)" }}
+                                                                        >
+                                                                            {item.tipo === "material" ? "Material" : "Equipo"}
+                                                                        </span>
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="text-muted">Sin contenido actual en esta caja.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setCajasResumenOpen(false)}>
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {showModal && (
                 <div className="modal show d-block" tabIndex="-1" role="dialog">
                     <div className="modal-dialog" role="document">
@@ -3344,7 +3679,7 @@ const ArmadoTecnico = () => {
                                     />
                                             </div>
                                 <div className="form-group">
-                                    <label>Fecha término</label>
+                                    <label>Fecha tÃ©rmino</label>
                                     <input
                                         type="date"
                                         className="form-control"
@@ -3367,7 +3702,7 @@ const ArmadoTecnico = () => {
                                     Cancelar
                                 </button>
                                 <button type="button" className="btn btn-primary" onClick={handleGuardarAsignacion}>
-                                    Guardar asignación
+                                    Guardar asignaciÃ³n
                                 </button>
                                             </div>
                                             </div>
@@ -3615,6 +3950,7 @@ const ArmadoTecnico = () => {
 };
 
 export default ArmadoTecnico;
+
 
 
 
