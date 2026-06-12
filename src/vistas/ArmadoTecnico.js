@@ -94,7 +94,7 @@ const escapeHtml = (value) =>
 
 const labelAccionMovimientoMaterial = (mov) => {
     const accion = String(mov?.accion || "").toLowerCase().trim();
-    if (accion === "creacion") return "Material creado";
+    if (accion === "creacion") return "Material";
     if (accion === "ajuste") return "Cantidad ajustada";
     if (accion === "incremento") return "Cantidad agregada";
     return String(mov?.tipo || "");
@@ -151,7 +151,6 @@ const ORDEN_EQUIPOS = [
     "router mikrotik + trafo",
     "switch rack",
     "rack 9u - tuercas - tornillos",
-    "bandeja rack - tornillos",
     "zapatilla rack (pdu)",
     "rack 9u + tuercas + tornillos",
     "zapatilla rack",
@@ -228,7 +227,6 @@ const GRUPOS_EQUIPOS = [
             "Parlantes",
             "Sensor Magnetico",
             "Rack 9U - tuercas - tornillos",
-            "Bandeja Rack - tornillos",
             "Zapatilla Rack (PDU)"
         ]
     },
@@ -332,7 +330,6 @@ const EQUIPOS_PREDEF = [
     "Netio",
     "Monitor",
     "Rack 9U - tuercas - tornillos",
-    "Bandeja Rack - tornillos",
     "Zapatilla Rack (PDU)",
     "Parlantes",
     "Sensor Magnetico",
@@ -416,6 +413,7 @@ const MATERIALES_PREDEF = [
     "Cinta Engomada",
     "Cable Power",
     "Cable UPS",
+    "Bandeja Rack - tornillos",
     "Regleta 6-8mm",
     "Amarras Plásticas 4,5x300mm (med)",
     "Amarras Plásticas 7,5x500mm (gran)",
@@ -1108,12 +1106,16 @@ const ArmadoTecnico = () => {
                 return;
             }
 
+            const esPendiente = String(mov?.caja || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
+            const numeroSerie = String(mov?.numero_serie || "").trim();
+            if (esPendiente && !numeroSerie) return;
+
             caja.equipos += 1;
             caja.items.push({
                 key: `equipo-${mov?.id_movimiento || mov?.item_id || caja.items.length}`,
                 tipo: "equipo",
                 nombre: mov?.nombre_item || "Equipo",
-                detalle: mov?.numero_serie ? `N Serie: ${mov.numero_serie}` : "Sin N Serie"
+                detalle: numeroSerie ? `N Serie: ${numeroSerie}` : "Sin N Serie"
             });
         });
 
