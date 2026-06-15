@@ -576,6 +576,20 @@ const obtenerCategoriaMaterial = (nombre = "") => {
     return "Otros";
 };
 
+const normalizarEstadoRegistroEquipo = (value = "") => {
+    const estado = String(value || "").trim().toLowerCase();
+    if (estado === "no_aplica") return "no_aplica";
+    if (estado === "pendiente") return "pendiente";
+    return "normal";
+};
+
+const labelEstadoRegistroEquipo = (value = "") => {
+    const estado = normalizarEstadoRegistroEquipo(value);
+    if (estado === "no_aplica") return "No aplica";
+    if (estado === "pendiente") return "Pendiente";
+    return "Normal";
+};
+
 const CHECKLIST_ARMADO_SECCIONES = [
     {
         titulo: "1. PC/NVR",
@@ -762,7 +776,7 @@ const ArmadoTecnico = () => {
     const [materialesSnapshot, setMaterialesSnapshot] = useState({});
     const [categoriaMaterialPlanilla, setCategoriaMaterialPlanilla] = useState("Todas");
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
-    const [verCodigoPlanilla, setVerCodigoPlanilla] = useState(false);
+    const [filtroVistaEquiposPlanilla, setFiltroVistaEquiposPlanilla] = useState("todo");
     const [cajas, setCajas] = useState([DEFAULT_PENDING_BOX]);
     const [movimientos, setMovimientos] = useState([]);
     const [movimientosRecientes, setMovimientosRecientes] = useState([]);
@@ -931,7 +945,9 @@ const ArmadoTecnico = () => {
                 estado: found?.estado || "",
                 caja: normalizarCajaEquipoInicial(found?.caja, found || {}),
                 id_equipo: found?.id_equipo,
-                centro_id: found?.centro_id
+                centro_id: found?.centro_id,
+                estado_registro: normalizarEstadoRegistroEquipo(found?.estado_registro),
+                observacion_registro: found?.observacion_registro || ""
             };
         });
         const extras = listaFiltrada.filter(
@@ -940,7 +956,9 @@ const ArmadoTecnico = () => {
         const extrasNorm = extras.map((e) => ({
             ...e,
             caja: normalizarCajaEquipoInicial(e.caja, e),
-            nombre: e.nombre
+            nombre: e.nombre,
+            estado_registro: normalizarEstadoRegistroEquipo(e?.estado_registro),
+            observacion_registro: e?.observacion_registro || ""
         }));
         return [...base, ...extrasNorm];
     }, [esEquipoMigradoAMaterial, normalizarNombreEquipo]);
@@ -965,13 +983,23 @@ const ArmadoTecnico = () => {
         [equipos, prioridadEquipo]
     );
 
+    const equiposOrdenadosFiltradosPlanilla = useMemo(() => {
+        if (filtroVistaEquiposPlanilla === "todo") return equiposOrdenados;
+        return equiposOrdenados.filter((eq) => {
+            const estadoRegistro = normalizarEstadoRegistroEquipo(eq?.estado_registro);
+            if (filtroVistaEquiposPlanilla === "no_aplica") return estadoRegistro === "no_aplica";
+            if (filtroVistaEquiposPlanilla === "pendiente") return estadoRegistro === "pendiente";
+            return true;
+        });
+    }, [equiposOrdenados, filtroVistaEquiposPlanilla]);
+
     // Arma una lista combinada con filas de título + filas de ítems para mostrar secciones
     const equiposConTitulos = useMemo(() => {
         const lista = [];
         const usado = new Set();
         const pushGrupo = (titulo, items) => {
             const itemsNorm = items.map((n) => normalizarNombreEquipo(n));
-            const presentes = equiposOrdenados.filter(
+            const presentes = equiposOrdenadosFiltradosPlanilla.filter(
                 (eq) =>
                     !usado.has(eq.__idx) &&
                     itemsNorm.includes(normalizarNombreEquipo(eq.nombre || ""))
@@ -985,13 +1013,13 @@ const ArmadoTecnico = () => {
         };
         GRUPOS_EQUIPOS.forEach((g) => pushGrupo(g.titulo, g.items));
         // Extras no agrupados
-        const extras = equiposOrdenados.filter((eq) => !usado.has(eq.__idx));
+        const extras = equiposOrdenadosFiltradosPlanilla.filter((eq) => !usado.has(eq.__idx));
         if (extras.length) {
             lista.push({ tipo: "titulo", titulo: "Otros" });
             extras.forEach((eq) => lista.push({ tipo: "item", data: eq }));
         }
         return lista;
-    }, [equiposOrdenados, normalizarNombreEquipo]);
+    }, [equiposOrdenadosFiltradosPlanilla, normalizarNombreEquipo]);
     const esMovil = useMemo(
         () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || ""),
         []
@@ -2592,14 +2620,29 @@ const ArmadoTecnico = () => {
                                                 </button>
                                             </div>
                                             {tabPlanilla === "equipos" && (
-                                                <button
-                                                    type="button"
-                                                    className={`btn btn-sm ml-2 ${verCodigoPlanilla ? "btn-primary" : "btn-outline-primary"}`}
-                                                    onClick={() => setVerCodigoPlanilla((v) => !v)}
-                                                >
-                                                    <i className="fas fa-barcode mr-1" />
-                                                    {verCodigoPlanilla ? "Ocultar N series" : "Ver N series"}
-                                                </button>
+                                                <div className="btn-group btn-group-sm ml-2" role="group" aria-label="Filtro equipos planilla">
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaEquiposPlanilla === "todo" ? "btn-primary" : "btn-outline-primary"}`}
+                                                        onClick={() => setFiltroVistaEquiposPlanilla("todo")}
+                                                    >
+                                                        Ver todo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaEquiposPlanilla === "no_aplica" ? "btn-secondary" : "btn-outline-secondary"}`}
+                                                        onClick={() => setFiltroVistaEquiposPlanilla("no_aplica")}
+                                                    >
+                                                        No aplica
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaEquiposPlanilla === "pendiente" ? "btn-warning" : "btn-outline-warning"}`}
+                                                        onClick={() => setFiltroVistaEquiposPlanilla("pendiente")}
+                                                    >
+                                                        Pendientes
+                                                    </button>
+                                                </div>
                                             )}
                                             <button
                                                 className="btn btn-sm btn-outline-primary ml-auto"
@@ -2762,6 +2805,13 @@ const ArmadoTecnico = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
+                                                            {equiposConTitulos.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan={esMovil ? 4 : 8} className="text-center text-muted py-4">
+                                                                        No hay equipos para este filtro.
+                                                                    </td>
+                                                                </tr>
+                                                            )}
                                                             {equiposConTitulos.map((item, idx) => {
                                                                 const colSpan = esMovil ? 4 : 8;
                                                                 if (item.tipo === "titulo") {
@@ -2776,27 +2826,13 @@ const ArmadoTecnico = () => {
                                                                 const eq = item.data;
                                                                 const rowKey = eq.id_equipo || `tmp-${eq.__idx}`;
                                                                 const enEdicion = editingId === rowKey;
+                                                                const estadoRegistro = normalizarEstadoRegistroEquipo(eq.estado_registro);
+                                                                const esNoAplica = estadoRegistro === "no_aplica";
+                                                                const esPendienteRegistro = estadoRegistro === "pendiente";
                                                                 return (
                                                                     <tr key={rowKey}>
                                                                         <td>
                                                                             <div>{eq.nombre}</div>
-                                                                            {verCodigoPlanilla && !enEdicion ? (
-                                                                                <div className="mt-1">
-                                                                                    {eq.codigo ? (
-                                                                                        <span
-                                                                                            className="badge badge-light mr-2"
-                                                                                            style={{ border: "1px solid #bfdbfe", color: "#1e40af" }}
-                                                                                        >
-                                                                                            Cod: {eq.codigo}
-                                                                                        </span>
-                                                                                    ) : null}
-                                                                                    {eq.numero_serie ? (
-                                                                                        <span style={{ color: "#dc2626", fontWeight: 800 }}>
-                                                                                            N Serie: {eq.numero_serie}
-                                                                                        </span>
-                                                                                    ) : null}
-                                            </div>
-                                                                            ) : null}
                                                                         </td>
                                                                             <td style={{ minWidth: "110px" }}>
                                                                                 {enEdicion ? (
@@ -2829,15 +2865,20 @@ const ArmadoTecnico = () => {
                                                                                             ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || tecnicoMov || userId)
                                                                                             : "#6b7280";
                                                                                         const border = hasTec ? color : "#cbd5e1";
+                                                                                        const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : nombreCajaSeguro(eq.caja);
                                                                                         return (
                                                                                             <>
                                                                                                 <span
                                                                                                     className="badge badge-light"
-                                                                                                    style={{ border: `1px solid ${border}`, color }}
+                                                                                                    style={{
+                                                                                                        border: esNoAplica ? "1px solid #d1d5db" : `1px solid ${border}`,
+                                                                                                        color: esNoAplica ? "#4b5563" : color,
+                                                                                                        background: esNoAplica ? "#f3f4f6" : undefined
+                                                                                                    }}
                                                                                                 >
-                                                                                                    {nombreCajaSeguro(eq.caja)}
+                                                                                                    {cajaLabel}
                                                                                                 </span>
-                                                                                                {hasTec && displayName && (
+                                                                                                {!esNoAplica && hasTec && displayName && (
                                                                                                     <small className="d-block" style={{ color }}>
                                                                                                         por {displayName}
                                                                                                     </small>
@@ -2870,7 +2911,13 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "observacion", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.observacion || "-"
+                                                                                    esPendienteRegistro ? (
+                                                                                        <span style={{ color: "#c2410c", fontWeight: 700 }}>
+                                                                                            {eq.observacion_registro || eq.observacion || "-"}
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        eq.observacion || "-"
+                                                                                    )
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -2909,7 +2956,21 @@ const ArmadoTecnico = () => {
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "estado", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.estado || "-"
+                                                                                    estadoRegistro !== "normal" ? (
+                                                                                        <span
+                                                                                            className="badge badge-light"
+                                                                                            style={{
+                                                                                                border: `1px solid ${esNoAplica ? "#d1d5db" : "#fdba74"}`,
+                                                                                                color: esNoAplica ? "#4b5563" : "#b45309",
+                                                                                                background: esNoAplica ? "#f3f4f6" : "#fff7ed",
+                                                                                                fontWeight: 700
+                                                                                            }}
+                                                                                        >
+                                                                                            {labelEstadoRegistroEquipo(estadoRegistro)}
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        eq.estado || "-"
+                                                                                    )
                                                                                 )}
                                                                             </td>
                                                                         )}
