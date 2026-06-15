@@ -400,6 +400,7 @@ const EQUIPOS_PREDEF = [
     "Switch POE 2",
     "Switch 4",
 ];
+const EQUIPOS_MIGRADOS_A_MATERIALES = new Set(["bandeja rack - tornillos"]);
 const MATERIALES_PREDEF = [
     "Cable Eléctrico 3 x 1,5mm",
     "Cable Eléctrico 3 x 0,75mm",
@@ -450,7 +451,8 @@ const MATERIALES_PREDEF = [
     "Tirafondos",
     "Prensas",
     "Cáncamo",
-    "Platina o ángulo (Tira)",
+    "Platina",
+    "Angulo",
     "Disco Corte",
     "PG 21",
     "PG 16",
@@ -486,8 +488,93 @@ const MATERIALES_PREDEF = [
     "Brazo Ubiquiti",
     "Mástil",
     "Riel U",
-    "Perno Pasado"
+    "Perno Pasado",
+    "Planza",
+    "Mesa rack",
+    "utp planza",
+    "conector planza a corrugado",
+    "copla planza"
 ];
+
+const MATERIAL_CATEGORY_OPTIONS = ["Todas", "Electricidad", "Redes", "Montaje", "Canalizacion", "Otros"];
+
+const normalizarNombreMaterialCategoria = (value = "") =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ");
+
+const obtenerCategoriaMaterial = (nombre = "") => {
+    const n = normalizarNombreMaterialCategoria(nombre);
+    if (
+        n.startsWith("cable electrico") ||
+        ["enchufes macho", "enchufes hembra", "automatico 16a", "cinta aislante super 33", "cable power", "cable ups", "puente bateria"].includes(n)
+    ) {
+        return "Electricidad";
+    }
+    if (
+        n.includes("utp") ||
+        n.includes("rj45") ||
+        n.includes("patchcore") ||
+        n.includes("hdmi") ||
+        n.includes("vga") ||
+        n.includes("usb") ||
+        n.includes("microsd") ||
+        n.includes("conector hembra red")
+    ) {
+        return "Redes";
+    }
+    if (
+        n.includes("corrugado") ||
+        n.includes("canaleta") ||
+        n === "pg 16" ||
+        n === "pg 21" ||
+        n.startsWith("terminales rectos") ||
+        n.startsWith("terminal curvo") ||
+        n.includes("omega") ||
+        n.includes("cadie") ||
+        n.includes("planza") ||
+        n.includes("copla planza") ||
+        n.includes("conector planza a corrugado") ||
+        n.includes("regleta") ||
+        n.includes("caja de union") ||
+        n.includes("caja de camara") ||
+        n.includes("caja interior") ||
+        n.includes("caja de panel") ||
+        n.includes("cajas (fondo + tapa)")
+    ) {
+        return "Canalizacion";
+    }
+    if (
+        n.includes("bandeja rack") ||
+        n.includes("mesa rack") ||
+        n.includes("amarras") ||
+        n.includes("pernos") ||
+        n.includes("perno pasado") ||
+        n.includes("tornillos") ||
+        n.includes("abrazaderas") ||
+        n.includes("autoperforantes") ||
+        n.includes("tirafondos") ||
+        n.includes("prensas") ||
+        n.includes("grilletes") ||
+        n.includes("guardacabos") ||
+        n.includes("kit de soporte") ||
+        n.includes("orejas tableros") ||
+        n.includes("mastil") ||
+        n.includes("riel u") ||
+        n === "platina" ||
+        n === "angulo" ||
+        n.includes("brazo ubiquiti") ||
+        n.includes("soporte led") ||
+        n.includes("grampas para cable") ||
+        n.includes("cinta doble contacto")
+    ) {
+        return "Montaje";
+    }
+    return "Otros";
+};
 
 const CHECKLIST_ARMADO_SECCIONES = [
     {
@@ -673,6 +760,7 @@ const ArmadoTecnico = () => {
     const [transferNota, setTransferNota] = useState("");
     const [materiales, setMateriales] = useState([]);
     const [materialesSnapshot, setMaterialesSnapshot] = useState({});
+    const [categoriaMaterialPlanilla, setCategoriaMaterialPlanilla] = useState("Todas");
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
     const [verCodigoPlanilla, setVerCodigoPlanilla] = useState(false);
     const [cajas, setCajas] = useState([DEFAULT_PENDING_BOX]);
@@ -773,6 +861,16 @@ const ArmadoTecnico = () => {
         return [...base, ...extrasNormalizados];
     }, []);
 
+    const materialesFiltradosPlanilla = useMemo(
+        () =>
+            (materiales || []).filter(
+                (mat) =>
+                    categoriaMaterialPlanilla === "Todas" ||
+                    obtenerCategoriaMaterial(mat?.nombre || "") === categoriaMaterialPlanilla
+            ),
+        [categoriaMaterialPlanilla, materiales]
+    );
+
     const socketBaseUrl = useMemo(() => {
         const env = process.env.REACT_APP_API_BASE_URL;
         if (env && /^https?:\/\//i.test(env)) return env.replace(/\/api\/?$/i, "");
@@ -811,9 +909,15 @@ const ArmadoTecnico = () => {
         return n;
     }, []);
 
+    const esEquipoMigradoAMaterial = useCallback(
+        (nombre = "") => EQUIPOS_MIGRADOS_A_MATERIALES.has(normalizarNombreEquipo(nombre)),
+        [normalizarNombreEquipo]
+    );
+
     const mergeEquiposPredef = useCallback((lista = []) => {
+        const listaFiltrada = (lista || []).filter((e) => !esEquipoMigradoAMaterial(e?.nombre || ""));
         const mapa = new Map(
-            (lista || []).map((e) => [normalizarNombreEquipo(e.nombre || ""), e])
+            listaFiltrada.map((e) => [normalizarNombreEquipo(e.nombre || ""), e])
         );
         const base = EQUIPOS_PREDEF.map((nombre) => {
             const key = normalizarNombreEquipo(nombre);
@@ -830,7 +934,7 @@ const ArmadoTecnico = () => {
                 centro_id: found?.centro_id
             };
         });
-        const extras = (lista || []).filter(
+        const extras = listaFiltrada.filter(
             (e) => !EQUIPOS_PREDEF.some((p) => normalizarNombreEquipo(p) === normalizarNombreEquipo(e.nombre || ""))
         );
         const extrasNorm = extras.map((e) => ({
@@ -839,7 +943,7 @@ const ArmadoTecnico = () => {
             nombre: e.nombre
         }));
         return [...base, ...extrasNorm];
-    }, [normalizarNombreEquipo]);
+    }, [esEquipoMigradoAMaterial, normalizarNombreEquipo]);
 
     const prioridadEquipo = useCallback((nombre = "") => {
         let n = nombre.toLowerCase().trim();
@@ -2903,8 +3007,39 @@ const ArmadoTecnico = () => {
                                                     </button>
                                             </div>
                                             </div>
+                                            <div className="d-flex flex-wrap align-items-center mb-3" style={{ gap: 8 }}>
+                                                {MATERIAL_CATEGORY_OPTIONS.map((categoria) => {
+                                                    const activa = categoriaMaterialPlanilla === categoria;
+                                                    return (
+                                                        <button
+                                                            key={categoria}
+                                                            type="button"
+                                                            className={`btn btn-sm ${activa ? "btn-primary" : "btn-light"}`}
+                                                            style={{
+                                                                borderRadius: 999,
+                                                                padding: "0.4rem 0.85rem",
+                                                                border: activa ? "1px solid #0f4aa3" : "1px solid #dbeafe",
+                                                                boxShadow: activa ? "0 10px 22px rgba(15, 74, 163, 0.18)" : "none",
+                                                                color: activa ? "#fff" : "#31507a",
+                                                                fontWeight: 700
+                                                            }}
+                                                            onClick={() => setCategoriaMaterialPlanilla(categoria)}
+                                                        >
+                                                            {categoria}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                             <div className="row">
-                                                {materiales.map((mat, idx) => (
+                                                {!materialesFiltradosPlanilla.length ? (
+                                                    <div className="col-12">
+                                                        <div className="alert alert-light border mb-0" style={{ color: "#475569" }}>
+                                                            No hay materiales en esta categoria.
+                                                        </div>
+                                                    </div>
+                                                ) : materialesFiltradosPlanilla.map((mat) => {
+                                                    const idx = materiales.findIndex((item) => item === mat);
+                                                    return (
                                                     <div className="col-md-6 col-lg-6 mb-2" key={mat.nombre}>
                                                         <div className="material-card">
                                                             <div className="material-head">
@@ -2999,9 +3134,10 @@ const ArmadoTecnico = () => {
                                             </div>
                                             </div>
                                             </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
-                                            </div>
+                                        </div>
                                         )}
                                     </>
                                 )}
