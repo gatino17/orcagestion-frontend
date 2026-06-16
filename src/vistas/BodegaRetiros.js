@@ -138,7 +138,6 @@ const CATALOGO_EQUIPOS_ARMADO = [
   "UPS online",
 ];
 
-const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
 
 export default function BodegaRetiros() {
   const [activeTab, setActiveTab] = useState("logistica");
@@ -232,23 +231,6 @@ export default function BodegaRetiros() {
     const norm = normalizeText(raw);
     if (!raw || !norm || norm === "sin caja") return false;
     return /^caja\s*\d+/i.test(raw);
-  };
-
-  const obtenerRevisionChecklistArmado = (armadoId) => {
-    const id = Number(armadoId || 0);
-    if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
-    try {
-      const raw = localStorage.getItem(`orcagest_armado_checklist_v1_${id}`);
-      if (!raw) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
-      const parsed = JSON.parse(raw);
-      const checks = parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {};
-      const done = Object.values(checks).filter((row) => !!String(row?.estado || "").trim()).length;
-      const total = CHECKLIST_ARMADO_TOTAL_ITEMS;
-      const pct = total ? Math.round((done / total) * 100) : 0;
-      return { done, total, pct };
-    } catch {
-      return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
-    }
   };
 
   const catalogoEquiposInventario = useMemo(() => {
@@ -1697,7 +1679,7 @@ export default function BodegaRetiros() {
                   <th>Inicio</th>
                   <th>Término</th>
                   <th>Armado</th>
-                  <th>Revisión checklist</th>
+                  <th>% armado</th>
                   <th className="text-center">Acción</th>
                 </tr>
               </thead>
@@ -1711,8 +1693,9 @@ export default function BodegaRetiros() {
                 ) : (
                   armadosSeguimiento.slice(0, 8).map((a) => {
                     const finalizado = normalizeText(a?.estado || "") === "finalizado";
-                    const progresoChecklist = obtenerRevisionChecklistArmado(a?.id_armado || a?.id);
-                    const revision = Math.max(0, Math.min(100, Number(progresoChecklist?.pct || 0)));
+                    const equiposResueltos = Math.max(0, Number(a?.armado_equipos_resueltos || 0));
+                    const equiposTotal = Math.max(0, Number(a?.armado_total_equipos || 0));
+                    const revision = Math.max(0, Math.min(100, Number(a?.porcentaje_armado || 0)));
                     return (
                       <tr key={`seg-arm-${a.id_armado}`}>
                         <td>{a.id_armado}</td>
@@ -1750,11 +1733,11 @@ export default function BodegaRetiros() {
                             {revision >= 100 ? (
                               <span className="badge badge-success">{revision}%</span>
                             ) : revision >= 70 ? (
-                              <span className="badge badge-primary">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                              <span className="badge badge-primary">{revision}% ({equiposResueltos}/{equiposTotal})</span>
                             ) : revision >= 40 ? (
-                              <span className="badge badge-warning">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                              <span className="badge badge-warning">{revision}% ({equiposResueltos}/{equiposTotal})</span>
                             ) : (
-                              <span className="badge badge-danger">{revision}% ({progresoChecklist.done}/{progresoChecklist.total})</span>
+                              <span className="badge badge-danger">{revision}% ({equiposResueltos}/{equiposTotal})</span>
                             )}
                           </div>
                         </td>

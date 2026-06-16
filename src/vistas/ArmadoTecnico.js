@@ -84,6 +84,11 @@ const siguienteNombreCaja = (lista = []) => {
 
 const contarCajasReales = (lista = []) => obtenerCajasDetectadas(lista).filter((nombre) => nombre !== DEFAULT_PENDING_BOX).length;
 
+const esCajaVirtualOEspecial = (value) => {
+    const limpio = String(value ?? "").trim().toLowerCase();
+    return !limpio || limpio === DEFAULT_PENDING_BOX.toLowerCase() || limpio === "n/a" || limpio === "pendiente";
+};
+
 const escapeHtml = (value) =>
     String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -826,6 +831,15 @@ const ArmadoTecnico = () => {
         [tecnicosActivosPlanilla]
     );
     const totalCajasRealesPlanilla = useMemo(() => contarCajasReales(cajas), [cajas]);
+    const resumenArmadoPlanilla = useMemo(() => {
+        const total = Array.isArray(equipos) ? equipos.length : 0;
+        const conSerie = (equipos || []).filter((eq) => String(eq?.numero_serie || "").trim()).length;
+        const noAplica = (equipos || []).filter((eq) => normalizarEstadoRegistroEquipo(eq?.estado_registro) === "no_aplica").length;
+        const pendientes = (equipos || []).filter((eq) => normalizarEstadoRegistroEquipo(eq?.estado_registro) === "pendiente").length;
+        const resueltos = conSerie + noAplica;
+        const porcentaje = total ? Math.round((resueltos / total) * 100) : 0;
+        return { total, conSerie, noAplica, pendientes, resueltos, porcentaje };
+    }, [equipos]);
     const tecnicosApoyoPlanilla = useMemo(
         () => tecnicosActivosPlanilla.filter((tec) => !tec?.principal),
         [tecnicosActivosPlanilla]
@@ -1184,6 +1198,7 @@ const ArmadoTecnico = () => {
         const porCaja = new Map();
         const asegurarCaja = (nombreCaja) => {
             const limpio = nombreCajaSeguro(nombreCaja);
+            if (esCajaVirtualOEspecial(limpio)) return null;
             if (!porCaja.has(limpio)) {
                 porCaja.set(limpio, {
                     nombre: limpio,
@@ -1210,6 +1225,7 @@ const ArmadoTecnico = () => {
             .forEach((mov) => {
                 const tipo = String(mov?.tipo || "").trim().toLowerCase();
                 const nombreCaja = nombreCajaSeguro(mov?.caja);
+                if (esCajaVirtualOEspecial(nombreCaja)) return;
                 const itemBase = tipo === "material"
                     ? String(mov?.nombre_item || "").trim().toLowerCase()
                     : String(mov?.item_id || mov?.numero_serie || mov?.nombre_item || "").trim().toLowerCase();
@@ -1256,26 +1272,16 @@ const ArmadoTecnico = () => {
 
     const cajasResumenOrdenado = useMemo(() => {
         const lista = Array.isArray(cajasResumenData) ? [...cajasResumenData] : [];
-        return lista.sort((a, b) => {
-            const aPendiente = String(a?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
-            const bPendiente = String(b?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
-            if (aPendiente !== bPendiente) return aPendiente ? -1 : 1;
-            return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), undefined, { numeric: true, sensitivity: "base" });
-        });
+        return lista.sort((a, b) =>
+            String(a?.nombre || "").localeCompare(String(b?.nombre || ""), undefined, { numeric: true, sensitivity: "base" })
+        );
     }, [cajasResumenData]);
 
     const cajasResumenMeta = useMemo(() => {
-        const pendiente = cajasResumenOrdenado.filter(
-            (caja) => String(caja?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase()
-        ).length;
-        const reales = cajasResumenOrdenado.filter(
-            (caja) => String(caja?.nombre || "").trim().toLowerCase() !== DEFAULT_PENDING_BOX.toLowerCase()
-        );
-        const cerradas = reales.filter((caja) => String(caja?.estado || "").trim().toLowerCase() === "cerrada").length;
-        const abiertas = reales.length - cerradas;
+        const cerradas = cajasResumenOrdenado.filter((caja) => String(caja?.estado || "").trim().toLowerCase() === "cerrada").length;
+        const abiertas = cajasResumenOrdenado.length - cerradas;
         return {
-            pendiente,
-            totalReal: reales.length,
+            totalReal: cajasResumenOrdenado.length,
             abiertas,
             cerradas
         };
@@ -1900,22 +1906,66 @@ const ArmadoTecnico = () => {
             cell: (row) => row.total_cajas ?? 0
         },
         {
-            name: "% Checklist armado",
+            name: "Armado",
+            selector: (row) => Number(row?.porcentaje_armado || 0),
+            sortable: true,
+            grow: 0.55,
+            wrap: true,
+            cell: (row) => {
+                const porcentaje = Math.max(0, Math.min(100, Number(row?.porcentaje_armado || 0)));
+                const color = porcentaje >= 100 ? "#15803d" : porcentaje >= 70 ? "#1d4ed8" : "#c2410c";
+                const fondo = porcentaje >= 100 ? "#dcfce7" : porcentaje >= 70 ? "#dbeafe" : "#ffedd5";
+                const borde = porcentaje >= 100 ? "#86efac" : porcentaje >= 70 ? "#93c5fd" : "#fdba74";
+                return (
+                    <span
+                        className="badge badge-pill"
+                        style={{ background: fondo, color, border: `1px solid ${borde}`, fontWeight: 700 }}
+                    >
+                        {porcentaje}%
+                    </span>
+                );
+            }
+        },
+        {
+            name: "Pendientes",
+            selector: (row) => Number(row?.armado_equipos_pendientes || 0),
+            sortable: true,
+            grow: 0.55,
+            wrap: true,
+            cell: (row) => {
+                const pendientes = Math.max(0, Number(row?.armado_equipos_pendientes || 0));
+                return (
+                    <span
+                        className="badge badge-pill"
+                        style={{
+                            background: pendientes > 0 ? "#fff7ed" : "#f0fdf4",
+                            color: pendientes > 0 ? "#c2410c" : "#166534",
+                            border: `1px solid ${pendientes > 0 ? "#fdba74" : "#86efac"}`,
+                            fontWeight: 700
+                        }}
+                    >
+                        {pendientes}
+                    </span>
+                );
+            }
+        },
+        {
+            name: "Checklist",
             selector: (row) => {
                 const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
                 if (!progreso.total) return 0;
                 return Math.round((progreso.done / progreso.total) * 100);
             },
             sortable: true,
-            grow: 0.8,
-            minWidth: "170px",
+            grow: 0.62,
+            minWidth: "130px",
             wrap: true,
             cell: (row) => {
                 const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
                 const pct = progreso.total ? Math.round((progreso.done / progreso.total) * 100) : 0;
                 const color = pct >= 100 ? "#16a34a" : pct >= 60 ? "#f59e0b" : "#dc2626";
                 return (
-                    <div style={{ minWidth: 145 }}>
+                    <div style={{ minWidth: 112 }}>
                         <div className="d-flex justify-content-between align-items-center mb-1">
                             <small>{progreso.done}/{progreso.total || 0}</small>
                             <strong style={{ color }}>{pct}%</strong>
@@ -2164,6 +2214,8 @@ const ArmadoTecnico = () => {
             const nombreCentro = row?.centro?.nombre || row?.centro_nombre || "-";
             const cliente = row?.centro?.cliente || row?.cliente || "-";
             const tecnico = row?.tecnico?.nombre || row?.tecnico_nombre || "-";
+            const porcentajeArmado = Math.max(0, Math.min(100, Number(row?.porcentaje_armado || 0)));
+            const pendientesArmado = Math.max(0, Number(row?.armado_equipos_pendientes || 0));
 
             const [detalles, materiales] = await Promise.all([
                 obtenerDetallesCentro(nombreCentro),
@@ -2256,6 +2308,8 @@ const ArmadoTecnico = () => {
                             <td>
                                 <table class="head-side" style="width:100%; margin:0;">
                                     <tr><th>Total cajas</th><td>${escapeHtml(row.total_cajas ?? 0)}</td></tr>
+                                    <tr><th>Armado</th><td>${escapeHtml(`${porcentajeArmado}%`)}</td></tr>
+                                    <tr><th>Pendientes</th><td>${escapeHtml(pendientesArmado)}</td></tr>
                                 </table>
                             </td>
                         </tr>
@@ -2566,6 +2620,28 @@ const ArmadoTecnico = () => {
                                     Planilla de armado - {armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre || "Centro"}{" "}
                                     <span className="badge badge-primary ml-2" title="Total de cajas reales">
                                         {totalCajasRealesPlanilla} cajas
+                                    </span>
+                                    <span
+                                        className="badge ml-2"
+                                        title={`${resumenArmadoPlanilla.resueltos} de ${resumenArmadoPlanilla.total} equipos resueltos`}
+                                        style={{
+                                            background: resumenArmadoPlanilla.porcentaje >= 100 ? "#16a34a" : "#2563eb",
+                                            color: "#fff",
+                                            border: "1px solid rgba(255,255,255,0.18)"
+                                        }}
+                                    >
+                                        Armado {resumenArmadoPlanilla.porcentaje}%
+                                    </span>
+                                    <span
+                                        className="badge ml-2"
+                                        title="Total de equipos pendientes"
+                                        style={{
+                                            background: resumenArmadoPlanilla.pendientes > 0 ? "#fff7ed" : "#f0fdf4",
+                                            color: resumenArmadoPlanilla.pendientes > 0 ? "#c2410c" : "#166534",
+                                            border: `1px solid ${resumenArmadoPlanilla.pendientes > 0 ? "#fdba74" : "#86efac"}`
+                                        }}
+                                    >
+                                        Pendientes {resumenArmadoPlanilla.pendientes}
                                     </span>
                                     {tecnicoPrincipalPlanilla && (
                                         <span
@@ -3692,10 +3768,6 @@ const ArmadoTecnico = () => {
                                         <strong style={{ color: "#0f172a" }}>
                                             {armadoHistorialSeleccionado?.centro?.cliente || armadoHistorialSeleccionado?.cliente || armadoHistorialSeleccionado?.cliente_nombre || "-"}
                                         </strong>
-                                        <span className="badge badge-pill" style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid rgba(239,68,68,0.18)" }}>
-                                            Pendiente de caja
-                                        </span>
-                                        <strong style={{ color: "#b91c1c" }}>{cajasResumenMeta.pendiente}</strong>
                                         <span className="badge badge-pill" style={{ background: "#1d4ed8", color: "#fff" }}>
                                             Total real
                                         </span>
@@ -3715,24 +3787,21 @@ const ArmadoTecnico = () => {
                                     <div className="text-muted">Cargando cajas...</div>
                                 ) : cajasResumenError ? (
                                     <div className="alert alert-warning mb-0">{cajasResumenError}</div>
-                                ) : !cajasResumenData.length ? (
-                                    <div className="text-muted">No hay cajas registradas para este armado.</div>
+                                ) : !cajasResumenOrdenado.length ? (
+                                    <div className="text-muted">No hay cajas reales registradas para este armado.</div>
                                 ) : (
                                     <div className="row">
                                         {cajasResumenOrdenado.map((caja) => {
                                             const cerrada = caja.estado === "cerrada";
-                                            const esPendiente = String(caja?.nombre || "").trim().toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase();
                                             return (
                                                 <div key={caja.nombre} className="col-md-6 mb-3">
                                                     <div
                                                         className="h-100 p-3 rounded border"
                                                         style={{
-                                                            background: esPendiente
-                                                                ? "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)"
-                                                                : cerrada
+                                                            background: cerrada
                                                                 ? "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)"
                                                                 : "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)",
-                                                            borderColor: esPendiente ? "#fda4af" : cerrada ? "#fdba74" : "#93c5fd",
+                                                            borderColor: cerrada ? "#fdba74" : "#93c5fd",
                                                             boxShadow: "0 14px 30px rgba(15, 23, 42, 0.08)"
                                                         }}
                                                     >
@@ -3746,12 +3815,12 @@ const ArmadoTecnico = () => {
                                                             <span
                                                                 className="badge badge-pill"
                                                                 style={{
-                                                                    background: esPendiente ? "#fee2e2" : cerrada ? "#fed7aa" : "#bfdbfe",
-                                                                    color: esPendiente ? "#b91c1c" : cerrada ? "#9a3412" : "#1d4ed8",
+                                                                    background: cerrada ? "#fed7aa" : "#bfdbfe",
+                                                                    color: cerrada ? "#9a3412" : "#1d4ed8",
                                                                     fontWeight: 700
                                                                 }}
                                                             >
-                                                                {esPendiente ? "Temporal" : cerrada ? "Cerrada" : "Abierta"}
+                                                                {cerrada ? "Cerrada" : "Abierta"}
                                                             </span>
                                                         </div>
 
