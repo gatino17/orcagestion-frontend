@@ -236,6 +236,15 @@ const GRUPOS_EQUIPOS = [
         ]
     },
     {
+        titulo: "Base tierra",
+        items: [
+            "PC cliente",
+            "Rack 2",
+            "Ubiquiti TX",
+            "Ubiquiti RX"
+        ]
+    },
+    {
         titulo: "Tablero Alarma",
         items: [
             "Tablero 500x400x200",
@@ -336,6 +345,10 @@ const EQUIPOS_PREDEF = [
     "Monitor",
     "Rack 9U - tuercas - tornillos",
     "Zapatilla Rack (PDU)",
+    "PC cliente",
+    "Rack 2",
+    "Ubiquiti TX",
+    "Ubiquiti RX",
     "Parlantes",
     "Sensor Magnetico",
     "Mouse",
@@ -595,6 +608,9 @@ const labelEstadoRegistroEquipo = (value = "") => {
     return "Normal";
 };
 
+const normalizarEstadoRegistroMaterial = (value = "") => normalizarEstadoRegistroEquipo(value);
+const labelEstadoRegistroMaterial = (value = "") => labelEstadoRegistroEquipo(value);
+
 const CHECKLIST_ARMADO_SECCIONES = [
     {
         titulo: "1. PC/NVR",
@@ -782,6 +798,7 @@ const ArmadoTecnico = () => {
     const [categoriaMaterialPlanilla, setCategoriaMaterialPlanilla] = useState("Todas");
     const [tabPlanilla, setTabPlanilla] = useState("equipos"); // 'equipos' | 'materiales'
     const [filtroVistaEquiposPlanilla, setFiltroVistaEquiposPlanilla] = useState("todo");
+    const [filtroVistaMaterialesPlanilla, setFiltroVistaMaterialesPlanilla] = useState("todo");
     const [cajas, setCajas] = useState([DEFAULT_PENDING_BOX]);
     const [movimientos, setMovimientos] = useState([]);
     const [movimientosRecientes, setMovimientosRecientes] = useState([]);
@@ -874,7 +891,15 @@ const ArmadoTecnico = () => {
             const caja = normalizarCajaMaterialInicial(found?.caja, found || {});
             const caja_tecnico_id = found?.caja_tecnico_id;
             const caja_tecnico_nombre = found?.caja_tecnico_nombre;
-            return { nombre, cantidad, caja, caja_tecnico_id, caja_tecnico_nombre };
+            return {
+                nombre,
+                cantidad,
+                caja,
+                caja_tecnico_id,
+                caja_tecnico_nombre,
+                estado_registro: normalizarEstadoRegistroMaterial(found?.estado_registro),
+                observacion_registro: found?.observacion_registro || ""
+            };
         });
         const extras = (listaBackend || []).filter(
             (m) => !MATERIALES_PREDEF.some((p) => p.toLowerCase() === String(m.nombre || "").toLowerCase())
@@ -884,19 +909,27 @@ const ArmadoTecnico = () => {
             cantidad: m.cantidad ?? "",
             caja: normalizarCajaMaterialInicial(m.caja, m),
             caja_tecnico_id: m.caja_tecnico_id,
-            caja_tecnico_nombre: m.caja_tecnico_nombre
+            caja_tecnico_nombre: m.caja_tecnico_nombre,
+            estado_registro: normalizarEstadoRegistroMaterial(m?.estado_registro),
+            observacion_registro: m?.observacion_registro || ""
         }));
         return [...base, ...extrasNormalizados];
     }, []);
 
     const materialesFiltradosPlanilla = useMemo(
         () =>
-            (materiales || []).filter(
-                (mat) =>
+            (materiales || []).filter((mat) => {
+                const estadoRegistro = normalizarEstadoRegistroMaterial(mat?.estado_registro);
+                const cumpleEstado =
+                    filtroVistaMaterialesPlanilla === "todo" ||
+                    (filtroVistaMaterialesPlanilla === "no_aplica" && estadoRegistro === "no_aplica") ||
+                    (filtroVistaMaterialesPlanilla === "pendiente" && estadoRegistro === "pendiente");
+                const cumpleCategoria =
                     categoriaMaterialPlanilla === "Todas" ||
-                    obtenerCategoriaMaterial(mat?.nombre || "") === categoriaMaterialPlanilla
-            ),
-        [categoriaMaterialPlanilla, materiales]
+                    obtenerCategoriaMaterial(mat?.nombre || "") === categoriaMaterialPlanilla;
+                return cumpleEstado && cumpleCategoria;
+            }),
+        [categoriaMaterialPlanilla, filtroVistaMaterialesPlanilla, materiales]
     );
 
     const socketBaseUrl = useMemo(() => {
@@ -3144,6 +3177,31 @@ const ArmadoTecnico = () => {
                                                     </button>
                                             </div>
                                             </div>
+                                            <div className="d-flex flex-wrap align-items-center mb-2" style={{ gap: 8 }}>
+                                                <div className="btn-group btn-group-sm" role="group" aria-label="Filtro materiales planilla">
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaMaterialesPlanilla === "todo" ? "btn-primary" : "btn-outline-primary"}`}
+                                                        onClick={() => setFiltroVistaMaterialesPlanilla("todo")}
+                                                    >
+                                                        Ver todo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaMaterialesPlanilla === "no_aplica" ? "btn-secondary" : "btn-outline-secondary"}`}
+                                                        onClick={() => setFiltroVistaMaterialesPlanilla("no_aplica")}
+                                                    >
+                                                        No aplica
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn ${filtroVistaMaterialesPlanilla === "pendiente" ? "btn-warning" : "btn-outline-warning"}`}
+                                                        onClick={() => setFiltroVistaMaterialesPlanilla("pendiente")}
+                                                    >
+                                                        Pendientes
+                                                    </button>
+                                                </div>
+                                            </div>
                                             <div className="d-flex flex-wrap align-items-center mb-3" style={{ gap: 8 }}>
                                                 {MATERIAL_CATEGORY_OPTIONS.map((categoria) => {
                                                     const activa = categoriaMaterialPlanilla === categoria;
@@ -3176,11 +3234,22 @@ const ArmadoTecnico = () => {
                                                     </div>
                                                 ) : materialesFiltradosPlanilla.map((mat) => {
                                                     const idx = materiales.findIndex((item) => item === mat);
+                                                    const estadoRegistro = normalizarEstadoRegistroMaterial(mat?.estado_registro);
+                                                    const esNoAplica = estadoRegistro === "no_aplica";
+                                                    const esPendienteRegistro = estadoRegistro === "pendiente";
+                                                    const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : nombreCajaSeguro(mat.caja);
                                                     return (
                                                     <div className="col-md-6 col-lg-6 mb-2" key={mat.nombre}>
                                                         <div className="material-card">
                                                             <div className="material-head">
-                                                                <div className="material-name">{mat.nombre}</div>
+                                                                <div>
+                                                                    <div className="material-name">{mat.nombre}</div>
+                                                                    {esPendienteRegistro && String(mat?.observacion_registro || "").trim() ? (
+                                                                        <small style={{ color: "#c2410c", fontWeight: 700 }}>
+                                                                            {mat.observacion_registro}
+                                                                        </small>
+                                                                    ) : null}
+                                                                </div>
                                                                 <div className="material-badge">
                                                                     {(() => {
                                                                         const tecnicoMov = tecnicoRecientePorMaterial.get(
@@ -3202,15 +3271,23 @@ const ArmadoTecnico = () => {
                                                                             <>
                                                                                 <span
                                                                                     className="badge badge-light d-inline-block"
-                                                                                    style={{ border: `1px solid ${border}`, color }}
+                                                                                    style={{
+                                                                                        border: esNoAplica ? "1px solid #d1d5db" : esPendienteRegistro ? "1px solid #fdba74" : `1px solid ${border}`,
+                                                                                        color: esNoAplica ? "#4b5563" : esPendienteRegistro ? "#b45309" : color,
+                                                                                        background: esNoAplica ? "#f3f4f6" : esPendienteRegistro ? "#fff7ed" : undefined
+                                                                                    }}
                                                                                 >
-                                                                                    {nombreCajaSeguro(mat.caja)}
+                                                                                    {cajaLabel}
                                                                                 </span>
-                                                                                {hasTec && displayName && (
+                                                                                {(esNoAplica || esPendienteRegistro) ? (
+                                                                                    <small className="d-block" style={{ color: esNoAplica ? "#4b5563" : "#b45309" }}>
+                                                                                        {labelEstadoRegistroMaterial(estadoRegistro)}
+                                                                                    </small>
+                                                                                ) : hasTec && displayName ? (
                                                                                     <small className="d-block" style={{ color }}>
                                                                                         por {displayName}
                                                                                     </small>
-                                                                                )}
+                                                                                ) : null}
                                                                             </>
                                                                         );
                                                                     })()}
@@ -3222,6 +3299,7 @@ const ArmadoTecnico = () => {
                                                                     <select
                                                                         className="form-control form-control-sm"
                                                                         value={nombreCajaSeguro(mat.caja)}
+                                                                        disabled={esNoAplica || esPendienteRegistro}
                             onChange={(e) =>
                                 setMateriales((prev) =>
                                     prev.map((m, i) =>
@@ -3251,6 +3329,7 @@ const ArmadoTecnico = () => {
                                                                         className="form-control form-control-sm text-right"
                                                                         min="0"
                                                                         value={mat.cantidad}
+                                                                        disabled={esNoAplica || esPendienteRegistro}
                                                                         onChange={(e) =>
                                                                             setMateriales((prev) =>
                                                                                 prev.map((m, i) =>
