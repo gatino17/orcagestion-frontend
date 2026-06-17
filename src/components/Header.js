@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
@@ -10,7 +10,16 @@ function Header({ onLogout }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "/api";
+  const envBase = process.env.REACT_APP_API_BASE_URL;
+  let API_BASE_URL = "/api";
+
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    API_BASE_URL = "http://localhost:5000/api";
+  }
+
+  if (envBase) {
+    API_BASE_URL = envBase;
+  }
   const normalizeText = (value) =>
     String(value || "")
       .normalize("NFD")
@@ -307,3 +316,4 @@ function Header({ onLogout }) {
 }
 
 export default Header;
+
