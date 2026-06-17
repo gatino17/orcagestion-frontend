@@ -241,7 +241,8 @@ const GRUPOS_EQUIPOS = [
             "PC cliente",
             "Rack 2",
             "Ubiquiti TX",
-            "Ubiquiti RX"
+            "Ubiquiti RX",
+            "Pantalla"
         ]
     },
     {
@@ -349,6 +350,7 @@ const EQUIPOS_PREDEF = [
     "Rack 2",
     "Ubiquiti TX",
     "Ubiquiti RX",
+    "Pantalla",
     "Parlantes",
     "Sensor Magnetico",
     "Mouse",
@@ -508,7 +510,7 @@ const MATERIALES_PREDEF = [
     "Riel U",
     "Perno Pasado",
     "Planza",
-    "Mesa rack",
+    "Mesa respaldo",
     "utp planza",
     "conector planza a corrugado",
     "copla planza"
@@ -522,7 +524,14 @@ const normalizarNombreMaterialCategoria = (value = "") =>
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/\s+/g, " ");
+        .replace(/\s+/g, " ")
+        .replace(/\bmesa rack\b/g, "mesa respaldo");
+
+const canonizarNombreMaterial = (value = "") => {
+    const texto = String(value || "").trim();
+    if (!texto) return "";
+    return normalizarNombreMaterialCategoria(texto) === "mesa respaldo" ? "Mesa respaldo" : texto;
+};
 
 const obtenerCategoriaMaterial = (nombre = "") => {
     const n = normalizarNombreMaterialCategoria(nombre);
@@ -567,7 +576,7 @@ const obtenerCategoriaMaterial = (nombre = "") => {
     }
     if (
         n.includes("bandeja rack") ||
-        n.includes("mesa rack") ||
+        n.includes("mesa respaldo") ||
         n.includes("amarras") ||
         n.includes("pernos") ||
         n.includes("perno pasado") ||
@@ -883,16 +892,19 @@ const ArmadoTecnico = () => {
 
     const mergeMateriales = useCallback((listaBackend = []) => {
         const mapa = new Map(
-            (listaBackend || []).map((m) => [String(m.nombre || "").toLowerCase(), m])
+            (listaBackend || []).map((m) => [
+                normalizarNombreMaterialCategoria(m.nombre || ""),
+                m
+            ])
         );
         const base = MATERIALES_PREDEF.map((nombre) => {
-            const found = mapa.get(nombre.toLowerCase());
+            const found = mapa.get(normalizarNombreMaterialCategoria(nombre));
             const cantidad = found && found.cantidad !== undefined && found.cantidad !== null ? found.cantidad : "";
             const caja = normalizarCajaMaterialInicial(found?.caja, found || {});
             const caja_tecnico_id = found?.caja_tecnico_id;
             const caja_tecnico_nombre = found?.caja_tecnico_nombre;
             return {
-                nombre,
+                nombre: canonizarNombreMaterial(nombre),
                 cantidad,
                 caja,
                 caja_tecnico_id,
@@ -902,10 +914,15 @@ const ArmadoTecnico = () => {
             };
         });
         const extras = (listaBackend || []).filter(
-            (m) => !MATERIALES_PREDEF.some((p) => p.toLowerCase() === String(m.nombre || "").toLowerCase())
+            (m) =>
+                !MATERIALES_PREDEF.some(
+                    (p) =>
+                        normalizarNombreMaterialCategoria(p) ===
+                        normalizarNombreMaterialCategoria(m.nombre || "")
+                )
         );
         const extrasNormalizados = extras.map((m) => ({
-            nombre: m.nombre,
+            nombre: canonizarNombreMaterial(m.nombre),
             cantidad: m.cantidad ?? "",
             caja: normalizarCajaMaterialInicial(m.caja, m),
             caja_tecnico_id: m.caja_tecnico_id,
@@ -1915,22 +1932,6 @@ const ArmadoTecnico = () => {
             cell: (row) => formatearFecha(row.fecha_cierre)
         },
         {
-            name: "Excel",
-            grow: 0.45,
-            minWidth: "95px",
-            wrap: true,
-            cell: (row) => {
-                const esFinalizado = (row.estado || "").toLowerCase() === "finalizado";
-                if (!esFinalizado) return <span className="text-muted">-</span>;
-                return (
-                    <button className="btn btn-sm btn-outline-success" onClick={() => descargarExcelArmado(row)}>
-                        <i className="fas fa-file-excel mr-1" />
-                        Excel
-                    </button>
-                );
-            }
-        },
-        {
             name: "Total cajas",
             selector: (row) => row.total_cajas || 0,
             sortable: true,
@@ -1946,9 +1947,9 @@ const ArmadoTecnico = () => {
             wrap: true,
             cell: (row) => {
                 const porcentaje = Math.max(0, Math.min(100, Number(row?.porcentaje_armado || 0)));
-                const color = porcentaje >= 100 ? "#15803d" : porcentaje >= 70 ? "#1d4ed8" : "#c2410c";
-                const fondo = porcentaje >= 100 ? "#dcfce7" : porcentaje >= 70 ? "#dbeafe" : "#ffedd5";
-                const borde = porcentaje >= 100 ? "#86efac" : porcentaje >= 70 ? "#93c5fd" : "#fdba74";
+                const color = porcentaje >= 100 ? "#15803d" : "#b91c1c";
+                const fondo = porcentaje >= 100 ? "#dcfce7" : "#fee2e2";
+                const borde = porcentaje >= 100 ? "#86efac" : "#fca5a5";
                 return (
                     <span
                         className="badge badge-pill"
@@ -2020,12 +2021,13 @@ const ArmadoTecnico = () => {
         },
         {
             name: "Planilla",
-            grow: 0.85,
-            minWidth: "205px",
+            grow: 1.1,
+            minWidth: "285px",
             wrap: true,
             cell: (row) => {
                 const progreso = obtenerProgresoChecklist(row?.id_armado || row?.id);
                 const listo = progreso.total > 0 && progreso.done === progreso.total;
+                const esFinalizado = (row.estado || "").toLowerCase() === "finalizado";
                 return (
                     <div className="d-flex align-items-center" style={{ gap: 6, flexWrap: "wrap" }}>
                         <button className="btn btn-sm btn-outline-primary" onClick={() => handleAbrirPlanilla(row)}>
@@ -2036,6 +2038,15 @@ const ArmadoTecnico = () => {
                             <i className="fas fa-clipboard-check mr-1" />
                             Checklist
                         </button>
+                        {esFinalizado && (
+                            <button
+                                className="btn btn-sm btn-outline-success"
+                                onClick={() => descargarExcelArmado(row)}
+                                title="Descargar Excel"
+                            >
+                                <i className="fas fa-file-excel" />
+                            </button>
+                        )}
                         {puedeVerObservacionArmado && (
                             <button
                                 className="btn btn-sm btn-outline-secondary"

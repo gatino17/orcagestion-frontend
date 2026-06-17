@@ -218,6 +218,7 @@ export default function BodegaRetiros() {
   const [cajasDisponiblesGuia, setCajasDisponiblesGuia] = useState([]);
   const [cajasSeleccionadasGuia, setCajasSeleccionadasGuia] = useState([]);
   const [loadingGuiaCajas, setLoadingGuiaCajas] = useState(false);
+  const [pendientesDetalleModal, setPendientesDetalleModal] = useState(null);
 
   const normalizeText = (value) =>
     String(value || "")
@@ -761,6 +762,34 @@ export default function BodegaRetiros() {
     return map;
   }, [guiasSalida]);
 
+  const armadosSeguimientoVisibles = useMemo(() => {
+    const lista = Array.isArray(armadosSeguimiento) ? armadosSeguimiento : [];
+    return lista.filter((a) => {
+      const finalizado = normalizeText(a?.estado || "") === "finalizado";
+      const porcentajeArmado = Math.max(0, Math.min(100, Number(a?.porcentaje_armado || 0)));
+      const pendientesArmado = Math.max(0, Number(a?.armado_equipos_pendientes || 0));
+      const totalCajas = Math.max(0, Number(a?.total_cajas || 0));
+      const guiasArmado = Array.isArray(guiasPorArmado.get(Number(a?.id_armado || 0)))
+        ? guiasPorArmado.get(Number(a?.id_armado || 0))
+        : [];
+      const cajasDespachadas = new Set();
+      guiasArmado.forEach((guia) => {
+        (Array.isArray(guia?.cajas) ? guia.cajas : []).forEach((caja) => {
+          const valor = String(caja || "").trim();
+          if (valor) cajasDespachadas.add(valor);
+        });
+      });
+      const cajasPendientesDespacho = Math.max(totalCajas - cajasDespachadas.size, 0);
+      const estaCompletamenteCerrado =
+        finalizado &&
+        porcentajeArmado >= 100 &&
+        pendientesArmado <= 0 &&
+        cajasPendientesDespacho <= 0;
+      return !estaCompletamenteCerrado;
+    });
+  }, [armadosSeguimiento, guiasPorArmado]);
+
+
   const armadosDespachoFiltrados = useMemo(() => {
     const q = normalizeText(filtroDespachoCentro);
     return (armadosFinalizados || []).filter((a) => {
@@ -819,17 +848,16 @@ export default function BodegaRetiros() {
     mostrarTablaTransito || mostrarTablaBodega || mostrarTablaAsignaciones || mostrarTablaBajas || mostrarTablaDespachos;
 
   const armadosSeguimientoResumen = useMemo(() => {
-    const lista = Array.isArray(armadosSeguimiento) ? armadosSeguimiento : [];
+    const lista = Array.isArray(armadosSeguimientoVisibles) ? armadosSeguimientoVisibles : [];
     const enPreparacion = lista.filter((a) => normalizeText(a?.estado || "") !== "finalizado");
     const listos = lista.filter((a) => normalizeText(a?.estado || "") === "finalizado");
     return { enPreparacion, listos };
-  }, [armadosSeguimiento]);
+  }, [armadosSeguimientoVisibles]);
 
   const canGestionarAsignaciones = useMemo(() => {
     const rol = String(usuario?.rol || "").toLowerCase();
     return ["admin", "superadmin", "bodega", "operaciones", "almacen", "logistica", "logístico"].includes(rol);
   }, [usuario]);
-
   const esAdminBodega = useMemo(() => {
     const rol = String(usuario?.rol || "").toLowerCase();
     return ["admin", "superadmin"].includes(rol);
@@ -1680,22 +1708,43 @@ export default function BodegaRetiros() {
                   <th>Término</th>
                   <th>Armado</th>
                   <th>% armado</th>
+                  <th>Despacho</th>
                   <th className="text-center">Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {!armadosSeguimiento.length ? (
+                {!armadosSeguimientoVisibles.length ? (
                   <tr>
-	                    <td colSpan={9} className="text-center py-3 text-muted">
-                      Sin armados para seguimiento.
+	                    <td colSpan={10} className="text-center py-3 text-muted">
+                      Sin armados pendientes de seguimiento.
                     </td>
                   </tr>
                 ) : (
-                  armadosSeguimiento.slice(0, 8).map((a) => {
+                  armadosSeguimientoVisibles.slice(0, 8).map((a) => {
                     const finalizado = normalizeText(a?.estado || "") === "finalizado";
-                    const equiposResueltos = Math.max(0, Number(a?.armado_equipos_resueltos || 0));
-                    const equiposTotal = Math.max(0, Number(a?.armado_total_equipos || 0));
+                    const pendientesArmado = Math.max(0, Number(a?.armado_equipos_pendientes || 0));
                     const revision = Math.max(0, Math.min(100, Number(a?.porcentaje_armado || 0)));
+                    const badgeArmado = finalizado
+                      ? pendientesArmado > 0
+                        ? { className: "badge badge-warning", label: "Finalizado incompleto" }
+                        : { className: "badge badge-success", label: "Finalizado completo" }
+                      : { className: "badge badge-info", label: "En preparación" };
+                    const guiasArmadoSeguimiento = Array.isArray(guiasPorArmado.get(Number(a?.id_armado || 0))) ? guiasPorArmado.get(Number(a?.id_armado || 0)) : [];
+                    const cajasDespachadasSeguimiento = new Set();
+                    guiasArmadoSeguimiento.forEach((guia) => {
+                      (Array.isArray(guia?.cajas) ? guia.cajas : []).forEach((caja) => {
+                        const valor = String(caja || "").trim();
+                        if (valor) cajasDespachadasSeguimiento.add(valor);
+                      });
+                    });
+                    const totalCajasDespacho = Math.max(0, Number(a?.total_cajas || 0), cajasDespachadasSeguimiento.size);
+                    const cajasEnviadas = Math.min(cajasDespachadasSeguimiento.size, totalCajasDespacho);
+                    const cajasPendientesDespacho = Math.max(totalCajasDespacho - cajasEnviadas, 0);
+                    const badgeDespacho = cajasEnviadas <= 0
+                      ? { className: "badge badge-secondary", label: "Sin despacho" }
+                      : cajasPendientesDespacho > 0
+                        ? { className: "badge badge-warning", label: "Despacho parcial" }
+                        : { className: "badge badge-success", label: "Despacho completo" };
                     return (
                       <tr key={`seg-arm-${a.id_armado}`}>
                         <td>{a.id_armado}</td>
@@ -1712,33 +1761,53 @@ export default function BodegaRetiros() {
                         <td>{formatDate(a?.fecha_inicio || a?.fecha_asignacion)}</td>
                         <td>{formatDate(a?.fecha_cierre)}</td>
                         <td>
-                          {finalizado ? (
-                            <span className="badge badge-success">Finalizado</span>
+                          <div className="d-flex flex-column" style={{ gap: 4 }}>
+                            <span className={badgeArmado.className}>{badgeArmado.label}</span>
+                            {pendientesArmado > 0 ? (
+                              <>
+                                <small style={{ color: "#c2410c", fontWeight: 600 }}>
+                                  Pendientes: {pendientesArmado}
+                                </small>
+                                {String(a?.armado_pendientes_resumen || "").trim() ? (
+                                  <small
+                                    style={{ color: "#b45309", lineHeight: 1.25 }}
+                                    title={(Array.isArray(a?.armado_pendientes_detalle) ? a.armado_pendientes_detalle : [])
+                                      .map((item) => item?.observacion ? `${item?.nombre || "Pendiente"}: ${item.observacion}` : (item?.nombre || "Pendiente"))
+                                      .join("\n")}
+                                  >
+                                    {a.armado_pendientes_resumen}
+                                  </small>
+                                ) : null}
+                                {Array.isArray(a?.armado_pendientes_detalle) && a.armado_pendientes_detalle.length ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-link btn-sm p-0 text-left align-self-start"
+                                    style={{ color: "#0f4aa3", fontWeight: 600, textDecoration: "none" }}
+                                    onClick={() => setPendientesDetalleModal(a)}
+                                  >
+                                    <i className="fas fa-eye mr-1" />
+                                    Ver pendientes
+                                  </button>
+                                ) : null}
+                              </>
+                            ) : finalizado ? (
+                              <small className="text-success font-weight-bold">Sin pendientes</small>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          {revision >= 100 ? (
+                            <span className="badge badge-success">{revision}%</span>
                           ) : (
-                            <span className="badge badge-info">En preparación</span>
+                            <span className="badge badge-danger">{revision}%</span>
                           )}
                         </td>
                         <td>
-                          <div className="d-flex align-items-center" style={{ gap: 8 }}>
-                            <div className="progress flex-grow-1" style={{ height: 8, minWidth: 120 }}>
-                              <div
-                                className={`progress-bar ${finalizado ? "bg-success" : "bg-info"}`}
-                                role="progressbar"
-                                style={{ width: `${revision}%` }}
-                                aria-valuenow={revision}
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                              />
-                            </div>
-                            {revision >= 100 ? (
-                              <span className="badge badge-success">{revision}%</span>
-                            ) : revision >= 70 ? (
-                              <span className="badge badge-primary">{revision}% ({equiposResueltos}/{equiposTotal})</span>
-                            ) : revision >= 40 ? (
-                              <span className="badge badge-warning">{revision}% ({equiposResueltos}/{equiposTotal})</span>
-                            ) : (
-                              <span className="badge badge-danger">{revision}% ({equiposResueltos}/{equiposTotal})</span>
-                            )}
+                          <div className="d-flex flex-column" style={{ gap: 4 }}>
+                            <span className={badgeDespacho.className}>{badgeDespacho.label}</span>
+                            <small><strong>Total:</strong> {totalCajasDespacho}</small>
+                            <small><strong>Enviadas:</strong> {cajasEnviadas}</small>
+                            <small style={{ color: "#b91c1c" }}><strong>Pendientes:</strong> {cajasPendientesDespacho}</small>
                           </div>
                         </td>
                         <td className="text-center">
@@ -3558,6 +3627,57 @@ export default function BodegaRetiros() {
                 >
                   <i className="fas fa-check mr-1" />
                   Confirmar asignacion
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendientesDetalleModal ? (
+        <div className="modal d-block" tabIndex="-1" role="dialog">
+          <div className="modal-dialog modal-dialog-scrollable" role="document">
+            <div className="modal-content bodega-inv-modal">
+              <div className="modal-header bodega-inv-modal-header">
+                <h5 className="modal-title bodega-inv-modal-title">
+                  <i className="fas fa-exclamation-circle" />
+                  Pendientes del armado #{pendientesDetalleModal?.id_armado}
+                </h5>
+                <button type="button" className="close" onClick={() => setPendientesDetalleModal(null)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body bodega-inv-modal-body">
+                <div className="mb-3">
+                  <div><strong>Cliente:</strong> {pendientesDetalleModal?.centro?.cliente || "-"}</div>
+                  <div><strong>Centro:</strong> {pendientesDetalleModal?.centro?.nombre || "-"}</div>
+                </div>
+                {Array.isArray(pendientesDetalleModal?.armado_pendientes_detalle) && pendientesDetalleModal.armado_pendientes_detalle.length ? (
+                  <div className="list-group">
+                    {pendientesDetalleModal.armado_pendientes_detalle.map((item, idx) => (
+                      <div key={`pend-${idx}`} className="list-group-item">
+                        <div className="d-flex justify-content-between align-items-start" style={{ gap: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: "#7c2d12" }}>{item?.nombre || "Pendiente"}</div>
+                            <small className="text-muted text-uppercase">{item?.tipo || "equipo"}</small>
+                          </div>
+                          <span className="badge badge-warning">Pendiente</span>
+                        </div>
+                        {String(item?.observacion || "").trim() ? (
+                          <div className="mt-2 small" style={{ color: "#9a3412" }}>
+                            Observacion: {item.observacion}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-muted">No hay detalle disponible.</div>
+                )}
+              </div>
+              <div className="modal-footer bodega-inv-modal-footer">
+                <button className="btn btn-light" onClick={() => setPendientesDetalleModal(null)}>
+                  Cerrar
                 </button>
               </div>
             </div>
