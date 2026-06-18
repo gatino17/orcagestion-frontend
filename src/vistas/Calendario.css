@@ -1025,3 +1025,46 @@
   background: #6b7280;
   color: #ffffff;
 }
+
+.calendar-armado-estado-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  line-height: 1.15;
+}
+
+.calendar-armado-meta {
+  font-size: 0.7rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.calendar-armado-pendiente {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.calendar-armado-ok {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.calendar-status-info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.calendar-status-warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.calendar-status-success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.calendar-status-muted {
+  background: #e2e8f0;
+  color: #475569;
+}

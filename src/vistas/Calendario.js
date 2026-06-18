@@ -15,6 +15,7 @@ import {
 import { agregarArmado } from "../controllers/armadosControllers";
 import {
   obtenerArmados,
+  obtenerGuiasSalidaArmado,
   obtenerSoportes,
   obtenerBloqueosTecnicos,
   crearBloqueoTecnico,
@@ -81,6 +82,21 @@ const normalizarNombreTecnico = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+const normalizarTexto = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const obtenerClaveCaja = (valor) => {
+  const raw = String(valor || "").trim();
+  const norm = normalizarTexto(raw);
+  if (!raw || !norm || norm === "sin caja") return "";
+  const match = norm.match(/^caja\s*(\d+)/i);
+  return match ? `caja_${Number(match[1])}` : norm;
+};
+
 const parseFechaCalendario = (value) => {
   if (!value) return null;
   const raw = String(value).trim();
@@ -132,6 +148,7 @@ function Calendario() {
   const [soportesResueltosHoy, setSoportesResueltosHoy] = useState([]);
   const [loadingSoportesTerreno, setLoadingSoportesTerreno] = useState(false);
   const [armadosCalendario, setArmadosCalendario] = useState([]);
+  const [guiasSalidaCalendario, setGuiasSalidaCalendario] = useState([]);
   const [loadingArmadosCalendario, setLoadingArmadosCalendario] = useState(false);
   const [bloqueosTecnicos, setBloqueosTecnicos] = useState([]);
   const [loadingBloqueos, setLoadingBloqueos] = useState(false);
@@ -193,6 +210,25 @@ function Calendario() {
     return d;
   };
 
+  const cargarArmadosOperativosCalendario = async () => {
+    setLoadingArmadosCalendario(true);
+    try {
+      const [armados, guias] = await Promise.all([obtenerArmados(), obtenerGuiasSalidaArmado()]);
+      const lista = (Array.isArray(armados) ? armados : []).sort((a, b) => {
+        const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
+        const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
+        return fb - fa;
+      });
+      setArmadosCalendario(lista);
+      setGuiasSalidaCalendario(Array.isArray(guias) ? guias : []);
+    } catch (error) {
+      setArmadosCalendario([]);
+      setGuiasSalidaCalendario([]);
+    } finally {
+      setLoadingArmadosCalendario(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -247,19 +283,7 @@ function Calendario() {
         setSoportesResueltosHoy([]);
       }
       setLoadingSoportesTerreno(false);
-      try {
-        const armados = await obtenerArmados();
-        const lista = (Array.isArray(armados) ? armados : [])
-          .sort((a, b) => {
-            const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
-            const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
-            return fb - fa;
-          });
-        setArmadosCalendario(lista);
-      } catch (error) {
-        setArmadosCalendario([]);
-      }
-      setLoadingArmadosCalendario(false);
+      await cargarArmadosOperativosCalendario();
       try {
         const bloqueos = await obtenerBloqueosTecnicos({ estado: "activo" });
         setBloqueosTecnicos(Array.isArray(bloqueos) ? bloqueos : []);
@@ -639,17 +663,7 @@ function Calendario() {
     };
 
     await agregarArmado(payload, async () => {
-      try {
-        const armados = await obtenerArmados();
-        const lista = (Array.isArray(armados) ? armados : []).sort((a, b) => {
-          const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
-          const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
-          return fb - fa;
-        });
-      setArmadosCalendario(lista);
-      } catch (error) {
-        setArmadosCalendario([]);
-      }
+      await cargarArmadosOperativosCalendario();
       localStorage.setItem(LAST_ARMADO_TEC_KEY, String(armadoTecnicoId));
       setToastAsignacion("Armado asignado correctamente.");
       setTimeout(() => setToastAsignacion(""), 2500);
@@ -1600,48 +1614,138 @@ function Calendario() {
     },
     {
       name: "Armado",
-      selector: (row) => row.estado || "pendiente",
+      selector: (row) => row.armado_operativo_orden,
       sortable: true,
-      width: "108px",
+      width: "190px",
       cell: (row) => {
-        const estado = String(row.estado || "pendiente").toLowerCase();
-        const normalizado = estado === "en_proceso" ? "en_proceso" : estado;
+        const pendientes = Math.max(0, Number(row.armado_pendientes_operativos || 0));
         return (
-          <span className={`pill soporte-status-${normalizado}`}>
-            {estado === "en_proceso" ? "En proceso" : estado.charAt(0).toUpperCase() + estado.slice(1)}
-          </span>
+          <div className="calendar-armado-estado-cell">
+            <span className={`pill ${row.armado_operativo_pill_class}`}>{row.armado_operativo_label}</span>
+            {pendientes > 0 ? (
+              <small className="calendar-armado-meta calendar-armado-pendiente">
+                Pendientes: {pendientes}
+              </small>
+            ) : (
+              <small className="calendar-armado-meta calendar-armado-ok">Sin pendientes</small>
+            )}
+          </div>
         );
       }
     },
     {
-      name: "Revision",
+      name: "Despacho",
+      selector: (row) => row.despacho_operativo_orden,
+      sortable: true,
+      width: "178px",
+      cell: (row) => (
+        <div className="calendar-armado-estado-cell">
+          <span className={`pill ${row.despacho_operativo_pill_class}`}>{row.despacho_operativo_label}</span>
+          <small className="calendar-armado-meta">
+            Enviados: {row.cajas_enviadas_operativas} | Pendientes: {row.cajas_pendientes_operativas}
+          </small>
+        </div>
+      )
+    },
+    {
+      name: "Checklist",
       selector: (row) => calcularPctChecklistArmado(row.id_armado || row.id).pct,
       sortable: true,
-      width: "130px",
+      width: "92px",
       cell: (row) => {
         const progreso = calcularPctChecklistArmado(row.id_armado || row.id);
         const color = progreso.pct >= 100 ? "#16a34a" : progreso.pct >= 60 ? "#f59e0b" : "#dc2626";
         return (
-          <div style={{ minWidth: 115 }}>
-            <div className="d-flex justify-content-between align-items-center mb-1">
-              <small>{progreso.done}/{progreso.total}</small>
-              <strong style={{ color }}>{progreso.pct}%</strong>
-            </div>
-            <div style={{ height: 6, background: "#e5e7eb", borderRadius: 999 }}>
-              <div
-                style={{
-                  width: `${progreso.pct}%`,
-                  height: "100%",
-                  background: color,
-                  borderRadius: 999
-                }}
-              />
-            </div>
-          </div>
+          <strong style={{ color }}>{progreso.pct}%</strong>
         );
       }
     }
   ];
+
+  const guiasPorArmadoCalendario = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(guiasSalidaCalendario) ? guiasSalidaCalendario : []).forEach((guia) => {
+      const armadoId = Number(guia?.armado_id || 0);
+      if (!armadoId) return;
+      const lista = map.get(armadoId) || [];
+      lista.push(guia);
+      map.set(armadoId, lista);
+    });
+    return map;
+  }, [guiasSalidaCalendario]);
+
+  const armadosCalendarioOperativos = useMemo(() => {
+    return (Array.isArray(armadosCalendario) ? armadosCalendario : []).map((armado) => {
+      const armadoId = Number(armado?.id_armado || armado?.id || 0);
+      const finalizado = normalizarTexto(armado?.estado || "") === "finalizado";
+      const pendientesArmado = Math.max(0, Number(armado?.armado_equipos_pendientes || 0));
+      const totalCajas = Math.max(0, Number(armado?.total_cajas || 0));
+      const guiasArmado = Array.isArray(guiasPorArmadoCalendario.get(armadoId))
+        ? guiasPorArmadoCalendario.get(armadoId)
+        : [];
+      const cajasDespachadas = new Set();
+      guiasArmado.forEach((guia) => {
+        (Array.isArray(guia?.cajas) ? guia.cajas : []).forEach((caja) => {
+          const clave = obtenerClaveCaja(caja);
+          if (clave) cajasDespachadas.add(clave);
+        });
+      });
+
+      const totalCajasOperativas = Math.max(totalCajas, cajasDespachadas.size);
+      const cajasEnviadas = Math.min(cajasDespachadas.size, totalCajasOperativas);
+      const cajasPendientes = Math.max(totalCajasOperativas - cajasEnviadas, 0);
+
+      const armadoOperativo = finalizado
+        ? pendientesArmado > 0
+          ? {
+              label: "Finalizado incompleto",
+              pillClass: "calendar-status-warning",
+              order: 1
+            }
+          : {
+              label: "Finalizado completo",
+              pillClass: "calendar-status-success",
+              order: 2
+            }
+        : {
+            label: "En preparacion",
+            pillClass: "calendar-status-info",
+            order: 0
+          };
+
+      const despachoOperativo =
+        cajasEnviadas <= 0
+          ? {
+              label: "Sin despacho",
+              pillClass: "calendar-status-muted",
+              order: 0
+            }
+          : cajasPendientes > 0
+            ? {
+                label: "Despacho parcial",
+                pillClass: "calendar-status-warning",
+                order: 1
+              }
+            : {
+                label: "Despacho completo",
+                pillClass: "calendar-status-success",
+                order: 2
+              };
+
+      return {
+        ...armado,
+        armado_pendientes_operativos: pendientesArmado,
+        armado_operativo_label: armadoOperativo.label,
+        armado_operativo_pill_class: armadoOperativo.pillClass,
+        armado_operativo_orden: armadoOperativo.order,
+        despacho_operativo_label: despachoOperativo.label,
+        despacho_operativo_pill_class: despachoOperativo.pillClass,
+        despacho_operativo_orden: despachoOperativo.order,
+        cajas_enviadas_operativas: cajasEnviadas,
+        cajas_pendientes_operativas: cajasPendientes
+      };
+    });
+  }, [armadosCalendario, guiasPorArmadoCalendario]);
 
   const columnasSoporteResueltosHoy = [
     {
@@ -1970,7 +2074,7 @@ function Calendario() {
               </div>
               <DataTable
                 columns={columnasArmadosCalendario}
-                data={armadosCalendario}
+                data={armadosCalendarioOperativos}
                 progressPending={loadingArmadosCalendario}
                 pagination
                 paginationPerPage={5}
