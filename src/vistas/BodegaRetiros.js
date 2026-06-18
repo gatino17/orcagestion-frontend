@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import {
   fetchClientes,
@@ -219,6 +219,7 @@ export default function BodegaRetiros() {
   const [cajasSeleccionadasGuia, setCajasSeleccionadasGuia] = useState([]);
   const [loadingGuiaCajas, setLoadingGuiaCajas] = useState(false);
   const [pendientesDetalleModal, setPendientesDetalleModal] = useState(null);
+  const guiaDetalleCacheRef = useRef(new Map());
 
   const normalizeText = (value) =>
     String(value || "")
@@ -1153,6 +1154,36 @@ export default function BodegaRetiros() {
     });
   };
 
+  const aplicarDetalleGuiaEnModal = (armado, rows, guiaExistente = null, modoEdicion = false) => {
+    setGuiaCajasDetalle(rows);
+    const cajasPropias = new Set(
+      (Array.isArray(guiaExistente?.cajas) ? guiaExistente.cajas : [])
+        .map((caja) => obtenerClaveCaja(caja))
+        .filter(Boolean)
+    );
+    const cajasOcupadas = new Set();
+    (Array.isArray(guiasPorArmado.get(Number(armado?.id_armado || 0))) ? guiasPorArmado.get(Number(armado?.id_armado || 0)) : [])
+      .filter((item) => Number(item?.id_guia_salida || 0) !== Number(guiaExistente?.id_guia_salida || 0))
+      .forEach((item) => {
+        (Array.isArray(item?.cajas) ? item.cajas : []).forEach((caja) => {
+          const valor = obtenerClaveCaja(caja);
+          if (valor) cajasOcupadas.add(valor);
+        });
+      });
+    const disponibles = rows
+      .filter((row) => row?.caja && (!cajasOcupadas.has(row.cajaClave) || cajasPropias.has(row.cajaClave)))
+      .map((row) => row.caja);
+    const seleccionInicial = modoEdicion
+      ? cajasPropias.size
+        ? rows.filter((row) => disponibles.includes(row.caja) && cajasPropias.has(row.cajaClave)).map((row) => row.caja)
+        : [...disponibles]
+      : cajasPropias.size
+        ? rows.filter((row) => cajasPropias.has(row.cajaClave)).map((row) => row.caja)
+        : [...disponibles];
+    setCajasDisponiblesGuia(disponibles);
+    setCajasSeleccionadasGuia(seleccionInicial);
+  };
+
   const abrirModalGuia = async (armado, guiaExistente = null, modoEdicion = false) => {
     setArmadoGuia(armado);
     setGuiaSeleccionadaId(Number(guiaExistente?.id_guia_salida || 0) || null);
@@ -1171,6 +1202,14 @@ export default function BodegaRetiros() {
       modalidad_salida: normalizarModalidadSalida(guiaExistente?.modalidad_salida || "transportista_externo"),
     });
     setLoadingGuiaCajas(true);
+    const armadoId = Number(armado?.id_armado || 0);
+    const rowsCache = guiaDetalleCacheRef.current.get(armadoId);
+    if (Array.isArray(rowsCache) && rowsCache.length) {
+      aplicarDetalleGuiaEnModal(armado, rowsCache, guiaExistente, modoEdicion);
+      setLoadingGuiaCajas(false);
+      setShowGuiaModal(true);
+      return;
+    }
     try {
       const [materiales, movimientos, equiposCentro, historialEquipos] = await Promise.all([
         obtenerMaterialesArmado(Number(armado?.id_armado || 0)),
@@ -1260,33 +1299,8 @@ export default function BodegaRetiros() {
           materiales: row?.materiales || [],
           equipos: row?.equipos || [],
         }));
-      setGuiaCajasDetalle(rows);
-      const cajasPropias = new Set(
-        (Array.isArray(guiaExistente?.cajas) ? guiaExistente.cajas : [])
-          .map((caja) => obtenerClaveCaja(caja))
-          .filter(Boolean)
-      );
-      const cajasOcupadas = new Set();
-      (Array.isArray(guiasPorArmado.get(Number(armado?.id_armado || 0))) ? guiasPorArmado.get(Number(armado?.id_armado || 0)) : [])
-        .filter((item) => Number(item?.id_guia_salida || 0) !== Number(guiaExistente?.id_guia_salida || 0))
-        .forEach((item) => {
-          (Array.isArray(item?.cajas) ? item.cajas : []).forEach((caja) => {
-            const valor = obtenerClaveCaja(caja);
-            if (valor) cajasOcupadas.add(valor);
-          });
-        });
-      const disponibles = rows
-        .filter((row) => row?.caja && (!cajasOcupadas.has(row.cajaClave) || cajasPropias.has(row.cajaClave)))
-        .map((row) => row.caja);
-      const seleccionInicial = modoEdicion
-        ? cajasPropias.size
-          ? rows.filter((row) => disponibles.includes(row.caja) && cajasPropias.has(row.cajaClave)).map((row) => row.caja)
-          : [...disponibles]
-        : cajasPropias.size
-          ? rows.filter((row) => cajasPropias.has(row.cajaClave)).map((row) => row.caja)
-          : [...disponibles];
-      setCajasDisponiblesGuia(disponibles);
-      setCajasSeleccionadasGuia(seleccionInicial);
+      guiaDetalleCacheRef.current.set(armadoId, rows);
+      aplicarDetalleGuiaEnModal(armado, rows, guiaExistente, modoEdicion);
     } catch {
       setGuiaCajasDetalle([]);
       setCajasDisponiblesGuia([]);
@@ -1365,7 +1379,6 @@ export default function BodegaRetiros() {
         }
         return [guardada, ...lista];
       });
-      await cargarArmadosFinalizados();
       setShowGuiaModal(false);
       setArmadoGuia(null);
       setGuiaSeleccionadaId(null);

@@ -18,7 +18,7 @@ import {
     borrarMovimientoGlobal,
     cargarHistorialEquiposArmado
 } from "../controllers/armadosControllers";
-import { obtenerDetallesCentro, obtenerMaterialesArmado, obtenerMovimientosArmado, validarSerieEquipo } from "../api";
+import { obtenerDetallesCentro, obtenerMovimientosArmado, validarSerieEquipo } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
@@ -39,6 +39,15 @@ const DEFAULT_FIRST_BOX = "Caja 1";
 const nombreCajaSeguro = (value) => {
     const limpio = String(value ?? "").trim();
     return limpio || DEFAULT_PENDING_BOX;
+};
+
+const etiquetaBulto = (value) => {
+    const limpio = String(value ?? "").trim();
+    if (!limpio) return "Pendiente de bulto";
+    if (limpio.toLowerCase() === DEFAULT_PENDING_BOX.toLowerCase()) return "Pendiente de bulto";
+    const match = limpio.match(/^Caja(\s*\d+(?:\s*-\s*.*)?)$/i);
+    if (match) return `Bulto${match[1]}`;
+    return limpio;
 };
 
 const normalizarCajaEquipoInicial = (caja, equipo = {}) => {
@@ -1932,7 +1941,7 @@ const ArmadoTecnico = () => {
             cell: (row) => formatearFecha(row.fecha_cierre)
         },
         {
-            name: "Total cajas",
+            name: "Total bultos",
             selector: (row) => row.total_cajas || 0,
             sortable: true,
             grow: 0.5,
@@ -2040,11 +2049,11 @@ const ArmadoTecnico = () => {
                         </button>
                         {esFinalizado && (
                             <button
-                                className="btn btn-sm btn-outline-success"
-                                onClick={() => descargarExcelArmado(row)}
-                                title="Descargar Excel"
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => descargarPdfArmado(row)}
+                                title="Descargar PDF"
                             >
-                                <i className="fas fa-file-excel" />
+                                <i className="fas fa-file-pdf" />
                             </button>
                         )}
                         {puedeVerObservacionArmado && (
@@ -2130,7 +2139,7 @@ const ArmadoTecnico = () => {
 
     const handleAgregarCaja = () => {
         const propuesta = siguienteNombreCaja(cajas);
-        const nueva = window.prompt("Nombre de la caja", propuesta);
+        const nueva = window.prompt("Nombre del bulto", propuesta);
         if (!nueva) return;
         if (cajas.includes(nueva)) return;
         setCajas((prev) => [...prev, nueva]);
@@ -2252,36 +2261,37 @@ const ArmadoTecnico = () => {
         }
     };
 
-    const descargarExcelArmado = async (row) => {
+    const descargarPdfArmado = async (row) => {
         try {
             const idArmado = row.id_armado || row.id;
             const nombreCentro = row?.centro?.nombre || row?.centro_nombre || "-";
             const cliente = row?.centro?.cliente || row?.cliente || "-";
-            const tecnico = row?.tecnico?.nombre || row?.tecnico_nombre || "-";
-            const porcentajeArmado = Math.max(0, Math.min(100, Number(row?.porcentaje_armado || 0)));
-            const pendientesArmado = Math.max(0, Number(row?.armado_equipos_pendientes || 0));
-
-            const [detalles, materiales] = await Promise.all([
-                obtenerDetallesCentro(nombreCentro),
-                obtenerMaterialesArmado(idArmado)
-            ]);
+            const tecnicosAsignados = Array.isArray(row?.tecnicos_asignados)
+                ? row.tecnicos_asignados
+                    .map((tec) => String(tec?.nombre || "").trim())
+                    .filter(Boolean)
+                : [];
+            const tecnico = tecnicosAsignados.length
+                ? tecnicosAsignados.join(" / ")
+                : (row?.tecnico?.nombre || row?.tecnico_nombre || "-");
+            const detalles = await obtenerDetallesCentro(nombreCentro);
             const equipos = Array.isArray(detalles?.equipos) ? detalles.equipos : [];
-            const mats = Array.isArray(materiales) ? materiales : [];
 
-            const equiposConIdx = (equipos || []).map((e, idx) => ({ ...e, __idx: idx }));
+            const equiposConIdx = (equipos || [])
+                .filter((e) => String(e?.numero_serie || "").trim())
+                .map((e, idx) => ({ ...e, __idx: idx }));
             const usados = new Set();
             const bloquesEquipos = [];
             const pushBloque = (titulo, lista) => {
-                bloquesEquipos.push(`<tr class="section-row"><td colspan="4">${escapeHtml(titulo)}</td></tr>`);
                 if (!lista.length) {
-                    bloquesEquipos.push(`<tr><td colspan="4" class="empty-row">Sin registros</td></tr>`);
                     return;
                 }
+                bloquesEquipos.push(`<tr class="section-row"><td colspan="2">${escapeHtml(titulo)}</td></tr>`);
                 lista.forEach((e) => {
                     bloquesEquipos.push(
-                        `<tr><td>${escapeHtml(e.nombre || "-")}</td><td>${escapeHtml(e.caja || "-")}</td><td>${escapeHtml(
+                        `<tr><td>${escapeHtml(e.nombre || "-")}</td><td>${escapeHtml(
                             e.numero_serie || "-"
-                        )}</td><td>${escapeHtml(e.codigo || "-")}</td></tr>`
+                        )}</td></tr>`
                     );
                 });
             };
@@ -2299,116 +2309,110 @@ const ArmadoTecnico = () => {
             const extras = equiposConIdx.filter((e) => !usados.has(e.__idx));
             pushBloque("Otros", extras);
 
-            const filasEquipos = bloquesEquipos.join("");
+            const totalEquiposConSerie = equiposConIdx.length;
+            const filasEquipos = bloquesEquipos.length
+                ? bloquesEquipos.join("")
+                : "<tr><td colspan='2' class='empty-row'>Sin equipos con serie</td></tr>";
 
-            const filasMateriales = mats
-                .map(
-                    (m) =>
-                        `<tr><td>${escapeHtml(m.nombre || "-")}</td><td>${escapeHtml(
-                            m.cantidad ?? 0
-                        )}</td><td>${escapeHtml(m.caja || "-")}</td></tr>`
-                )
-                .join("");
-
-            const html = `
+            const doc = `<!doctype html>
                 <html>
                 <head>
                     <meta charset="UTF-8" />
+                    <title>Armado ${escapeHtml(nombreCentro)} #${escapeHtml(idArmado)}</title>
                     <style>
-                        body { font-family: "Segoe UI", Arial, sans-serif; color:#0f172a; padding:18px; }
-                        h3 { margin: 14px 0 8px 0; }
-                        table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
-                        .header-table td { border: 1px solid #b8c7d9; vertical-align: top; }
-                        .brand-cell { width: 220px; background:#173a6a; color:#fff; text-align:center; padding: 16px 10px; }
-                        .brand-orca { font-size: 38px; letter-spacing: 6px; font-weight: 800; line-height: 1; }
-                        .brand-sub { font-size: 15px; letter-spacing: 2px; font-weight: 700; margin-top: 8px; }
-                        .company-cell { padding: 8px 12px; min-width: 380px; }
-                        .company-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
-                        .company-line { font-size: 12px; line-height: 1.5; }
-                        .head-side td, .head-side th { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
-                        .head-side th { background:#eef2f7; text-align:left; width: 150px; }
-                        .meta-table th, .meta-table td { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
-                        .meta-table th { width: 140px; background: #eef2f7; font-weight: 700; text-transform: uppercase; }
-                        .items-table th, .items-table td { border: 1px solid #b8c7d9; padding: 6px 8px; font-size: 12px; }
-                        .items-table thead th { background:#dbe7f5; text-align:left; text-transform: uppercase; font-weight: 700; }
-                        .section-row td { background:#0f2d57; color:#fff; font-weight:700; text-transform: uppercase; }
-                        .empty-row { color:#64748b; font-style: italic; }
+                        body { font-family: Arial, sans-serif; color:#0f172a; margin:0; background:#f8fafc; }
+                        .wrap { max-width: 1080px; margin: 20px auto; background:#fff; border:1px solid #dbe7ff; border-radius:10px; overflow:hidden; }
+                        .head { padding:14px 18px; background:linear-gradient(135deg,#1d4ed8,#2563eb); color:#fff; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+                        .head h1 { margin:0; font-size:20px; }
+                        .toolbar { display:flex; gap:8px; }
+                        .btn { border:0; border-radius:8px; padding:8px 12px; font-weight:700; cursor:pointer; }
+                        .btn-print { background:#dc2626; color:#fff; }
+                        .btn-close { background:#e2e8f0; color:#0f172a; }
+                        .content { padding:16px 18px; }
+                        .doc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; }
+                        .doc-meta h2 { margin:0 0 6px; color:#1d4ed8; font-size:20px; }
+                        .doc-meta .meta-line { color:#334155; font-weight:700; margin-bottom:4px; font-size:13px; }
+                        .logo-wrap { display:flex; flex-direction:column; align-items:center; gap:6px; }
+                        .orca-logo { border:1px solid #dbe7ff; border-radius:8px; padding:6px; background:#fff; min-width:112px; }
+                        .orca-row { display:grid; grid-template-columns:repeat(4, 1fr); gap:0; margin-bottom:4px; }
+                        .orca-cell { width:23px; height:23px; background:#245b98; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .orca-sub { text-align:center; color:#245b98; font-size:11px; font-weight:900; letter-spacing:0.14em; text-transform:uppercase; padding-left:1px; }
+                        .logo-meta { color:#334155; font-weight:700; font-size:12px; text-align:center; }
+                        .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+                        .field { border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; background:#fff; }
+                        .field b { display:block; font-size:11px; text-transform:uppercase; color:#64748b; margin-bottom:4px; letter-spacing:.04em; }
+                        .wide { grid-column:1 / -1; }
+                        .sec-title { margin: 12px 0 6px; color:#1d4ed8; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.02em; }
+                        table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:12px; }
+                        th, td { border:1px solid #cbd5e1; padding:7px 8px; vertical-align:top; }
+                        thead th { background:#dbeafe; color:#1e3a8a; text-transform:uppercase; font-size:11px; letter-spacing:.04em; text-align:left; }
+                        .section-row td { background:#1e3a8a; color:#fff; font-weight:800; text-transform:uppercase; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .empty-row { color:#64748b; font-style:italic; }
+                        @media print {
+                            @page { margin: 12mm; }
+                            body { background:#fff; }
+                            .wrap { margin:0; border:0; border-radius:0; }
+                            .toolbar { display:none; }
+                            .orca-cell { background:#245b98 !important; color:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            .orca-sub { color:#245b98 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            .section-row td { background:#1e3a8a !important; color:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
                     </style>
                 </head>
                 <body>
-                    <table class="header-table">
-                        <tr>
-                            <td class="brand-cell">
-                                <div class="brand-orca">ORCA</div>
-                                <div class="brand-sub">TECNOLOGIA</div>
-                            </td>
-                            <td class="company-cell">
-                                <div class="company-title">Inventario de equipos</div>
-                                <div class="company-line"><strong>SOCIEDAD ORCA TECNOLOGIA SPA.</strong></div>
-                                <div class="company-line">Tel. (065)2753524</div>
-                                <div class="company-line">www.orcatecnologia.cl</div>
-                                <div class="company-line">E-mail: ioyarzun@orcatecnologia.cl</div>
-                            </td>
-                            <td>
-                                <table class="head-side" style="width:100%; margin:0;">
-                                    <tr><th>Total cajas</th><td>${escapeHtml(row.total_cajas ?? 0)}</td></tr>
-                                    <tr><th>Armado</th><td>${escapeHtml(`${porcentajeArmado}%`)}</td></tr>
-                                    <tr><th>Pendientes</th><td>${escapeHtml(pendientesArmado)}</td></tr>
-                                </table>
-                            </td>
-                        </tr>
-                    </table>
+                    <div class="wrap">
+                        <div class="head">
+                            <h1>Planilla de armado</h1>
+                            <div class="toolbar">
+                                <button class="btn btn-print" onclick="window.print()">Descargar PDF</button>
+                                <button class="btn btn-close" onclick="window.close()">Cerrar</button>
+                            </div>
+                        </div>
+                        <div class="content">
+                            <div class="doc-top">
+                                <div class="doc-meta">
+                                    <h2>${escapeHtml(nombreCentro)}</h2>
+                                    <div class="meta-line">Cliente: ${escapeHtml(cliente)}</div>
+                                    <div class="meta-line">Total equipos: ${escapeHtml(totalEquiposConSerie)}</div>
+                                    <div class="meta-line">Total bultos: ${escapeHtml(row.total_cajas ?? 0)}</div>
+                                </div>
+                                <div class="logo-wrap">
+                                    <div class="orca-logo">
+                                        <div class="orca-row">
+                                            <div class="orca-cell">O</div><div class="orca-cell">R</div><div class="orca-cell">C</div><div class="orca-cell">A</div>
+                                        </div>
+                                        <div class="orca-sub">Tecnologia</div>
+                                    </div>
+                                    <div class="logo-meta">Armado Nro ${escapeHtml(idArmado)}</div>
+                                </div>
+                            </div>
+                            <div class="grid">
+                                <div class="field wide"><b>Tecnico</b>${escapeHtml(tecnico)}</div>
+                                <div class="field"><b>Inicio armado</b>${escapeHtml(formatearFecha(row.fecha_inicio))}</div>
+                                <div class="field"><b>Cierre</b>${escapeHtml(formatearFecha(row.fecha_cierre))}</div>
+                            </div>
 
-                    <table class="meta-table">
-                        <tr>
-                            <th>Centro</th><td>${escapeHtml(nombreCentro)}</td>
-                            <th>Asignado</th><td>${escapeHtml(formatearFecha(row.fecha_asignacion || row.created_at))}</td>
-                        </tr>
-                        <tr>
-                            <th>Cliente</th><td>${escapeHtml(cliente)}</td>
-                            <th>Inicio armado</th><td>${escapeHtml(formatearFecha(row.fecha_inicio))}</td>
-                        </tr>
-                        <tr>
-                            <th>Tecnico</th><td>${escapeHtml(tecnico)}</td>
-                            <th>Cierre</th><td>${escapeHtml(formatearFecha(row.fecha_cierre))}</td>
-                        </tr>
-                        <tr>
-                            <th>Estado</th><td>${escapeHtml(row.estado || "-")}</td>
-                            <th></th><td></td>
-                        </tr>
-                    </table>
-
-                    <h3>Equipos</h3>
-                    <table class="items-table">
-                        <thead><tr><th>Equipo</th><th>Caja</th><th>Nro Serie</th><th>Codigo</th></tr></thead>
-                        <tbody>${filasEquipos || "<tr><td colspan='4'>Sin equipos</td></tr>"}</tbody>
-                    </table>
-
-                    <h3>Materiales</h3>
-                    <table class="items-table">
-                        <thead><tr><th>Material</th><th>Cantidad</th><th>Caja</th></tr></thead>
-                        <tbody>${filasMateriales || "<tr><td colspan='3'>Sin materiales</td></tr>"}</tbody>
-                    </table>
+                            <div class="sec-title">Equipos</div>
+                            <table>
+                                <thead><tr><th>Equipo</th><th>Nro Serie</th></tr></thead>
+                                <tbody>${filasEquipos}</tbody>
+                            </table>
+                        </div>
+                    </div>
                 </body>
-                </html>
-            `;
+                </html>`;
 
-            const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            const centroArchivo = String(nombreCentro || "centro")
-                .trim()
-                .replace(/[\\/:*?"<>|]/g, "")
-                .replace(/\s+/g, "_");
-            a.download = `armado_${centroArchivo}_${idArmado}_${new Date().toISOString().slice(0, 10)}.xls`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const w = window.open("", "_blank", "width=1180,height=860");
+            if (!w) {
+                alert("El navegador bloqueo la ventana del PDF. Habilita pop-ups e intenta nuevamente.");
+                return;
+            }
+            w.document.open();
+            w.document.write(doc);
+            w.document.close();
         } catch (error) {
-            console.error("No se pudo generar el Excel:", error);
-            alert("No se pudo generar el Excel del armado.");
+            console.error("No se pudo generar el PDF:", error);
+            alert("No se pudo generar el PDF del armado.");
         }
     };
 
@@ -2662,8 +2666,8 @@ const ArmadoTecnico = () => {
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     Planilla de armado - {armadoActivo?.centro?.nombre || armadoActivo?.centro_nombre || "Centro"}{" "}
-                                    <span className="badge badge-primary ml-2" title="Total de cajas reales">
-                                        {totalCajasRealesPlanilla} cajas
+                                    <span className="badge badge-primary ml-2" title="Total de bultos reales">
+                                        {totalCajasRealesPlanilla} bultos
                                     </span>
                                     <span
                                         className="badge ml-2"
@@ -2769,7 +2773,7 @@ const ArmadoTecnico = () => {
                                                 onClick={handleAgregarCaja}
                                             >
                                                 <i className="fas fa-box-open mr-1" />
-                                                Agregar caja
+                                                Agregar bulto
                                             </button>
                                         </div>
 
@@ -2915,7 +2919,7 @@ const ArmadoTecnico = () => {
                                                     <thead>
                                                         <tr>
                                                             <th>Equipo</th>
-                                                            <th style={{ minWidth: esMovil ? "50px" : "75px" }}>Caja</th>
+                                                            <th style={{ minWidth: esMovil ? "50px" : "75px" }}>Bulto</th>
                                                             {!esMovil && <th>IP</th>}
                                                             {!esMovil && <th>Observacion</th>}
                                                             {!esMovil && <th>Codigo</th>}
@@ -2963,7 +2967,7 @@ const ArmadoTecnico = () => {
                                                                                 >
                                                                                     {cajas.map((caja) => (
                                                                                         <option key={caja} value={caja}>
-                                                                                            {caja}
+                                                                                            {etiquetaBulto(caja)}
                                                                                         </option>
                                                                                     ))}
                                                                                 </select>
@@ -2985,7 +2989,7 @@ const ArmadoTecnico = () => {
                                                                                             ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || tecnicoMov || userId)
                                                                                             : "#6b7280";
                                                                                         const border = hasTec ? color : "#cbd5e1";
-                                                                                        const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : nombreCajaSeguro(eq.caja);
+                                                                                        const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : etiquetaBulto(nombreCajaSeguro(eq.caja));
                                                                                         return (
                                                                                             <>
                                                                                                 <span
@@ -3248,7 +3252,7 @@ const ArmadoTecnico = () => {
                                                     const estadoRegistro = normalizarEstadoRegistroMaterial(mat?.estado_registro);
                                                     const esNoAplica = estadoRegistro === "no_aplica";
                                                     const esPendienteRegistro = estadoRegistro === "pendiente";
-                                                    const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : nombreCajaSeguro(mat.caja);
+                                                    const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : etiquetaBulto(nombreCajaSeguro(mat.caja));
                                                     return (
                                                     <div className="col-md-6 col-lg-6 mb-2" key={mat.nombre}>
                                                         <div className="material-card">
@@ -3306,7 +3310,7 @@ const ArmadoTecnico = () => {
                                             </div>
                                                             <div className="material-assign">
                                                                 <div className="mr-2">
-                                                                    <label className="text-muted small mb-1">Caja</label>
+                                                                    <label className="text-muted small mb-1">Bulto</label>
                                                                     <select
                                                                         className="form-control form-control-sm"
                                                                         value={nombreCajaSeguro(mat.caja)}
@@ -3328,7 +3332,7 @@ const ArmadoTecnico = () => {
                                                                     >
                                                                         {cajas.map((caja) => (
                                                                             <option key={caja} value={caja}>
-                                                                                {caja}
+                                                                                {etiquetaBulto(caja)}
                                                                             </option>
                                                                         ))}
                                                                     </select>
@@ -3401,7 +3405,7 @@ const ArmadoTecnico = () => {
                                         <th>Tipo</th>
                                         <th>Item</th>
                                         <th>N Serie</th>
-                                        <th>Caja</th>
+                                        <th>Bulto</th>
                                         <th>Cant.</th>
                                         <th>Tecnico</th>
                                     </tr>
@@ -3413,7 +3417,7 @@ const ArmadoTecnico = () => {
                                             <td>{renderTipoMovimiento(mov)}</td>
                                             <td>{mov.nombre_item}</td>
                                             <td>{mov.numero_serie || "-"}</td>
-                                            <td>{mov.caja}</td>
+                                            <td>{etiquetaBulto(mov.caja)}</td>
                                             <td>{mov.cantidad}</td>
                                             <td style={{ color: colorTecnico(mov.tecnico_nombre || mov.tecnico_id) }}>
                                                 {mov.tecnico_nombre || `ID ${mov.tecnico_id || "-"}`}
@@ -3500,7 +3504,7 @@ const ArmadoTecnico = () => {
                                     title={movArmadoFiltro ? "Ver cajas y contenido del armado seleccionado" : "Selecciona un centro primero"}
                                 >
                                     <i className="fas fa-boxes mr-1" />
-                                    Cajas
+                                    Bultos
                                 </button>
                                 {esAdmin && (
                                     <button
@@ -3549,7 +3553,7 @@ const ArmadoTecnico = () => {
                                         <th>Tipo</th>
                                         <th>Item</th>
                                         <th>N Serie</th>
-                                        <th>Caja</th>
+                                        <th>Bulto</th>
                                         <th>Cant.</th>
                                         <th>Armado</th>
                                         <th>Tecnico</th>
@@ -3834,7 +3838,7 @@ const ArmadoTecnico = () => {
                             <div className="modal-header">
                                 <h5 className="modal-title">
                                     <i className="fas fa-boxes mr-2" />
-                                    Detalle de cajas
+                                    Detalle de bultos
                                     {armadoHistorialSeleccionado?.centro?.nombre || armadoHistorialSeleccionado?.centro_nombre
                                         ? ` - ${armadoHistorialSeleccionado?.centro?.nombre || armadoHistorialSeleccionado?.centro_nombre}`
                                         : ""}
@@ -3874,11 +3878,11 @@ const ArmadoTecnico = () => {
                                 </div>
 
                                 {cajasResumenLoading ? (
-                                    <div className="text-muted">Cargando cajas...</div>
+                                    <div className="text-muted">Cargando bultos...</div>
                                 ) : cajasResumenError ? (
                                     <div className="alert alert-warning mb-0">{cajasResumenError}</div>
                                 ) : !cajasResumenOrdenado.length ? (
-                                    <div className="text-muted">No hay cajas reales registradas para este armado.</div>
+                                    <div className="text-muted">No hay bultos reales registrados para este armado.</div>
                                 ) : (
                                     <div className="row">
                                         {cajasResumenOrdenado.map((caja) => {
@@ -3897,7 +3901,7 @@ const ArmadoTecnico = () => {
                                                     >
                                                         <div className="d-flex justify-content-between align-items-start mb-2" style={{ gap: 10 }}>
                                                             <div>
-                                                                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem" }}>{caja.nombre}</div>
+                                                                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem" }}>{etiquetaBulto(caja.nombre)}</div>
                                                                 <small className="text-muted">
                                                                     {caja.equipos} equipos / {caja.materiales} materiales
                                                                 </small>
@@ -3942,7 +3946,7 @@ const ArmadoTecnico = () => {
                                                                     </div>
                                                                 ))
                                                             ) : (
-                                                                <div className="text-muted">Sin contenido actual en esta caja.</div>
+                                                                <div className="text-muted">Sin contenido actual en este bulto.</div>
                                                             )}
                                                         </div>
                                                     </div>
