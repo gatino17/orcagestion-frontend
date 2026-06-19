@@ -10,6 +10,7 @@ import {
   obtenerLevantamientosTerreno,
   obtenerMantencionesTerreno,
   obtenerSaldosRendicion,
+  obtenerUsuarios,
   resolverEdicionRendicion,
   obtenerRendiciones,
   obtenerRetirosTerreno,
@@ -306,6 +307,7 @@ export default function Rendiciones() {
   const [trabajosPendientes, setTrabajosPendientes] = useState([]);
   const [actividades, setActividades] = useState([]);
   const [tecnicosPorRegistro, setTecnicosPorRegistro] = useState(new Map());
+  const [usuariosSistema, setUsuariosSistema] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [centros, setCentros] = useState([]);
   const [clienteDetalle, setClienteDetalle] = useState(null);
@@ -363,6 +365,16 @@ export default function Rendiciones() {
       setActividades(Array.isArray(actividadesData) ? actividadesData : []);
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const cargarUsuariosSistema = async () => {
+    try {
+      const data = await obtenerUsuarios();
+      setUsuariosSistema(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(error);
+      setUsuariosSistema([]);
     }
   };
 
@@ -530,6 +542,7 @@ export default function Rendiciones() {
 
   useEffect(() => {
     cargarBase();
+    cargarUsuariosSistema();
     cargarSolicitudesEdicionPendientes();
   }, []);
 
@@ -590,18 +603,17 @@ export default function Rendiciones() {
 
   const tecnicosDisponibles = useMemo(() => {
     const out = new Map();
-    (Array.isArray(saldosTecnico) ? saldosTecnico : []).forEach((s) => {
-      const nombre = String(s?.tecnico_nombre || "").trim();
-      if (!nombre) return;
-      out.set(normalizeText(nombre), nombre);
-    });
-    (Array.isArray(rendiciones) ? rendiciones : []).forEach((r) => {
-      const nombre = String(r?.tecnico_nombre || "").trim();
+    (Array.isArray(usuariosSistema) ? usuariosSistema : []).forEach((u) => {
+      const rol = normalizeText(u?.rol || u?.role || "");
+      const tienePerfilTecnico = !!u?.tecnico?.nombre_encargado;
+      const esTecnicoSistema = rol === "tecnico" || rol === "supervisor";
+      if (!tienePerfilTecnico && !esTecnicoSistema) return;
+      const nombre = String(u?.tecnico?.nombre_encargado || u?.name || "").trim();
       if (!nombre) return;
       out.set(normalizeText(nombre), nombre);
     });
     return Array.from(out.values()).sort((a, b) => a.localeCompare(b, "es"));
-  }, [saldosTecnico, rendiciones]);
+  }, [usuariosSistema]);
 
   const kpiAbonosPeriodo = useMemo(
     () => (Array.isArray(abonos) ? abonos : []).reduce((acc, a) => acc + Number(a?.monto || 0), 0),
