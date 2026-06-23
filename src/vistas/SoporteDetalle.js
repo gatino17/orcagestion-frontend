@@ -68,6 +68,11 @@ const calcularDiasAbiertos = (soporte) => {
     return Math.max(0, diff);
 };
 
+const obtenerSubcategoriaSoporte = (soporte) => {
+    const valor = String(soporte?.subcategoria_falla || "").trim();
+    return valor || "Sin subcategoria";
+};
+
 const SoporteDetalle = () => {
     const [soportes, setSoportes] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -79,6 +84,8 @@ const SoporteDetalle = () => {
     const [aplicarPeriodoGlobal, setAplicarPeriodoGlobal] = useState(true);
     const [verCategoriasCliente, setVerCategoriasCliente] = useState(false);
     const [categoriasPorCliente, setCategoriasPorCliente] = useState(false);
+    const [showCategoriasModal, setShowCategoriasModal] = useState(false);
+    const [categoriasModalVista, setCategoriasModalVista] = useState("cliente");
     const [indicadorMes, setIndicadorMes] = useState(() => new Date().getMonth());
     const [indicadorAnio, setIndicadorAnio] = useState(() => new Date().getFullYear());
     const navigate = useNavigate();
@@ -303,46 +310,6 @@ const SoporteDetalle = () => {
         return base;
     }, [soportesAnalisis]);
 
-    const fallasPorCategoria = useMemo(() => {
-        return soportesAnalisis.reduce((acc, soporte) => {
-            const categoria = soporte.categoria_falla || "Sin categoria";
-            acc[categoria] = (acc[categoria] || 0) + 1;
-            return acc;
-        }, {});
-    }, [soportesAnalisis]);
-
-    const fallasPorCategoriaCliente = useMemo(() => {
-        if (!clienteSeleccionado) return {};
-        const soportesCliente = soportesAnalisis.filter(
-            (soporte) => soporte.centro?.cliente === clienteSeleccionado
-        );
-        return soportesCliente.reduce((acc, soporte) => {
-            const categoria = soporte.categoria_falla || "Sin categoria";
-            acc[categoria] = (acc[categoria] || 0) + 1;
-            return acc;
-        }, {});
-    }, [soportesAnalisis, clienteSeleccionado]);
-
-    const tiemposResolucion = useMemo(() => {
-        const resueltos = soportesAnalisis.filter((soporte) => soporte.fecha_cierre);
-        if (!resueltos.length) {
-            return { promedio: 0, maximo: 0, casos: 0 };
-        }
-
-        const dias = resueltos.map((soporte) => {
-            const inicio = parseFechaLocal(soporte.fecha_soporte);
-            const cierre = parseFechaLocal(soporte.fecha_cierre);
-            if (!inicio || !cierre) return 0;
-            const diff = (cierre.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24);
-            return Math.max(0, Math.round(diff));
-        });
-
-        const promedio = Math.round(dias.reduce((acc, dia) => acc + dia, 0) / dias.length);
-        const maximo = Math.max(...dias);
-
-        return { promedio, maximo, casos: resueltos.length };
-    }, [soportesAnalisis]);
-
     const topEquiposTendencia = useMemo(() => {
         const mesActual = Number(indicadorMes);
         const anioActual = Number(indicadorAnio);
@@ -494,37 +461,128 @@ const SoporteDetalle = () => {
         });
     };
 
-    const categoriasVisualizadas =
-        verCategoriasCliente && clienteSeleccionado ? fallasPorCategoriaCliente : fallasPorCategoria;
+    const soportesCategoriasFuente = useMemo(() => {
+        if (verCategoriasCliente && clienteSeleccionado) {
+            return soportesAnalisis.filter((soporte) => soporte.centro?.cliente === clienteSeleccionado);
+        }
+        return soportesAnalisis;
+    }, [verCategoriasCliente, clienteSeleccionado, soportesAnalisis]);
 
     const categoriasAgrupadas = useMemo(() => {
         if (!categoriasPorCliente) {
-            return Object.entries(categoriasVisualizadas).map(([categoria, total]) => ({
-                categoria,
-                total
-            }));
+            const mapa = new Map();
+            soportesCategoriasFuente.forEach((soporte) => {
+                const categoria = soporte?.categoria_falla || "Sin categoria";
+                if (!mapa.has(categoria)) {
+                    mapa.set(categoria, {
+                        categoria,
+                        total: 0,
+                        subcategorias: new Set(),
+                        items: []
+                    });
+                }
+                const grupo = mapa.get(categoria);
+                grupo.total += 1;
+                grupo.subcategorias.add(obtenerSubcategoriaSoporte(soporte));
+                grupo.items.push(soporte);
+            });
+
+            return Array.from(mapa.values())
+                .map((item) => ({
+                    categoria: item.categoria,
+                    total: item.total,
+                    subcategorias: Array.from(item.subcategorias).sort(),
+                    items: item.items
+                }))
+                .sort((a, b) => b.total - a.total);
         }
 
         const mapa = new Map();
-        soportesAnalisis.forEach((soporte) => {
+        soportesCategoriasFuente.forEach((soporte) => {
             const cliente = soporte.centro?.cliente || "Cliente sin nombre";
             const categoria = soporte.categoria_falla || "Sin categoria";
             if (!mapa.has(cliente)) {
                 mapa.set(cliente, new Map());
             }
             const categorias = mapa.get(cliente);
-            categorias.set(categoria, (categorias.get(categoria) || 0) + 1);
+            if (!categorias.has(categoria)) {
+                categorias.set(categoria, {
+                    total: 0,
+                    subcategorias: new Set(),
+                    items: []
+                });
+            }
+            const grupo = categorias.get(categoria);
+            grupo.total += 1;
+            grupo.subcategorias.add(obtenerSubcategoriaSoporte(soporte));
+            grupo.items.push(soporte);
         });
 
         const resultado = [];
         mapa.forEach((categorias, cliente) => {
-            categorias.forEach((total, categoria) => {
-                resultado.push({ cliente, categoria, total });
+            categorias.forEach((data, categoria) => {
+                resultado.push({
+                    cliente,
+                    categoria,
+                    total: data.total,
+                    subcategorias: Array.from(data.subcategorias).sort(),
+                    items: data.items
+                });
             });
         });
 
-        return resultado;
-    }, [categoriasVisualizadas, categoriasPorCliente, soportesAnalisis]);
+        return resultado.sort((a, b) => b.total - a.total);
+    }, [categoriasPorCliente, soportesCategoriasFuente]);
+
+    const categoriasResumenModal = useMemo(() => {
+        const agrupado = new Map();
+        soportesCategoriasFuente.forEach((soporte) => {
+            const grupo =
+                categoriasModalVista === "centro"
+                    ? String(soporte.centro?.nombre || "Centro sin nombre").trim()
+                    : String(soporte.centro?.cliente || "Cliente sin nombre").trim();
+            const categoria = String(soporte.categoria_falla || "Sin categoria").trim();
+            const subcategoria = obtenerSubcategoriaSoporte(soporte);
+
+            if (!agrupado.has(grupo)) {
+                agrupado.set(grupo, new Map());
+            }
+            const categorias = agrupado.get(grupo);
+            if (!categorias.has(categoria)) {
+                categorias.set(categoria, {
+                    total: 0,
+                    subcategorias: new Map()
+                });
+            }
+            const categoriaData = categorias.get(categoria);
+            categoriaData.total += 1;
+            categoriaData.subcategorias.set(
+                subcategoria,
+                (categoriaData.subcategorias.get(subcategoria) || 0) + 1
+            );
+        });
+
+        const resultado = [];
+        agrupado.forEach((categorias, grupo) => {
+            const categoriasLista = Array.from(categorias.entries())
+                .map(([categoria, data]) => ({
+                    categoria,
+                    total: data.total,
+                    subcategorias: Array.from(data.subcategorias.entries())
+                        .map(([subcategoria, total]) => ({ subcategoria, total }))
+                        .sort((a, b) => b.total - a.total || a.subcategoria.localeCompare(b.subcategoria))
+                }))
+                .sort((a, b) => b.total - a.total || a.categoria.localeCompare(b.categoria));
+
+            resultado.push({
+                grupo,
+                total: categoriasLista.reduce((acc, item) => acc + item.total, 0),
+                categorias: categoriasLista
+            });
+        });
+
+        return resultado.sort((a, b) => b.total - a.total || a.grupo.localeCompare(b.grupo));
+    }, [soportesCategoriasFuente, categoriasModalVista]);
 
     const equiposCambiados = useMemo(() => {
         const resumen = {};
@@ -1210,20 +1268,29 @@ const SoporteDetalle = () => {
                                 Fallas por categoria (
                                 {verCategoriasCliente && clienteSeleccionado ? clienteSeleccionado : "todos los clientes"})
                             </strong>
-                            <div className="btn-group btn-group-sm" role="group">
+                            <div className="d-flex align-items-center" style={{ gap: "0.5rem" }}>
                                 <button
-                                    className={`btn ${verCategoriasCliente ? "btn-primary" : "btn-outline-secondary"}`}
-                                    onClick={() => setVerCategoriasCliente((prev) => !prev)}
-                                    disabled={!clienteSeleccionado}
+                                    type="button"
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={() => setShowCategoriasModal(true)}
                                 >
+                                    Ver
+                                </button>
+                                <div className="btn-group btn-group-sm" role="group">
+                                    <button
+                                        className={`btn ${verCategoriasCliente ? "btn-primary" : "btn-outline-secondary"}`}
+                                        onClick={() => setVerCategoriasCliente((prev) => !prev)}
+                                        disabled={!clienteSeleccionado}
+                                    >
                                     {verCategoriasCliente ? "Cliente" : "Todos"}
                                 </button>
-                                <button
-                                    className={`btn ${categoriasPorCliente ? "btn-primary" : "btn-outline-secondary"}`}
-                                    onClick={() => setCategoriasPorCliente((prev) => !prev)}
-                                >
-                                    {categoriasPorCliente ? "Lista" : "Clientes"}
-                                </button>
+                                    <button
+                                        className={`btn ${categoriasPorCliente ? "btn-primary" : "btn-outline-secondary"}`}
+                                        onClick={() => setCategoriasPorCliente((prev) => !prev)}
+                                    >
+                                        {categoriasPorCliente ? "Lista" : "Clientes"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className="card-body">
@@ -1232,24 +1299,32 @@ const SoporteDetalle = () => {
                             ) : (
                                 <ul className="list-group">
                                     {categoriasPorCliente
-                                        ? categoriasAgrupadas.map(({ cliente, categoria, total }) => (
+                                        ? categoriasAgrupadas.map(({ cliente, categoria, total, subcategorias }) => (
                                             <li
                                                 key={`${cliente}-${categoria}`}
-                                                className="list-group-item d-flex justify-content-between align-items-center"
+                                                className="list-group-item d-flex justify-content-between align-items-start"
                                             >
                                                 <div>
                                                     <strong>{cliente}</strong>
                                                     <small className="d-block text-muted">{categoria}</small>
+                                                    <small className="d-block text-muted category-subdetail">
+                                                        Subcategorias: {subcategorias.join(", ")}
+                                                    </small>
                                                 </div>
                                                 <span className="badge badge-primary badge-pill">{total}</span>
                                             </li>
                                         ))
-                                        : categoriasAgrupadas.map(({ categoria, total }) => (
+                                        : categoriasAgrupadas.map(({ categoria, total, subcategorias }) => (
                                             <li
                                                 key={categoria}
-                                                className="list-group-item d-flex justify-content-between align-items-center"
+                                                className="list-group-item d-flex justify-content-between align-items-start"
                                             >
-                                                {categoria}
+                                                <div>
+                                                    <strong>{categoria}</strong>
+                                                    <small className="d-block text-muted category-subdetail">
+                                                        Subcategorias: {subcategorias.join(", ")}
+                                                    </small>
+                                                </div>
                                                 <span className="badge badge-primary badge-pill">{total}</span>
                                             </li>
                                         ))}
@@ -1345,6 +1420,100 @@ const SoporteDetalle = () => {
                     />
                 </div>
             </div>
+
+            {showCategoriasModal && (
+                <div className="modal show" style={{ display: "block" }}>
+                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div className="modal-content categoria-detalle-modal">
+                            <div className="modal-header">
+                                <div>
+                                    <h5 className="mb-1">Fallas por categoria y subcategoria</h5>
+                                    <small className="text-muted">
+                                        Universo: {verCategoriasCliente && clienteSeleccionado ? clienteSeleccionado : "todos los clientes"} · Vista por {categoriasModalVista}
+                                    </small>
+                                </div>
+                                <div className="d-flex align-items-center" style={{ gap: "0.5rem" }}>
+                                    <div className="btn-group btn-group-sm" role="group">
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalVista === "cliente" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalVista("cliente")}
+                                        >
+                                            Cliente
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalVista === "centro" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalVista("centro")}
+                                        >
+                                            Centro
+                                        </button>
+                                    </div>
+                                <button
+                                    type="button"
+                                    className="close"
+                                    onClick={() => setShowCategoriasModal(false)}
+                                >
+                                    &times;
+                                </button>
+                                </div>
+                            </div>
+                            <div className="modal-body">
+                                {categoriasResumenModal.length ? (
+                                    <div className="categoria-detalle-list">
+                                        {categoriasResumenModal.map((grupo) => (
+                                            <div
+                                                key={`cat-det-${categoriasModalVista}-${grupo.grupo}`}
+                                                className="categoria-detalle-item"
+                                            >
+                                                <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                                    <div>
+                                                        <strong>{grupo.grupo}</strong>
+                                                        <small className="d-block text-muted">
+                                                            Categorias: {grupo.categorias.length}
+                                                        </small>
+                                                    </div>
+                                                    <span className="badge badge-primary badge-pill">{grupo.total}</span>
+                                                </div>
+                                                <div className="categoria-resumen-grid">
+                                                    {grupo.categorias.map((categoria) => (
+                                                        <div
+                                                            key={`${grupo.grupo}-${categoria.categoria}`}
+                                                            className="categoria-resumen-card"
+                                                        >
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <strong>{categoria.categoria}</strong>
+                                                                <span className="badge badge-light categoria-detalle-badge">
+                                                                    {categoria.total}
+                                                                </span>
+                                                            </div>
+                                                            <ul className="list-unstyled mb-0">
+                                                                {categoria.subcategorias.map((sub) => (
+                                                                    <li
+                                                                        key={`${grupo.grupo}-${categoria.categoria}-${sub.subcategoria}`}
+                                                                        className="d-flex justify-content-between align-items-center categoria-subitem"
+                                                                    >
+                                                                        <span>{sub.subcategoria}</span>
+                                                                        <span className="badge badge-secondary badge-pill">
+                                                                            {sub.total}
+                                                                        </span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted mb-0">Sin registros para los filtros actuales.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

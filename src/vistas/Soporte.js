@@ -1,4 +1,4 @@
-ï»¿import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { useNavigate } from "react-router-dom";
 import {
@@ -11,7 +11,6 @@ import { obtenerCasosIsmael } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import "./Soporte.css";
 
-const CATEGORIA_OTRA = "OTRA";
 const CATEGORIAS_FALLA = [
     "ENERGIA",
     "CAMARAS",
@@ -20,23 +19,67 @@ const CATEGORIAS_FALLA = [
     "SOFTWARE",
     "HARDWARE",
     "CONFIGURACION",
-    "CALIBRACION",
     "MANTENCION",
     "ENLACE",
     "ALARMAS",
     "LICENCIA",
-    "TERCEROS",
     "USUARIO",
-    "UPS",
-    "VRM",
-    "BATERIAS",
-    "GENERADOR",
     "NETIO",
-    "REDES",
-    "ROUTER",
-    "PC",
-    "SWITCH"
+    "REDES"
 ];
+
+const SUBCATEGORIAS_FALLA = {
+    ENERGIA: ["VICTRON VRM", "CARGADOR", "BATERIAS", "TERCEROS", "UPS", "OTRA"],
+    CAMARAS: ["CAMARA LASER", "CAMARA TERMAL", "CAMARA INTERIOR", "CAMARA SILO", "CAMARA ACCESO", "CAMARA MODULO", "OTRA"],
+    RADAR: ["PANEL RADAR", "PLATAFORMA WEB", "CABLE RADAR", "CALIBRACION", "OTRA"],
+    SOFTWARE: ["DIGIFORT", "MAGOS", "OTRA"],
+    HARDWARE: ["PC", "NUC", "OTRA"],
+    CONFIGURACION: ["PRESET", "ALARMAS AXIS", "CAMARA", "PC", "OTRA"],
+    ALARMAS: ["FUENTE PODER", "AXIS", "FOCO LED", "BALIZA EXTERIOR", "BALIZA INTERIOR", "BOCINA EXTERIOR", "BOCINA INTERIOR", "OTRA"],
+    LICENCIA: ["RADAR", "DIGIFORT", "OTRA"],
+    REDES: ["IP STATIC", "IP DHCP", "PROBLEMA DE CABLEADO", "ROUTER", "SWITCH", "OTRA"]
+};
+
+const MAPEO_CATEGORIAS_LEGACY = {
+    UPS: { categoria: "ENERGIA", subcategoria: "UPS" },
+    VRM: { categoria: "ENERGIA", subcategoria: "VICTRON VRM" },
+    BATERIAS: { categoria: "ENERGIA", subcategoria: "BATERIAS" },
+    GENERADOR: { categoria: "ENERGIA", subcategoria: "OTRA" },
+    TERCEROS: { categoria: "ENERGIA", subcategoria: "TERCEROS" },
+    CALIBRACION: { categoria: "RADAR", subcategoria: "CALIBRACION" },
+    ROUTER: { categoria: "REDES", subcategoria: "ROUTER" },
+    SWITCH: { categoria: "REDES", subcategoria: "SWITCH" },
+    PC: { categoria: "HARDWARE", subcategoria: "PC" }
+};
+
+const normalizarTextoCategoria = (valor) =>
+    String(valor || "")
+        .trim()
+        .toUpperCase();
+
+const obtenerSubcategoriasPorCategoria = (categoria) => {
+    const categoriaNormalizada = normalizarTextoCategoria(categoria);
+    return SUBCATEGORIAS_FALLA[categoriaNormalizada] || [];
+};
+
+const resolverCategoriaExistente = (categoria, subcategoria) => {
+    const categoriaNormalizada = normalizarTextoCategoria(categoria);
+    const subcategoriaNormalizada = normalizarTextoCategoria(subcategoria);
+
+    if (CATEGORIAS_FALLA.includes(categoriaNormalizada)) {
+        const subcategoriasDisponibles = obtenerSubcategoriasPorCategoria(categoriaNormalizada);
+        return {
+            categoria: categoriaNormalizada,
+            subcategoria: subcategoriasDisponibles.includes(subcategoriaNormalizada) ? subcategoriaNormalizada : ""
+        };
+    }
+
+    if (MAPEO_CATEGORIAS_LEGACY[categoriaNormalizada]) {
+        return MAPEO_CATEGORIAS_LEGACY[categoriaNormalizada];
+    }
+
+    return { categoria: "", subcategoria: "" };
+};
 
 const obtenerTotalUnico = (items, accessor) => {
     const valores = items
@@ -75,7 +118,7 @@ const parseFechaLocal = (valor, finDeDia = false) => {
 const formatearEtiquetaCentro = (centro) => {
     if (!centro) return "";
     const estado = String(centro.estado || "").trim();
-    return `${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}${estado ? ` Â· ${estado}` : ""}`;
+    return `${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}${estado ? ` · ${estado}` : ""}`;
 };
 
 const normalizarEstadoCentro = (estado) =>
@@ -145,6 +188,12 @@ const obtenerNombresCambioSoporte = (soporte) => {
 };
 
 const Soporte = () => {
+    const tableScrollRef = useRef(null);
+    const dragScrollStateRef = useRef({
+        isDown: false,
+        startX: 0,
+        scrollLeft: 0
+    });
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -161,7 +210,7 @@ const Soporte = () => {
     const [fechaSoporte, setFechaSoporte] = useState("");
     const [solucion, setSolucion] = useState("");
     const [categoriaFalla, setCategoriaFalla] = useState("");
-    const [categoriaFallaOtra, setCategoriaFallaOtra] = useState("");
+    const [subcategoriaFalla, setSubcategoriaFalla] = useState("");
     const [cambioEquipo, setCambioEquipo] = useState(false);
     const [cantidadEquiposCambiados, setCantidadEquiposCambiados] = useState("");
     const [detalleEquiposCambiadosLista, setDetalleEquiposCambiadosLista] = useState([]);
@@ -222,6 +271,10 @@ const Soporte = () => {
     const claseEstadoCentroInput = centroSeleccionado
         ? `centro-input-estado-${normalizarEstadoCentro(centroSeleccionado.estado) || "sin-estado"}`
         : "";
+    const subcategoriasDisponibles = useMemo(
+        () => obtenerSubcategoriasPorCategoria(categoriaFalla),
+        [categoriaFalla]
+    );
 
     const centrosSugeridos = useMemo(() => {
         const texto = String(centroBusqueda || "").trim().toLowerCase();
@@ -233,6 +286,19 @@ const Soporte = () => {
             })
             .slice(0, 8);
     }, [centros, centroBusqueda]);
+
+    useEffect(() => {
+        if (!categoriaFalla) {
+            setSubcategoriaFalla("");
+            return;
+        }
+        if (subcategoriasDisponibles.length && !subcategoriasDisponibles.includes(subcategoriaFalla)) {
+            setSubcategoriaFalla("");
+        }
+        if (!subcategoriasDisponibles.length && subcategoriaFalla) {
+            setSubcategoriaFalla("");
+        }
+    }, [categoriaFalla, subcategoriaFalla, subcategoriasDisponibles]);
 
     const rangoFechas = useMemo(() => {
         const hoy = new Date();
@@ -280,9 +346,9 @@ const Soporte = () => {
             case "mes-anterior":
                 return "Mes anterior";
             case "anio-actual":
-                return "AÃ±o actual";
+                return "Año actual";
             case "anio-anterior":
-                return "AÃ±o anterior";
+                return "Año anterior";
             case "personalizado": {
                 if (fechaInicioPersonalizada || fechaFinPersonalizada) {
                     return `Personalizado (${fechaInicioPersonalizada || "sin inicio"} - ${fechaFinPersonalizada || "sin fin"})`;
@@ -348,7 +414,7 @@ const Soporte = () => {
         });
     }, [soportesFiltrados, filtroNombre, fechaInicioBusqueda, fechaFinBusqueda]);
 
-    // MÃ©tricas
+    // Métricas
     const totalSoportesGeneral = soportes.length;
     const totalSoportesPeriodo = soportesFiltrados.length;
     const totalCambiosEquiposPeriodo = useMemo(
@@ -393,7 +459,7 @@ const Soporte = () => {
         setFechaSoporte("");
         setSolucion("");
         setCategoriaFalla("");
-        setCategoriaFallaOtra("");
+        setSubcategoriaFalla("");
         setCambioEquipo(false);
         setCantidadEquiposCambiados("");
         setDetalleEquiposCambiadosLista([]);
@@ -459,11 +525,6 @@ const Soporte = () => {
             return;
         }
 
-        const categoriaNormalizada =
-            categoriaFalla === CATEGORIA_OTRA
-                ? categoriaFallaOtra.trim().toUpperCase()
-                : categoriaFalla;
-
         if (cambioEquipo) {
             const cantidad = Number(cantidadEquiposCambiados || 0);
             if (!cantidad || cantidad < 1) {
@@ -485,7 +546,8 @@ const Soporte = () => {
             origen,
             fecha_soporte: fechaSoporte,
             solucion,
-            categoria_falla: categoriaNormalizada,
+            categoria_falla: categoriaFalla || null,
+            subcategoria_falla: subcategoriaFalla || null,
             cambio_equipo: cambioEquipo,
             equipo_cambiado: cambioEquipo
                 ? construirDetalleCambioEquipo(cantidadEquiposCambiados, detalleEquiposCambiadosLista)
@@ -512,11 +574,38 @@ const Soporte = () => {
     };
 
     const handleEliminarSoporte = async (id) => {
-        if (window.confirm("Â¿EstÃ¡s seguro de que deseas eliminar este soporte?")) {
+        if (window.confirm("¿Estás seguro de que deseas eliminar este soporte?")) {
             await borrarSoporte(id, async () => {
                 await refrescarSoportes();
             });
         }
+    };
+
+    const handleTablePointerDown = (event) => {
+        const container = tableScrollRef.current;
+        if (!container) return;
+        dragScrollStateRef.current = {
+            isDown: true,
+            startX: event.pageX - container.offsetLeft,
+            scrollLeft: container.scrollLeft
+        };
+    };
+
+    const handleTablePointerLeave = () => {
+        dragScrollStateRef.current.isDown = false;
+    };
+
+    const handleTablePointerUp = () => {
+        dragScrollStateRef.current.isDown = false;
+    };
+
+    const handleTablePointerMove = (event) => {
+        const container = tableScrollRef.current;
+        if (!container || !dragScrollStateRef.current.isDown) return;
+        event.preventDefault();
+        const x = event.pageX - container.offsetLeft;
+        const walk = x - dragScrollStateRef.current.startX;
+        container.scrollLeft = dragScrollStateRef.current.scrollLeft - walk;
     };
 
     const handleEditarSoporte = (soporte) => {
@@ -537,14 +626,12 @@ const Soporte = () => {
         const fechaCierreNormalizada = formatearParaInputFecha(soporte.fecha_cierre);
         setFechaSoporte(fechaSoporteNormalizada);
         setSolucion(soporte.solucion);
-        const categoriaActual = soporte.categoria_falla ? soporte.categoria_falla.toUpperCase() : "";
-        if (categoriaActual && !CATEGORIAS_FALLA.includes(categoriaActual)) {
-            setCategoriaFalla(CATEGORIA_OTRA);
-            setCategoriaFallaOtra(categoriaActual);
-        } else {
-        setCategoriaFalla(categoriaActual);
-        setCategoriaFallaOtra("");
-        }
+        const categoriaResuelta = resolverCategoriaExistente(
+            soporte.categoria_falla,
+            soporte.subcategoria_falla
+        );
+        setCategoriaFalla(categoriaResuelta.categoria);
+        setSubcategoriaFalla(categoriaResuelta.subcategoria);
         setCambioEquipo(soporte.cambio_equipo);
         setCaseCode(String(soporte.case_code || ""));
         setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
@@ -600,7 +687,7 @@ const Soporte = () => {
         if (!fin) return "";
         const fechaFin = new Date(fin);
         if (Number.isNaN(fechaFin.getTime())) {
-            return "Fecha de cierre invÃ¡lida";
+            return "Fecha de cierre inválida";
         }
         if (inicio) {
             const fechaInicio = new Date(inicio);
@@ -761,18 +848,18 @@ const Soporte = () => {
             name: "N",
             selector: (row) => row.rowNumber,
             sortable: true,
-            width: "60px",
+            width: "46px",
             sortFunction: (rowA, rowB) => rowA.rowNumber - rowB.rowNumber
         },
         { name: "Centro", selector: (row) => row.centro?.nombre || "No asignado", sortable: true, wrap: true, grow: 1.2 },
         { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, grow: 1.0 },
         { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, grow: 1.5 },
-        { name: "Tipo", selector: (row) => row.tipo, sortable: true, width: "110px" },
+        { name: "Tipo", selector: (row) => row.tipo, sortable: true, width: "82px" },
         {
             name: "Origen",
             selector: (row) => row.origen || "cliente",
             sortable: true,
-            width: "110px",
+            width: "90px",
             cell: (row) => {
                 const valor = String(row.origen || "cliente").toLowerCase();
                 const esOrca = valor === "orca";
@@ -795,10 +882,10 @@ const Soporte = () => {
             width: "100px"
         },
         {
-            name: "D\u00edas transcurridos",
+            name: "D\u00edas",
             selector: (row) => calcularDiasAbiertos(row),
             sortable: true,
-            width: "150px",
+            width: "95px",
             cell: (row) =>
                 row.fecha_cierre
                     ? `${calcularDiasAbiertos(row)} d\u00edas`
@@ -821,6 +908,7 @@ const Soporte = () => {
         { name: "Cierre", selector: (row) => (row.fecha_cierre ? formatearFecha(row.fecha_cierre) : "-"), sortable: true, width: "100px" },
         { name: "Solucion", selector: (row) => row.solucion || "-", sortable: true, wrap: true },
         { name: "Categoria", selector: (row) => row.categoria_falla || "-", sortable: true, wrap: true },
+        { name: "Subcategoria", selector: (row) => row.subcategoria_falla || "-", sortable: true, wrap: true },
         {
             name: "Cambio equipo",
             selector: (row) => row.cambio_equipo,
@@ -928,28 +1016,28 @@ const Soporte = () => {
         {
             title: `Soportes (${descripcionPeriodo})`,
             value: totalSoportesPeriodo,
-            subtitle: `HistÃ³rico: ${totalSoportesGeneral}`,
+            subtitle: `Histórico: ${totalSoportesGeneral}`,
             icon: "fas fa-clipboard-check",
             variant: "gradient-blue"
         },
         {
             title: "Cambios de equipo",
             value: totalCambiosEquiposPeriodo,
-            subtitle: `HistÃ³rico: ${totalCambiosEquiposGeneral}`,
+            subtitle: `Histórico: ${totalCambiosEquiposGeneral}`,
             icon: "fas fa-sync-alt",
             variant: "gradient-orange"
         },
         {
             title: "Clientes atendidos",
             value: totalClientesPeriodo,
-            subtitle: `HistÃ³rico: ${totalClientesGeneral}`,
+            subtitle: `Histórico: ${totalClientesGeneral}`,
             icon: "fas fa-users",
             variant: "gradient-blue"
         },
         {
             title: "Centros gestionados",
             value: totalCentrosPeriodo,
-            subtitle: `HistÃ³rico: ${totalCentrosGeneral}`,
+            subtitle: `Histórico: ${totalCentrosGeneral}`,
             icon: "fas fa-network-wired",
             variant: "gradient-blue"
         }
@@ -971,7 +1059,7 @@ const Soporte = () => {
                 <div className="card-body">
                     <div className="row align-items-end">
                         <div className="col-lg-6 col-md-7">
-                            <label className="font-weight-semibold text-muted">Periodo de anÃ¡lisis</label>
+                            <label className="font-weight-semibold text-muted">Periodo de análisis</label>
                             <select
                                 className="form-control"
                                 value={filtroPeriodo}
@@ -979,8 +1067,8 @@ const Soporte = () => {
                             >
                                 <option value="mes-actual">Mes actual</option>
                                 <option value="mes-anterior">Mes anterior</option>
-                                <option value="anio-actual">AÃ±o actual</option>
-                                <option value="anio-anterior">AÃ±o anterior</option>
+                                <option value="anio-actual">Año actual</option>
+                                <option value="anio-anterior">Año anterior</option>
                                 <option value="personalizado">Personalizado</option>
                             </select>
                             {filtroPeriodo === "personalizado" && (
@@ -1065,7 +1153,7 @@ const Soporte = () => {
                                     <div key={row.id || `${row.case_code}-${row.created_at}`} className="ismael-preview-item">
                                         <div className="d-flex justify-content-between align-items-center">
                                             <strong className="text-truncate mr-2">
-                                                {row.case_code || "Sin cÃ³digo"}
+                                                {row.case_code || "Sin código"}
                                             </strong>
                                             <div className="d-flex align-items-center">
                                                 <button
@@ -1160,7 +1248,7 @@ const Soporte = () => {
                                                     </small>
                                                 )}
                                                 <small className="d-block text-muted">
-                                                    {soporte.centro?.cliente || "Cliente sin nombre"} Â· {formatearFecha(soporte.fecha_soporte)}
+                                                    {soporte.centro?.cliente || "Cliente sin nombre"} · {formatearFecha(soporte.fecha_soporte)}
                                                 </small>
                                             </div>
                                             <span className={`urgent-days ${String(soporte.estado || "").toLowerCase() === "en_proceso" ? "urgent-days-alert" : ""}`}>
@@ -1240,19 +1328,29 @@ const Soporte = () => {
                             />
                         </div>
                     </div>
-                    <DataTable
-                        columns={columns}
-                        data={datosOrdenados}
-                        progressPending={loading}
-                        pagination
-                        highlightOnHover
-                        pointerOnHover
-                        persistTableHead
-                        defaultSortFieldId="fechaSoporte"
-                        defaultSortAsc={false}
-                        customStyles={dataTableStyles}
-                        noDataComponent="Sin registros para el periodo seleccionado"
-                    />
+                    <div
+                        ref={tableScrollRef}
+                        className="table-drag-scroll"
+                        onMouseDown={handleTablePointerDown}
+                        onMouseLeave={handleTablePointerLeave}
+                        onMouseUp={handleTablePointerUp}
+                        onMouseMove={handleTablePointerMove}
+                    >
+                        <DataTable
+                            columns={columns}
+                            data={datosOrdenados}
+                            progressPending={loading}
+                            pagination
+                            highlightOnHover
+                            pointerOnHover
+                            persistTableHead
+                            defaultSortFieldId="fechaSoporte"
+                            defaultSortAsc={false}
+                            customStyles={dataTableStyles}
+                            noDataComponent="Sin registros para el periodo seleccionado"
+                        />
+                    </div>
+                    <small className="text-muted d-block mt-2">Arrastra la tabla hacia los lados para ver todas las columnas.</small>
                 </div>
             </div>
 
@@ -1274,7 +1372,7 @@ const Soporte = () => {
                                         <input
                                             type="text"
                                             className={`form-control ${claseEstadoCentroInput}`}
-                                            placeholder="ID - Centro (Cliente) Â· Estado"
+                                            placeholder="ID - Centro (Cliente) · Estado"
                                             value={centroBusqueda}
                                             onFocus={() => setMostrarSugerenciasCentro(true)}
                                             onBlur={() => setTimeout(() => setMostrarSugerenciasCentro(false), 120)}
@@ -1306,7 +1404,7 @@ const Soporte = () => {
                                         )}
                                     </div>
                                     {!centroId && (
-                                        <small className="text-muted">Escribe para buscar y selecciona una opciÃ³n.</small>
+                                        <small className="text-muted">Escribe para buscar y selecciona una opción.</small>
                                     )}
                                 </div>
 
@@ -1335,7 +1433,7 @@ const Soporte = () => {
                                         </select>
                                     </div>
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">Fecha de creaciÃ³n</label>
+                                        <label className="text-muted small font-weight-semibold">Fecha de creación</label>
                                         <input
                                             type="date"
                                             value={fechaSoporte}
@@ -1362,7 +1460,7 @@ const Soporte = () => {
 
                                 <div className="form-row">
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">SoluciÃ³n aplicada</label>
+                                        <label className="text-muted small font-weight-semibold">Solución aplicada</label>
                                         <input
                                             placeholder="Resultado o acciones ejecutadas"
                                             value={solucion}
@@ -1374,7 +1472,7 @@ const Soporte = () => {
                                         <label className="text-muted small font-weight-semibold">Categoria de falla</label>
                                         <select
                                             value={categoriaFalla}
-                                            onChange={(e) => setCategoriaFalla(e.target.value)}
+                                            onChange={(e) => setCategoriaFalla(normalizarTextoCategoria(e.target.value))}
                                             className="form-control"
                                         >
                                             <option value="">Seleccionar categoria...</option>
@@ -1383,18 +1481,29 @@ const Soporte = () => {
                                                     {categoria}
                                                 </option>
                                             ))}
-                                            <option value={CATEGORIA_OTRA}>OTRA</option>
                                         </select>
-                                        {categoriaFalla === CATEGORIA_OTRA && (
-                                            <input
-                                                placeholder="Especificar categoria"
-                                                value={categoriaFallaOtra}
-                                                onChange={(e) => setCategoriaFallaOtra(e.target.value.toUpperCase())}
-                                                className="form-control text-uppercase mt-2"
-                                            />
-                                        )}
                                     </div>
                                 </div>
+
+                                {subcategoriasDisponibles.length > 0 && (
+                                    <div className="form-row">
+                                        <div className="form-group col-md-6">
+                                            <label className="text-muted small font-weight-semibold">Subcategoria</label>
+                                            <select
+                                                value={subcategoriaFalla}
+                                                onChange={(e) => setSubcategoriaFalla(normalizarTextoCategoria(e.target.value))}
+                                                className="form-control"
+                                            >
+                                                <option value="">Seleccionar subcategoria...</option>
+                                                {subcategoriasDisponibles.map((subcategoria) => (
+                                                    <option key={subcategoria} value={subcategoria}>
+                                                        {subcategoria}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="form-row">
                                     <div className="form-group col-md-6">
@@ -1459,7 +1568,7 @@ const Soporte = () => {
                                             }}
                                             id="cambio-equipo"
                                         />
-                                        <label htmlFor="cambio-equipo" className="mb-0">Â¿Cambio de equipo?</label>
+                                        <label htmlFor="cambio-equipo" className="mb-0">¿Cambio de equipo?</label>
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold">Cantidad de equipos</label>
@@ -1580,3 +1689,4 @@ const Soporte = () => {
 };
 
 export default Soporte;
+

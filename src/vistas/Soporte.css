@@ -395,3 +395,19 @@
 .centro-sugerencia-estado.estado-sin-estado {
     color: #334155;
 }
+
+.table-drag-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    cursor: grab;
+    user-select: none;
+    scrollbar-width: thin;
+}
+
+.table-drag-scroll:active {
+    cursor: grabbing;
+}
+
+.table-drag-scroll .rdt_Table {
+    min-width: 1680px;
+}
