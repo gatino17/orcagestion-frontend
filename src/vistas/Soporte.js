@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+ï»¿import React, { useState, useEffect, useMemo, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { useNavigate } from "react-router-dom";
 import {
@@ -30,9 +30,9 @@ const CATEGORIAS_FALLA = [
 
 const SUBCATEGORIAS_FALLA = {
     ENERGIA: ["VICTRON VRM", "CARGADOR", "BATERIAS", "TERCEROS", "UPS", "OTRA"],
-    CAMARAS: ["CAMARA LASER", "CAMARA TERMAL", "CAMARA INTERIOR", "CAMARA SILO", "CAMARA ACCESO", "CAMARA MODULO", "OTRA"],
+    CAMARAS: ["CAMARA LASER", "CAMARA TERMAL", "CAMARA INTERIOR", "CAMARA SILO", "CAMARA ENSILAJE", "CAMARA ACCESO", "CAMARA MODULO", "OTRA"],
     RADAR: ["PANEL RADAR", "PLATAFORMA WEB", "CABLE RADAR", "CALIBRACION", "OTRA"],
-    SOFTWARE: ["DIGIFORT", "MAGOS", "OTRA"],
+    SOFTWARE: ["DIGIFORT", "MAGOS", "PLANILLA", "METRICA DE ENERGIA", "OTRA"],
     HARDWARE: ["PC", "NUC", "OTRA"],
     CONFIGURACION: ["PRESET", "ALARMAS AXIS", "CAMARA", "PC", "OTRA"],
     ALARMAS: ["FUENTE PODER", "AXIS", "FOCO LED", "BALIZA EXTERIOR", "BALIZA INTERIOR", "BOCINA EXTERIOR", "BOCINA INTERIOR", "OTRA"],
@@ -118,7 +118,7 @@ const parseFechaLocal = (valor, finDeDia = false) => {
 const formatearEtiquetaCentro = (centro) => {
     if (!centro) return "";
     const estado = String(centro.estado || "").trim();
-    return `${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}${estado ? ` · ${estado}` : ""}`;
+    return `${centro.id} - ${centro.nombre}${centro.cliente ? ` (${centro.cliente})` : ""}${estado ? ` Â· ${estado}` : ""}`;
 };
 
 const normalizarEstadoCentro = (estado) =>
@@ -346,9 +346,9 @@ const Soporte = () => {
             case "mes-anterior":
                 return "Mes anterior";
             case "anio-actual":
-                return "Año actual";
+                return "AÃ±o actual";
             case "anio-anterior":
-                return "Año anterior";
+                return "AÃ±o anterior";
             case "personalizado": {
                 if (fechaInicioPersonalizada || fechaFinPersonalizada) {
                     return `Personalizado (${fechaInicioPersonalizada || "sin inicio"} - ${fechaFinPersonalizada || "sin fin"})`;
@@ -414,7 +414,7 @@ const Soporte = () => {
         });
     }, [soportesFiltrados, filtroNombre, fechaInicioBusqueda, fechaFinBusqueda]);
 
-    // Métricas
+    // MÃ©tricas
     const totalSoportesGeneral = soportes.length;
     const totalSoportesPeriodo = soportesFiltrados.length;
     const totalCambiosEquiposPeriodo = useMemo(
@@ -574,7 +574,7 @@ const Soporte = () => {
     };
 
     const handleEliminarSoporte = async (id) => {
-        if (window.confirm("¿Estás seguro de que deseas eliminar este soporte?")) {
+        if (window.confirm("Â¿EstÃ¡s seguro de que deseas eliminar este soporte?")) {
             await borrarSoporte(id, async () => {
                 await refrescarSoportes();
             });
@@ -687,7 +687,7 @@ const Soporte = () => {
         if (!fin) return "";
         const fechaFin = new Date(fin);
         if (Number.isNaN(fechaFin.getTime())) {
-            return "Fecha de cierre inválida";
+            return "Fecha de cierre invÃ¡lida";
         }
         if (inicio) {
             const fechaInicio = new Date(inicio);
@@ -1016,28 +1016,28 @@ const Soporte = () => {
         {
             title: `Soportes (${descripcionPeriodo})`,
             value: totalSoportesPeriodo,
-            subtitle: `Histórico: ${totalSoportesGeneral}`,
+            subtitle: `Historico: ${totalSoportesGeneral}`,
             icon: "fas fa-clipboard-check",
             variant: "gradient-blue"
         },
         {
             title: "Cambios de equipo",
             value: totalCambiosEquiposPeriodo,
-            subtitle: `Histórico: ${totalCambiosEquiposGeneral}`,
+            subtitle: `Historico: ${totalCambiosEquiposGeneral}`,
             icon: "fas fa-sync-alt",
             variant: "gradient-orange"
         },
         {
             title: "Clientes atendidos",
             value: totalClientesPeriodo,
-            subtitle: `Histórico: ${totalClientesGeneral}`,
+            subtitle: `Historico: ${totalClientesGeneral}`,
             icon: "fas fa-users",
             variant: "gradient-blue"
         },
         {
             title: "Centros gestionados",
             value: totalCentrosPeriodo,
-            subtitle: `Histórico: ${totalCentrosGeneral}`,
+            subtitle: `Historico: ${totalCentrosGeneral}`,
             icon: "fas fa-network-wired",
             variant: "gradient-blue"
         }
@@ -1059,7 +1059,7 @@ const Soporte = () => {
                 <div className="card-body">
                     <div className="row align-items-end">
                         <div className="col-lg-6 col-md-7">
-                            <label className="font-weight-semibold text-muted">Periodo de análisis</label>
+                            <label className="font-weight-semibold text-muted">Periodo de anÃ¡lisis</label>
                             <select
                                 className="form-control"
                                 value={filtroPeriodo}
@@ -1067,8 +1067,8 @@ const Soporte = () => {
                             >
                                 <option value="mes-actual">Mes actual</option>
                                 <option value="mes-anterior">Mes anterior</option>
-                                <option value="anio-actual">Año actual</option>
-                                <option value="anio-anterior">Año anterior</option>
+                                <option value="anio-actual">AÃ±o actual</option>
+                                <option value="anio-anterior">AÃ±o anterior</option>
                                 <option value="personalizado">Personalizado</option>
                             </select>
                             {filtroPeriodo === "personalizado" && (
@@ -1153,7 +1153,7 @@ const Soporte = () => {
                                     <div key={row.id || `${row.case_code}-${row.created_at}`} className="ismael-preview-item">
                                         <div className="d-flex justify-content-between align-items-center">
                                             <strong className="text-truncate mr-2">
-                                                {row.case_code || "Sin código"}
+                                                {row.case_code || "Sin cÃ³digo"}
                                             </strong>
                                             <div className="d-flex align-items-center">
                                                 <button
@@ -1248,7 +1248,7 @@ const Soporte = () => {
                                                     </small>
                                                 )}
                                                 <small className="d-block text-muted">
-                                                    {soporte.centro?.cliente || "Cliente sin nombre"} · {formatearFecha(soporte.fecha_soporte)}
+                                                    {soporte.centro?.cliente || "Cliente sin nombre"} Â· {formatearFecha(soporte.fecha_soporte)}
                                                 </small>
                                             </div>
                                             <span className={`urgent-days ${String(soporte.estado || "").toLowerCase() === "en_proceso" ? "urgent-days-alert" : ""}`}>
@@ -1372,7 +1372,7 @@ const Soporte = () => {
                                         <input
                                             type="text"
                                             className={`form-control ${claseEstadoCentroInput}`}
-                                            placeholder="ID - Centro (Cliente) · Estado"
+                                            placeholder="ID - Centro (Cliente) Â· Estado"
                                             value={centroBusqueda}
                                             onFocus={() => setMostrarSugerenciasCentro(true)}
                                             onBlur={() => setTimeout(() => setMostrarSugerenciasCentro(false), 120)}
@@ -1404,7 +1404,7 @@ const Soporte = () => {
                                         )}
                                     </div>
                                     {!centroId && (
-                                        <small className="text-muted">Escribe para buscar y selecciona una opción.</small>
+                                        <small className="text-muted">Escribe para buscar y selecciona una opciÃ³n.</small>
                                     )}
                                 </div>
 
@@ -1433,7 +1433,7 @@ const Soporte = () => {
                                         </select>
                                     </div>
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">Fecha de creación</label>
+                                        <label className="text-muted small font-weight-semibold">Fecha de creaciÃ³n</label>
                                         <input
                                             type="date"
                                             value={fechaSoporte}
@@ -1460,7 +1460,7 @@ const Soporte = () => {
 
                                 <div className="form-row">
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">Solución aplicada</label>
+                                        <label className="text-muted small font-weight-semibold">SoluciÃ³n aplicada</label>
                                         <input
                                             placeholder="Resultado o acciones ejecutadas"
                                             value={solucion}
@@ -1568,7 +1568,7 @@ const Soporte = () => {
                                             }}
                                             id="cambio-equipo"
                                         />
-                                        <label htmlFor="cambio-equipo" className="mb-0">¿Cambio de equipo?</label>
+                                        <label htmlFor="cambio-equipo" className="mb-0">Â¿Cambio de equipo?</label>
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold">Cantidad de equipos</label>

@@ -18,7 +18,7 @@ import {
     borrarMovimientoGlobal,
     cargarHistorialEquiposArmado
 } from "../controllers/armadosControllers";
-import { obtenerDetallesCentro, obtenerMovimientosArmado, validarSerieEquipo } from "../api";
+import { obtenerHistorialEquiposArmado, obtenerMovimientosArmado, validarSerieEquipo } from "../api";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
@@ -116,6 +116,13 @@ const labelAccionMovimientoMaterial = (mov) => {
 
 const renderTipoMovimiento = (mov) => {
     const tipo = String(mov?.tipo || "").toLowerCase().trim();
+    if (tipo === "equipo") {
+        const accionEquipo = String(mov?.accion || "").toLowerCase().trim();
+        if (accionEquipo === "devuelto_bodega") {
+            return <span style={{ color: "#c2410c", fontWeight: 700 }}>Devuelto a bodega</span>;
+        }
+        return <span className="text-capitalize">{mov?.tipo || "-"}</span>;
+    }
     if (tipo !== "material") return <span className="text-capitalize">{mov?.tipo || "-"}</span>;
 
     const accion = String(mov?.accion || "").toLowerCase().trim();
@@ -1363,7 +1370,21 @@ const ArmadoTecnico = () => {
     }, [movArmadoFiltro, construirResumenCajas]);
     const historialResumen = useMemo(() => (Array.isArray(historialData?.resumen) ? historialData.resumen : []), [historialData]);
     const historialEventos = useMemo(() => (Array.isArray(historialData?.eventos) ? historialData.eventos : []), [historialData]);
-    const totalEquiposHistorial = useMemo(() => historialResumen.length, [historialResumen]);
+    const totalEquiposHistorial = useMemo(() => {
+        const totalReferencia = Number(historialData?.armado?.total_equipos_referencia || 0);
+        return totalReferencia > 0 ? totalReferencia : historialResumen.length;
+    }, [historialData, historialResumen]);
+    const totalEquiposInstaladosHistorial = useMemo(
+        () => {
+            const instaladosReferencia = Number(historialData?.armado?.equipos_instalados_referencia || 0);
+            if (instaladosReferencia > 0) return instaladosReferencia;
+            return historialResumen.filter((r) => {
+                const serieActual = String(r?.serie_actual || "").trim();
+                return serieActual && serieActual !== "-" && !r?.devuelto_bodega;
+            }).length;
+        },
+        [historialData, historialResumen]
+    );
 
     const normalizarNombreHistorial = useCallback((nombre = "") => {
         const base = String(nombre || "").replace(/\s*\(reemplazo_mantencion_N\d+\)\s*$/i, "").trim();
@@ -1403,14 +1424,14 @@ const ArmadoTecnico = () => {
     }, [historialResumen, historialResumenPorNombre, normalizarNombreEquipo, normalizarNombreHistorial]);
 
     const metricasHistorial = useMemo(() => {
-        const equiposConCambios = historialResumen.filter((r) => Number(r?.cambios || 0) > 0).length;
+        const equiposConCambios = historialResumen.filter((r) => Number(r?.cambios || 0) > 0 || !!r?.devuelto_bodega).length;
         const cambiosTotales = historialResumen.reduce((acc, r) => acc + Number(r?.cambios || 0), 0);
         const ultimoCambio = historialEventos.length ? historialEventos[0]?.fecha : null;
         return { equiposConCambios, cambiosTotales, ultimoCambio };
     }, [historialResumen, historialEventos]);
 
     const historialResumenConCambios = useMemo(
-        () => historialResumen.filter((r) => Number(r?.cambios || 0) > 0),
+        () => historialResumen.filter((r) => Number(r?.cambios || 0) > 0 || !!r?.devuelto_bodega),
         [historialResumen]
     );
 
@@ -2274,12 +2295,17 @@ const ArmadoTecnico = () => {
             const tecnico = tecnicosAsignados.length
                 ? tecnicosAsignados.join(" / ")
                 : (row?.tecnico?.nombre || row?.tecnico_nombre || "-");
-            const detalles = await obtenerDetallesCentro(nombreCentro);
-            const equipos = Array.isArray(detalles?.equipos) ? detalles.equipos : [];
-
-            const equiposConIdx = (equipos || [])
-                .filter((e) => String(e?.numero_serie || "").trim())
-                .map((e, idx) => ({ ...e, __idx: idx }));
+            const historial = await obtenerHistorialEquiposArmado(idArmado);
+            const equiposConIdx = (Array.isArray(historial?.resumen) ? historial.resumen : [])
+                .filter((e) => {
+                    const serieActual = String(e?.serie_actual || "").trim();
+                    return serieActual && serieActual !== "-" && !e?.devuelto_bodega;
+                })
+                .map((e, idx) => ({
+                    nombre: e?.nombre_item || "-",
+                    numero_serie: e?.serie_actual || "-",
+                    __idx: idx
+                }));
             const usados = new Set();
             const bloquesEquipos = [];
             const pushBloque = (titulo, lista) => {
@@ -3675,7 +3701,7 @@ const ArmadoTecnico = () => {
                                                     Centro
                                                 </span>
                                                 <strong style={{ color: "#0f172a" }}>
-                                                    {historialData?.armado?.centro_nombre || "-"} ({totalEquiposHistorial} equipos)
+                                                    {historialData?.armado?.centro_nombre || "-"} ({totalEquiposInstaladosHistorial} equipos instalados de {totalEquiposHistorial} equipos)
                                                 </strong>
                                             </div>
                                             </div>
@@ -3718,17 +3744,29 @@ const ArmadoTecnico = () => {
                                             <div className="row">
                                                 {historialResumenConCambios.map((r) => {
                                                     const cambios = Number(r?.cambios || 0);
-                                                    const color = cambios > 0 ? "#fff7ed" : "#f8fafc";
-                                                    const borde = cambios > 0 ? "#fdba74" : "#e2e8f0";
+                                                    const esDevueltoBodega = !!r?.devuelto_bodega;
+                                                    const color = esDevueltoBodega ? "#fef2f2" : cambios > 0 ? "#fff7ed" : "#f8fafc";
+                                                    const borde = esDevueltoBodega ? "#fca5a5" : cambios > 0 ? "#fdba74" : "#e2e8f0";
                                                     return (
                                                         <div className="col-md-6 mb-2" key={`card-${r.item_id}`}>
                                                             <div className="p-2 border rounded" style={{ background: color, borderColor: borde }}>
                                                                 <div className="d-flex justify-content-between align-items-center">
                                                                     <strong>{r.nombre_item || "-"}</strong>
-                                                                    <span className={`badge ${cambios > 0 ? "badge-warning" : "badge-secondary"}`}>{cambios > 0 ? `${cambios} cambios` : "Sin cambios"}</span>
+                                                                    <span className={`badge ${esDevueltoBodega ? "badge-danger" : cambios > 0 ? "badge-warning" : "badge-secondary"}`}>
+                                                                        {esDevueltoBodega ? "Devuelto a bodega" : cambios > 0 ? `${cambios} cambios` : "Sin cambios"}
+                                                                    </span>
                                             </div>
-                                                                <div className="small text-muted mt-1">{cambios > 0 ? "Anterior -> Actual" : "Inicial -> Actual"}</div>
-                                                                <div>{cambios > 0 ? (r.serie_anterior_actual || "-") : (r.serie_inicial || "-")} -&gt; {r.serie_actual || "-"}</div>
+                                                                <div className="small text-muted mt-1">{esDevueltoBodega ? "Ultima serie registrada" : cambios > 0 ? "Anterior -> Actual" : "Inicial -> Actual"}</div>
+                                                                {esDevueltoBodega ? (
+                                                                    <div>{(r.serie_devuelta_bodega || r.serie_anterior_actual || r.serie_inicial || "-")} -&gt; Devuelto a bodega</div>
+                                                                ) : (
+                                                                    <div>{cambios > 0 ? (r.serie_anterior_actual || "-") : (r.serie_inicial || "-")} -&gt; {r.serie_actual || "-"}</div>
+                                                                )}
+                                                                {esDevueltoBodega && (
+                                                                    <div className="small mt-1" style={{ color: "#b91c1c", fontWeight: 600 }}>
+                                                                        Fecha devolucion: {formatearFechaHora(r?.fecha_devuelto_bodega)}
+                                                                    </div>
+                                                                )}
                                                                 <div className="small text-muted mt-1">Ultima actualizacion: {formatearFechaHora(r.ultima_actualizacion)}</div>
                                             </div>
                                             </div>
@@ -3772,11 +3810,12 @@ const ArmadoTecnico = () => {
                                                             }
                                                             const r = row.data;
                                                             const tieneCambios = Number(r?.cambios || 0) > 0;
+                                                            const esDevueltoBodega = !!r?.devuelto_bodega;
                                                             return (
                                                                 <tr key={`h-item-${row.key}-${idx}`}>
                                                                     <td
                                                                         style={
-                                                                            tieneCambios
+                                                                            tieneCambios || esDevueltoBodega
                                                                                 ? { color: "#c2410c", fontWeight: 700 }
                                                                                 : undefined
                                                                         }
@@ -3796,17 +3835,28 @@ const ArmadoTecnico = () => {
                                                                         </small>
                                                                     </td>
                                                                     <td>
-                                                                        <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_anterior_actual || "-"}</div>
+                                                                        <div style={tieneCambios || esDevueltoBodega ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_anterior_actual || "-"}</div>
                                                                         <small className="text-muted" style={{ fontSize: "0.72rem" }}>
                                                                             {formatearFecha(r?.serie_anterior_actual_fecha)}
                                                                         </small>
                                                                     </td>
                                                                     <td>
-                                                                        <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
-                                                                        <small className="text-muted" style={{ fontSize: "0.72rem" }}>
-                                                                            {formatearFecha(r?.serie_actual_fecha)}
-                                                                            {r?.correlativo_ultimo ? ` · N${r.correlativo_ultimo}` : ""}
-                                                                        </small>
+                                                                        {esDevueltoBodega ? (
+                                                                            <>
+                                                                                <div style={{ color: "#b91c1c", fontWeight: 700 }}>-</div>
+                                                                                <small style={{ fontSize: "0.72rem", color: "#b91c1c", fontWeight: 600 }}>
+                                                                                    Devuelto a bodega {formatearFecha(r?.fecha_devuelto_bodega)}
+                                                                                </small>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
+                                                                                <small className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                                                    {formatearFecha(r?.serie_actual_fecha)}
+                                                                                    {r?.correlativo_ultimo ? ` · N${r.correlativo_ultimo}` : ""}
+                                                                                </small>
+                                                                            </>
+                                                                        )}
                                                                     </td>
                                                                     <td>{r?.cambios || 0}</td>
                                                                     <td>{formatearFechaHora(r?.ultima_actualizacion)}</td>
