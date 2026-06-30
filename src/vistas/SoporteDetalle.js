@@ -85,7 +85,7 @@ const SoporteDetalle = () => {
     const [verCategoriasCliente, setVerCategoriasCliente] = useState(false);
     const [categoriasPorCliente, setCategoriasPorCliente] = useState(false);
     const [showCategoriasModal, setShowCategoriasModal] = useState(false);
-    const [categoriasModalVista, setCategoriasModalVista] = useState("cliente");
+    const [categoriasModalVista, setCategoriasModalVista] = useState("total");
     const [indicadorMes, setIndicadorMes] = useState(() => new Date().getMonth());
     const [indicadorAnio, setIndicadorAnio] = useState(() => new Date().getFullYear());
     const navigate = useNavigate();
@@ -534,6 +534,38 @@ const SoporteDetalle = () => {
         return resultado.sort((a, b) => b.total - a.total);
     }, [categoriasPorCliente, soportesCategoriasFuente]);
 
+    const categoriasResumenTotalModal = useMemo(() => {
+        const agrupado = new Map();
+        soportesCategoriasFuente.forEach((soporte) => {
+            const categoria = String(soporte.categoria_falla || "Sin categoria").trim();
+            const subcategoria = obtenerSubcategoriaSoporte(soporte);
+
+            if (!agrupado.has(categoria)) {
+                agrupado.set(categoria, {
+                    total: 0,
+                    subcategorias: new Map()
+                });
+            }
+
+            const categoriaData = agrupado.get(categoria);
+            categoriaData.total += 1;
+            categoriaData.subcategorias.set(
+                subcategoria,
+                (categoriaData.subcategorias.get(subcategoria) || 0) + 1
+            );
+        });
+
+        return Array.from(agrupado.entries())
+            .map(([categoria, data]) => ({
+                categoria,
+                total: data.total,
+                subcategorias: Array.from(data.subcategorias.entries())
+                    .map(([subcategoria, total]) => ({ subcategoria, total }))
+                    .sort((a, b) => b.total - a.total || a.subcategoria.localeCompare(b.subcategoria))
+            }))
+            .sort((a, b) => b.total - a.total || a.categoria.localeCompare(b.categoria));
+    }, [soportesCategoriasFuente]);
+
     const categoriasResumenModal = useMemo(() => {
         const agrupado = new Map();
         soportesCategoriasFuente.forEach((soporte) => {
@@ -877,7 +909,7 @@ const SoporteDetalle = () => {
                             </div>
                             <div className="col-md-6 mb-3 d-flex align-items-end">
                                 <small className="text-muted">
-                                    Selecciona un rango válido para filtrar por fechas específicas.
+                                    Selecciona un rango valido para filtrar por fechas especificas.
                                 </small>
                             </div>
                         </div>
@@ -1272,7 +1304,10 @@ const SoporteDetalle = () => {
                                 <button
                                     type="button"
                                     className="btn btn-outline-primary btn-sm"
-                                    onClick={() => setShowCategoriasModal(true)}
+                                    onClick={() => {
+                                        setCategoriasModalVista("total");
+                                        setShowCategoriasModal(true);
+                                    }}
                                 >
                                     Ver
                                 </button>
@@ -1429,11 +1464,18 @@ const SoporteDetalle = () => {
                                 <div>
                                     <h5 className="mb-1">Fallas por categoria y subcategoria</h5>
                                     <small className="text-muted">
-                                        Universo: {verCategoriasCliente && clienteSeleccionado ? clienteSeleccionado : "todos los clientes"} · Vista por {categoriasModalVista}
+                                        Universo: {verCategoriasCliente && clienteSeleccionado ? clienteSeleccionado : "todos los clientes"} - Vista por {categoriasModalVista === "total" ? "total categorias" : categoriasModalVista}
                                     </small>
                                 </div>
                                 <div className="d-flex align-items-center" style={{ gap: "0.5rem" }}>
                                     <div className="btn-group btn-group-sm" role="group">
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalVista === "total" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalVista("total")}
+                                        >
+                                            Total
+                                        </button>
                                         <button
                                             type="button"
                                             className={`btn ${categoriasModalVista === "cliente" ? "btn-primary" : "btn-outline-secondary"}`}
@@ -1449,17 +1491,65 @@ const SoporteDetalle = () => {
                                             Centro
                                         </button>
                                     </div>
-                                <button
-                                    type="button"
-                                    className="close"
-                                    onClick={() => setShowCategoriasModal(false)}
-                                >
-                                    &times;
-                                </button>
+                                    <button
+                                        type="button"
+                                        className="close"
+                                        onClick={() => setShowCategoriasModal(false)}
+                                    >
+                                        &times;
+                                    </button>
                                 </div>
                             </div>
                             <div className="modal-body">
-                                {categoriasResumenModal.length ? (
+                                {categoriasModalVista === "total" ? (
+                                    categoriasResumenTotalModal.length ? (
+                                        <div className="categoria-detalle-list">
+                                            <div className="categoria-detalle-item">
+                                                <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                                    <div>
+                                                        <strong>Total categorias</strong>
+                                                        <small className="d-block text-muted">
+                                                            Categorias: {categoriasResumenTotalModal.length}
+                                                        </small>
+                                                    </div>
+                                                    <span className="badge badge-primary badge-pill">
+                                                        {categoriasResumenTotalModal.reduce((acc, item) => acc + item.total, 0)}
+                                                    </span>
+                                                </div>
+                                                <div className="categoria-resumen-grid">
+                                                    {categoriasResumenTotalModal.map((categoria) => (
+                                                        <div
+                                                            key={`cat-det-total-${categoria.categoria}`}
+                                                            className="categoria-resumen-card"
+                                                        >
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <strong>{categoria.categoria}</strong>
+                                                                <span className="badge badge-light categoria-detalle-badge">
+                                                                    {categoria.total}
+                                                                </span>
+                                                            </div>
+                                                            <ul className="list-unstyled mb-0">
+                                                                {categoria.subcategorias.map((sub) => (
+                                                                    <li
+                                                                        key={`cat-det-total-${categoria.categoria}-${sub.subcategoria}`}
+                                                                        className="d-flex justify-content-between align-items-center categoria-subitem"
+                                                                    >
+                                                                        <span>{sub.subcategoria}</span>
+                                                                        <span className="badge badge-secondary badge-pill">
+                                                                            {sub.total}
+                                                                        </span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted mb-0">Sin registros para los filtros actuales.</p>
+                                    )
+                                ) : categoriasResumenModal.length ? (
                                     <div className="categoria-detalle-list">
                                         {categoriasResumenModal.map((grupo) => (
                                             <div

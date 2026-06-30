@@ -2193,7 +2193,7 @@ export default function BodegaRetiros() {
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
                 <tr>
-                  <th>N°</th>
+                  <th>Nï¿½</th>
                   <th>Correlativo</th>
                   <th>Fecha retiro</th>
                   <th>Cliente</th>
@@ -2360,13 +2360,14 @@ export default function BodegaRetiros() {
                   <th>Estado</th>
                   <th>Recepcionado por</th>
                   <th>Fecha recepcion</th>
+                  <th>Equipo / serie</th>
                   <th className="text-center">Accion</th>
                 </tr>
               </thead>
               <tbody>
                 {!enBodegaFiltrados.length ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-3 text-muted">
+                    <td colSpan={9} className="text-center py-3 text-muted">
                       Sin retiros recepcionados en bodega para los filtros actuales.
                     </td>
                   </tr>
@@ -2388,6 +2389,16 @@ export default function BodegaRetiros() {
                           </td>
                           <td>{recepcionPor}</td>
                           <td>{formatDate(fechaRecepcion)}</td>
+                          <td>
+                            <div className="d-flex flex-column" style={{ gap: 4 }}>
+                              {equipos.map((eq, idx) => (
+                                <small key={`${row.rowKey}-bod-${idx}`} style={{ lineHeight: 1.25 }}>
+                                  <strong>{eq?.nombre || "Equipo"}</strong>
+                                  {eq?.numero_serie ? ` - ${eq.numero_serie}` : eq?.codigo ? ` - ${eq.codigo}` : ""}
+                                </small>
+                              ))}
+                            </div>
+                          </td>
                           <td className="text-center">
                             <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
                               <button
@@ -2451,6 +2462,18 @@ export default function BodegaRetiros() {
                         </td>
                         <td>{r.recepcion_bodega_por || "-"}</td>
                         <td>{formatDate(r.fecha_recepcion_bodega)}</td>
+                        <td>
+                          <div className="d-flex flex-column" style={{ gap: 4 }}>
+                            {(Array.isArray(r?.equipos) ? r.equipos : [])
+                              .filter((eq) => !!eq?.retirado)
+                              .map((eq, idx) => (
+                                <small key={`${row.rowKey}-eq-${idx}`} style={{ lineHeight: 1.25 }}>
+                                  <strong>{eq?.equipo_nombre || "Equipo"}</strong>
+                                  {eq?.numero_serie ? ` - ${eq.numero_serie}` : eq?.codigo ? ` - ${eq.codigo}` : ""}
+                                </small>
+                              ))}
+                          </div>
+                        </td>
                         <td className="text-center">
                           <button
                             className="btn btn-outline-primary btn-sm"
