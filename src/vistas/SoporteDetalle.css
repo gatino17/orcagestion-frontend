@@ -359,6 +359,24 @@
     padding: 0.75rem 0.85rem;
 }
 
+.categoria-resumen-button {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.categoria-resumen-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
+    border-color: #93c5fd;
+}
+
+.categoria-resumen-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
 .categoria-subitem {
     padding: 0.25rem 0;
     border-bottom: 1px dashed #e2e8f0;
@@ -367,4 +385,57 @@
 
 .categoria-subitem:last-child {
     border-bottom: none;
+}
+
+.categoria-subitem-button {
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: #0f172a;
+    text-align: left;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.categoria-subitem-button:hover {
+    color: #1d4ed8;
+}
+
+.categoria-subitem-button:focus {
+    outline: none;
+    color: #1d4ed8;
+}
+
+.categoria-registros-modal {
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.categoria-registros-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.categoria-registro-item {
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+    padding: 1rem;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.categoria-registro-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+
+.categoria-registro-problema {
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 0.75rem 0.85rem;
+    color: #1e293b;
+    line-height: 1.45;
 }

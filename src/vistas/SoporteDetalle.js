@@ -8,7 +8,7 @@ const parseFechaLocal = (valor) => {
     if (!valor) return null;
     if (valor instanceof Date) return valor;
     if (typeof valor === "string") {
-        const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
         if (match) {
             const [, y, m, d] = match;
             return new Date(Number(y), Number(m) - 1, Number(d));
@@ -85,7 +85,9 @@ const SoporteDetalle = () => {
     const [verCategoriasCliente, setVerCategoriasCliente] = useState(false);
     const [categoriasPorCliente, setCategoriasPorCliente] = useState(false);
     const [showCategoriasModal, setShowCategoriasModal] = useState(false);
+    const [detalleCategoriaModal, setDetalleCategoriaModal] = useState(null);
     const [categoriasModalVista, setCategoriasModalVista] = useState("total");
+    const [categoriasModalOrigen, setCategoriasModalOrigen] = useState("todos");
     const [indicadorMes, setIndicadorMes] = useState(() => new Date().getMonth());
     const [indicadorAnio, setIndicadorAnio] = useState(() => new Date().getFullYear());
     const navigate = useNavigate();
@@ -120,6 +122,10 @@ const SoporteDetalle = () => {
             setCategoriasPorCliente(false);
         }
     }, [clienteSeleccionado]);
+
+    useEffect(() => {
+        setDetalleCategoriaModal(null);
+    }, [categoriasModalVista, categoriasModalOrigen]);
 
     const clientesDisponibles = useMemo(() => {
         const nombres = soportes
@@ -213,7 +219,7 @@ const SoporteDetalle = () => {
         const actuales = new Set([new Date().getFullYear()]);
         soportes.forEach((soporte) => {
             if (!soporte.fecha_soporte) return;
-            const fecha = new Date(soporte.fecha_soporte);
+            const fecha = parseFechaLocal(soporte.fecha_soporte);
             if (!Number.isNaN(fecha.getTime())) {
                 actuales.add(fecha.getFullYear());
             }
@@ -468,6 +474,13 @@ const SoporteDetalle = () => {
         return soportesAnalisis;
     }, [verCategoriasCliente, clienteSeleccionado, soportesAnalisis]);
 
+    const soportesCategoriasModalFuente = useMemo(() => {
+        if (categoriasModalOrigen === "todos") return soportesCategoriasFuente;
+        return soportesCategoriasFuente.filter(
+            (soporte) => String(soporte?.origen || "cliente").toLowerCase().trim() === categoriasModalOrigen
+        );
+    }, [soportesCategoriasFuente, categoriasModalOrigen]);
+
     const categoriasAgrupadas = useMemo(() => {
         if (!categoriasPorCliente) {
             const mapa = new Map();
@@ -536,7 +549,7 @@ const SoporteDetalle = () => {
 
     const categoriasResumenTotalModal = useMemo(() => {
         const agrupado = new Map();
-        soportesCategoriasFuente.forEach((soporte) => {
+        soportesCategoriasModalFuente.forEach((soporte) => {
             const categoria = String(soporte.categoria_falla || "Sin categoria").trim();
             const subcategoria = obtenerSubcategoriaSoporte(soporte);
 
@@ -564,11 +577,11 @@ const SoporteDetalle = () => {
                     .sort((a, b) => b.total - a.total || a.subcategoria.localeCompare(b.subcategoria))
             }))
             .sort((a, b) => b.total - a.total || a.categoria.localeCompare(b.categoria));
-    }, [soportesCategoriasFuente]);
+    }, [soportesCategoriasModalFuente]);
 
     const categoriasResumenModal = useMemo(() => {
         const agrupado = new Map();
-        soportesCategoriasFuente.forEach((soporte) => {
+        soportesCategoriasModalFuente.forEach((soporte) => {
             const grupo =
                 categoriasModalVista === "centro"
                     ? String(soporte.centro?.nombre || "Centro sin nombre").trim()
@@ -614,7 +627,48 @@ const SoporteDetalle = () => {
         });
 
         return resultado.sort((a, b) => b.total - a.total || a.grupo.localeCompare(b.grupo));
-    }, [soportesCategoriasFuente, categoriasModalVista]);
+    }, [soportesCategoriasModalFuente, categoriasModalVista]);
+
+    const abrirDetalleCategoria = ({ categoria, subcategoria = "", grupo = "" }) => {
+        const categoriaNormalizada = String(categoria || "").trim();
+        const subcategoriaNormalizada = String(subcategoria || "").trim();
+        const grupoNormalizado = String(grupo || "").trim();
+
+        const registros = soportesCategoriasModalFuente
+            .filter((soporte) => {
+                const categoriaSoporte = String(soporte?.categoria_falla || "Sin categoria").trim();
+                if (categoriaSoporte !== categoriaNormalizada) return false;
+
+                if (subcategoriaNormalizada && obtenerSubcategoriaSoporte(soporte) !== subcategoriaNormalizada) {
+                    return false;
+                }
+
+                if (grupoNormalizado) {
+                    const grupoSoporte =
+                        categoriasModalVista === "centro"
+                            ? String(soporte.centro?.nombre || "Centro sin nombre").trim()
+                            : String(soporte.centro?.cliente || "Cliente sin nombre").trim();
+                    if (grupoSoporte !== grupoNormalizado) return false;
+                }
+
+                return true;
+            })
+            .sort((a, b) => {
+                const fechaA = parseFechaLocal(a?.fecha_soporte);
+                const fechaB = parseFechaLocal(b?.fecha_soporte);
+                return (fechaB?.getTime?.() || 0) - (fechaA?.getTime?.() || 0);
+            });
+
+        setDetalleCategoriaModal({
+            categoria: categoriaNormalizada,
+            subcategoria: subcategoriaNormalizada,
+            grupo: grupoNormalizado,
+            vista: categoriasModalVista,
+            origen: categoriasModalOrigen,
+            total: registros.length,
+            registros
+        });
+    };
 
     const equiposCambiados = useMemo(() => {
         const resumen = {};
@@ -1306,6 +1360,7 @@ const SoporteDetalle = () => {
                                     className="btn btn-outline-primary btn-sm"
                                     onClick={() => {
                                         setCategoriasModalVista("total");
+                                        setCategoriasModalOrigen("todos");
                                         setShowCategoriasModal(true);
                                     }}
                                 >
@@ -1466,6 +1521,9 @@ const SoporteDetalle = () => {
                                     <small className="text-muted">
                                         Universo: {verCategoriasCliente && clienteSeleccionado ? clienteSeleccionado : "todos los clientes"} - Vista por {categoriasModalVista === "total" ? "total categorias" : categoriasModalVista}
                                     </small>
+                                    <small className="text-muted d-block">
+                                        Origen: {categoriasModalOrigen === "todos" ? "todo" : categoriasModalOrigen}
+                                    </small>
                                 </div>
                                 <div className="d-flex align-items-center" style={{ gap: "0.5rem" }}>
                                     <div className="btn-group btn-group-sm" role="group">
@@ -1489,6 +1547,29 @@ const SoporteDetalle = () => {
                                             onClick={() => setCategoriasModalVista("centro")}
                                         >
                                             Centro
+                                        </button>
+                                    </div>
+                                    <div className="btn-group btn-group-sm" role="group">
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalOrigen === "todos" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalOrigen("todos")}
+                                        >
+                                            Todo
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalOrigen === "cliente" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalOrigen("cliente")}
+                                        >
+                                            Cliente
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`btn ${categoriasModalOrigen === "orca" ? "btn-primary" : "btn-outline-secondary"}`}
+                                            onClick={() => setCategoriasModalOrigen("orca")}
+                                        >
+                                            Orca
                                         </button>
                                     </div>
                                     <button
@@ -1518,9 +1599,11 @@ const SoporteDetalle = () => {
                                                 </div>
                                                 <div className="categoria-resumen-grid">
                                                     {categoriasResumenTotalModal.map((categoria) => (
-                                                        <div
+                                                        <button
+                                                            type="button"
                                                             key={`cat-det-total-${categoria.categoria}`}
-                                                            className="categoria-resumen-card"
+                                                            className="categoria-resumen-card categoria-resumen-button"
+                                                            onClick={() => abrirDetalleCategoria({ categoria: categoria.categoria })}
                                                         >
                                                             <div className="d-flex justify-content-between align-items-center mb-1">
                                                                 <strong>{categoria.categoria}</strong>
@@ -1534,14 +1617,26 @@ const SoporteDetalle = () => {
                                                                         key={`cat-det-total-${categoria.categoria}-${sub.subcategoria}`}
                                                                         className="d-flex justify-content-between align-items-center categoria-subitem"
                                                                     >
-                                                                        <span>{sub.subcategoria}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="categoria-subitem-button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                abrirDetalleCategoria({
+                                                                                    categoria: categoria.categoria,
+                                                                                    subcategoria: sub.subcategoria
+                                                                                });
+                                                                            }}
+                                                                        >
+                                                                            {sub.subcategoria}
+                                                                        </button>
                                                                         <span className="badge badge-secondary badge-pill">
                                                                             {sub.total}
                                                                         </span>
                                                                     </li>
                                                                 ))}
                                                             </ul>
-                                                        </div>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -1567,9 +1662,16 @@ const SoporteDetalle = () => {
                                                 </div>
                                                 <div className="categoria-resumen-grid">
                                                     {grupo.categorias.map((categoria) => (
-                                                        <div
+                                                        <button
+                                                            type="button"
                                                             key={`${grupo.grupo}-${categoria.categoria}`}
-                                                            className="categoria-resumen-card"
+                                                            className="categoria-resumen-card categoria-resumen-button"
+                                                            onClick={() =>
+                                                                abrirDetalleCategoria({
+                                                                    categoria: categoria.categoria,
+                                                                    grupo: grupo.grupo
+                                                                })
+                                                            }
                                                         >
                                                             <div className="d-flex justify-content-between align-items-center mb-1">
                                                                 <strong>{categoria.categoria}</strong>
@@ -1583,14 +1685,27 @@ const SoporteDetalle = () => {
                                                                         key={`${grupo.grupo}-${categoria.categoria}-${sub.subcategoria}`}
                                                                         className="d-flex justify-content-between align-items-center categoria-subitem"
                                                                     >
-                                                                        <span>{sub.subcategoria}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="categoria-subitem-button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                abrirDetalleCategoria({
+                                                                                    categoria: categoria.categoria,
+                                                                                    subcategoria: sub.subcategoria,
+                                                                                    grupo: grupo.grupo
+                                                                                });
+                                                                            }}
+                                                                        >
+                                                                            {sub.subcategoria}
+                                                                        </button>
                                                                         <span className="badge badge-secondary badge-pill">
                                                                             {sub.total}
                                                                         </span>
                                                                     </li>
                                                                 ))}
                                                             </ul>
-                                                        </div>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -1598,6 +1713,88 @@ const SoporteDetalle = () => {
                                     </div>
                                 ) : (
                                     <p className="text-muted mb-0">Sin registros para los filtros actuales.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {detalleCategoriaModal && (
+                <div className="modal show" style={{ display: "block" }}>
+                    <div className="modal-dialog modal-xl modal-dialog-scrollable">
+                        <div className="modal-content categoria-registros-modal">
+                            <div className="modal-header">
+                                <div>
+                                    <h5 className="mb-1">Detalle de categoria</h5>
+                                    <small className="text-muted">
+                                        {detalleCategoriaModal.categoria}
+                                        {detalleCategoriaModal.subcategoria ? ` / ${detalleCategoriaModal.subcategoria}` : ""}
+                                        {detalleCategoriaModal.grupo ? ` - ${detalleCategoriaModal.grupo}` : ""}
+                                        {detalleCategoriaModal.origen && detalleCategoriaModal.origen !== "todos" ? ` - ${detalleCategoriaModal.origen}` : ""}
+                                    </small>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="close"
+                                    onClick={() => setDetalleCategoriaModal(null)}
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="d-flex flex-wrap align-items-center mb-3" style={{ gap: "0.5rem" }}>
+                                    <span className="badge badge-primary badge-pill px-3 py-2">
+                                        Registros: {detalleCategoriaModal.total}
+                                    </span>
+                                    <span className="badge badge-light px-3 py-2">
+                                        Vista: {detalleCategoriaModal.vista === "total" ? "Total" : detalleCategoriaModal.vista}
+                                    </span>
+                                </div>
+                                {detalleCategoriaModal.registros.length ? (
+                                    <div className="categoria-registros-list">
+                                        {detalleCategoriaModal.registros.map((soporte) => (
+                                            <div key={`cat-reg-${soporte.id_soporte}`} className="categoria-registro-item">
+                                                <div className="d-flex justify-content-between align-items-start flex-wrap mb-2" style={{ gap: "0.5rem" }}>
+                                                    <div>
+                                                        <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
+                                                        <small className="d-block text-muted">
+                                                            {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
+                                                        </small>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap align-items-center" style={{ gap: "0.4rem" }}>
+                                                        <span className="badge badge-light">#{soporte.id_soporte}</span>
+                                                        {renderEstado(soporte.estado)}
+                                                    </div>
+                                                </div>
+                                                <div className="categoria-registro-grid">
+                                                    <div>
+                                                        <small className="text-muted d-block">Subcategoria</small>
+                                                        <strong>{obtenerSubcategoriaSoporte(soporte)}</strong>
+                                                    </div>
+                                                    <div>
+                                                        <small className="text-muted d-block">Tipo</small>
+                                                        <strong>{soporte.tipo || "-"}</strong>
+                                                    </div>
+                                                    <div>
+                                                        <small className="text-muted d-block">Origen</small>
+                                                        <strong>{soporte.origen || "cliente"}</strong>
+                                                    </div>
+                                                    <div>
+                                                        <small className="text-muted d-block">Fecha cierre</small>
+                                                        <strong>{soporte.fecha_cierre ? formatearFecha(soporte.fecha_cierre) : "-"}</strong>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2">
+                                                    <small className="text-muted d-block">Problema</small>
+                                                    <div className="categoria-registro-problema">
+                                                        {soporte.problema || "Sin descripcion"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted mb-0">Sin registros para esta categoria.</p>
                                 )}
                             </div>
                         </div>
