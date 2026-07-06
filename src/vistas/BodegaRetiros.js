@@ -17,6 +17,7 @@ import {
   devolverInventarioBodegaDesdeTecnico,
   obtenerArmados,
   obtenerActasEntrega,
+  obtenerPermisosTrabajo,
   actualizarActaEntrega,
   obtenerMaterialesArmado,
   obtenerEquipos,
@@ -206,6 +207,7 @@ export default function BodegaRetiros() {
   const [armadosSeguimiento, setArmadosSeguimiento] = useState([]);
   const [guiasSalida, setGuiasSalida] = useState([]);
   const [actasEntrega, setActasEntrega] = useState([]);
+  const [permisosTrabajo, setPermisosTrabajo] = useState([]);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [armadoGuia, setArmadoGuia] = useState(null);
   const [guiaSeleccionadaId, setGuiaSeleccionadaId] = useState(null);
@@ -369,7 +371,7 @@ export default function BodegaRetiros() {
   const cargarRetiros = async () => {
     setLoading(true);
     try {
-      const [data, ordenes, actas] = await Promise.all([
+      const [data, ordenes, actas, permisos] = await Promise.all([
         obtenerRetirosTerreno({
           cliente_id: clienteId || undefined,
           centro_id: centroId || undefined,
@@ -379,14 +381,20 @@ export default function BodegaRetiros() {
           cliente_id: clienteId || undefined,
           centro_id: centroId || undefined,
         }),
+        obtenerPermisosTrabajo({
+          cliente_id: clienteId || undefined,
+          centro_id: centroId || undefined,
+        }),
       ]);
       setRetiros(Array.isArray(data) ? data : []);
       setOrdenesRevision(Array.isArray(ordenes) ? ordenes : []);
       setActasEntrega(Array.isArray(actas) ? actas : []);
+      setPermisosTrabajo(Array.isArray(permisos) ? permisos : []);
     } catch {
       setRetiros([]);
       setOrdenesRevision([]);
       setActasEntrega([]);
+      setPermisosTrabajo([]);
     } finally {
       setLoading(false);
     }
@@ -412,6 +420,18 @@ export default function BodegaRetiros() {
     () => retiros.filter((r) => String(r.estado_logistico || "") === "en_transito"),
     [retiros]
   );
+  const permisosPorActaId = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(permisosTrabajo) ? permisosTrabajo : []).forEach((permiso) => {
+      const actaId = Number(permiso?.acta_entrega_id || 0);
+      if (!actaId) return;
+      const previo = map.get(actaId);
+      if (!previo || Number(permiso?.id_permiso_trabajo || 0) > Number(previo?.id_permiso_trabajo || 0)) {
+        map.set(actaId, permiso);
+      }
+    });
+    return map;
+  }, [permisosTrabajo]);
   const devolucionesInstalacionEnTransito = useMemo(() => {
     return (Array.isArray(actasEntrega) ? actasEntrega : []).flatMap((acta) => {
       const equipos = Array.isArray(acta?.armado_equipos) ? acta.armado_equipos : [];
@@ -426,11 +446,12 @@ export default function BodegaRetiros() {
           tipoFila: "instalacion_devuelta",
           rowKey: `acta-dev-${acta?.id_acta_entrega || Math.random()}`,
           acta,
+          permiso: permisosPorActaId.get(Number(acta?.id_acta_entrega || 0)) || null,
           equipos: devueltos,
         },
       ];
     });
-  }, [actasEntrega]);
+  }, [actasEntrega, permisosPorActaId]);
   const devolucionesInstalacionEnBodega = useMemo(() => {
     return (Array.isArray(actasEntrega) ? actasEntrega : []).flatMap((acta) => {
       const equipos = Array.isArray(acta?.armado_equipos) ? acta.armado_equipos : [];
@@ -445,11 +466,12 @@ export default function BodegaRetiros() {
           tipoFila: "instalacion_bodega",
           rowKey: `acta-bodega-${acta?.id_acta_entrega || Math.random()}`,
           acta,
+          permiso: permisosPorActaId.get(Number(acta?.id_acta_entrega || 0)) || null,
           equipos: devueltos,
         },
       ];
     });
-  }, [actasEntrega]);
+  }, [actasEntrega, permisosPorActaId]);
   const devolucionesInstalacionBaja = useMemo(() => {
     return (Array.isArray(actasEntrega) ? actasEntrega : []).flatMap((acta) => {
       const equipos = Array.isArray(acta?.armado_equipos) ? acta.armado_equipos : [];
@@ -2221,11 +2243,16 @@ export default function BodegaRetiros() {
                   transitoRows.map((row) => {
                     if (row.tipoFila === "instalacion_devuelta") {
                       const acta = row.acta || {};
+                      const permiso = row.permiso || {};
                       const equipos = Array.isArray(row.equipos) ? row.equipos : [];
                       return (
                         <tr key={row.rowKey}>
-                          <td>{acta?.id_acta_entrega || "-"}</td>
-                          <td>{`ACTA-${acta?.id_acta_entrega || "-"}`}</td>
+                          <td>{permiso?.id_permiso_trabajo || acta?.id_acta_entrega || "-"}</td>
+                          <td>
+                            {permiso?.id_permiso_trabajo
+                              ? `N${permiso.id_permiso_trabajo}`
+                              : `ACTA-${acta?.id_acta_entrega || "-"}`}
+                          </td>
                           <td>{formatDate(acta?.updated_at || acta?.fecha_registro)}</td>
                           <td>{acta?.empresa || acta?.cliente || "-"}</td>
                           <td>{acta?.centro || "-"}</td>
@@ -2375,13 +2402,18 @@ export default function BodegaRetiros() {
                   enBodegaFiltrados.map((row) => {
                     if (row.tipoFila === "instalacion_bodega") {
                       const acta = row.acta || {};
+                      const permiso = row.permiso || {};
                       const equipos = Array.isArray(row.equipos) ? row.equipos : [];
                       const recepcionPor = equipos[0]?.recepcion_bodega_por || "-";
                       const fechaRecepcion = equipos[0]?.fecha_recepcion_bodega || acta?.updated_at || null;
                       return (
                         <tr key={row.rowKey}>
-                          <td>{acta?.id_acta_entrega || "-"}</td>
-                          <td>{`ACTA-${acta?.id_acta_entrega || "-"}`}</td>
+                          <td>{permiso?.id_permiso_trabajo || acta?.id_acta_entrega || "-"}</td>
+                          <td>
+                            {permiso?.id_permiso_trabajo
+                              ? `N${permiso.id_permiso_trabajo}`
+                              : `ACTA-${acta?.id_acta_entrega || "-"}`}
+                          </td>
                           <td>{formatDate(acta?.fecha_registro)}</td>
                           <td>{acta?.centro || "-"}</td>
                           <td>

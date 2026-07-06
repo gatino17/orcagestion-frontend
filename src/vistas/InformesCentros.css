@@ -470,6 +470,152 @@
   background: #fff;
 }
 
+.informes-editor-subsection {
+  border: 1px solid #dbe7ff;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 0.9rem;
+  margin-top: 0.85rem;
+}
+
+.informes-editor-subsection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.informes-editor-subsection-head strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.informes-editor-subsection-head small {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.informes-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.informes-info-card {
+  border: 1px solid #dbe7ff;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  padding: 0.8rem 0.85rem;
+}
+
+.informes-info-card small {
+  display: block;
+  margin-bottom: 0.28rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.informes-info-card strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.informes-tecnicos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+
+.informes-tecnico-card {
+  border: 1px solid #dbe7ff;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.informes-tecnico-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.informes-tecnico-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: #e0ecff;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.informes-tecnico-card-extra .informes-tecnico-badge {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.informes-editor-subsection-recepcion {
+  border-color: #d1fae5;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.informes-recepcion-grid {
+  grid-template-columns: minmax(280px, 420px);
+}
+
+.informes-recepcion-card {
+  border-color: #bbf7d0;
+}
+
+.informes-permiso-gps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.informes-permiso-gps-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.informes-permiso-devueltos-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.informes-permiso-devuelto-serie {
+  display: block;
+  margin-top: 0.35rem;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.informes-permiso-actions {
+  margin-top: 0.25rem;
+}
+
+.informes-permiso-actions .btn-primary {
+  min-width: 190px;
+}
+
 .informes-editor-section-title {
   margin: 0 0 0.65rem;
   color: #1d4ed8;

@@ -125,6 +125,41 @@ const signatureHtml = (value, label = "Sin firma") => {
     return `<div class="sig-text">${esc(value)}</div>`;
 };
 
+const normalizeBoolSelectValue = (value) => {
+    if (value === true) return "si";
+    if (value === false) return "no";
+    const text = String(value || "").trim().toLowerCase();
+    if (!text) return "";
+    if (["si", "sí", "true", "1", "yes", "y"].includes(text)) return "si";
+    if (["no", "false", "0", "n"].includes(text)) return "no";
+    return "";
+};
+
+const getFirmasTecnicosAdicionales = (value) => {
+    if (Array.isArray(value)) return value.filter((item) => item && typeof item === "object");
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+    } catch (error) {
+        return [];
+    }
+};
+
+const getTecnicosAdicionalesActa = (acta) => {
+    const base = new Set(
+        [acta?.tecnico_1, acta?.tecnico_2]
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+    );
+    return getFirmasTecnicosAdicionales(acta?.firmas_tecnicos_adicionales)
+        .map((item) => ({
+            nombre: String(item?.nombre || "").trim(),
+            firma: item?.firma || ""
+        }))
+        .filter((item) => item.nombre && !base.has(item.nombre));
+};
+
 const evidenceHtml = (value) => {
     const raw = String(value || "").trim();
     if (!raw) return `<div class="sig-empty">Sin evidencia</div>`;
@@ -163,6 +198,25 @@ const parseGpsPoints = (value) => {
     return points.length ? points : [{ lat: "", lng: "" }];
 };
 
+const parseSellos = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return [{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }];
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }];
+        const items = parsed
+            .map((item) => ({
+                ubicacion: String(item?.ubicacion || "").trim(),
+                numeroAnterior: String(item?.numero_anterior || item?.numero || "").trim(),
+                numeroNuevo: String(item?.numero_nuevo || "").trim()
+            }))
+            .filter((item) => item.ubicacion || item.numeroAnterior || item.numeroNuevo);
+        return items.length ? items : [{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }];
+    } catch (error) {
+        return [{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }];
+    }
+};
+
 const normalizeMeasureInput = (value) => {
     let text = String(value ?? "").replace(/,/g, ".").replace(/[^\d.]/g, "");
     const firstDot = text.indexOf(".");
@@ -171,6 +225,8 @@ const normalizeMeasureInput = (value) => {
     }
     return text;
 };
+
+const normalizeSelloNumero = (value) => String(value || "").replace(/\D/g, "");
 
 const normalizeGpsPointInput = (value) => {
     let text = String(value ?? "").replace(/[^\d.\-]/g, "");
@@ -354,6 +410,7 @@ function InformesCentros() {
     const [firmaTecnico1, setFirmaTecnico1] = useState("");
     const [tecnico2, setTecnico2] = useState("");
     const [firmaTecnico2, setFirmaTecnico2] = useState("");
+    const [tecnicosAdicionalesActa, setTecnicosAdicionalesActa] = useState([]);
     const [recepcionaNombre, setRecepcionaNombre] = useState("");
     const [firmaRecepciona, setFirmaRecepciona] = useState("");
     const [equiposConsiderados, setEquiposConsiderados] = useState("");
@@ -363,17 +420,28 @@ function InformesCentros() {
     const [permisosTrabajo, setPermisosTrabajo] = useState([]);
     const [savingPermiso, setSavingPermiso] = useState(false);
     const [permisoEditandoId, setPermisoEditandoId] = useState(null);
+    const [permisoActaEntregaId, setPermisoActaEntregaId] = useState(null);
     const [permisoClienteIdForm, setPermisoClienteIdForm] = useState("");
     const [permisoCentroIdForm, setPermisoCentroIdForm] = useState("");
     const [permisoFechaIngreso, setPermisoFechaIngreso] = useState("");
     const [permisoFechaSalida, setPermisoFechaSalida] = useState("");
     const [permisoCorreoCentro, setPermisoCorreoCentro] = useState("");
+    const [permisoTelefonoCentro, setPermisoTelefonoCentro] = useState("");
     const [permisoRegion, setPermisoRegion] = useState("");
     const [permisoLocalidad, setPermisoLocalidad] = useState("");
+    const [permisoBaseTierra, setPermisoBaseTierra] = useState("");
+    const [permisoCantidadRadares, setPermisoCantidadRadares] = useState("");
     const [permisoTecnico1, setPermisoTecnico1] = useState("");
+    const [permisoFirmaTecnico1, setPermisoFirmaTecnico1] = useState("");
     const [permisoTecnico2, setPermisoTecnico2] = useState("");
+    const [permisoFirmaTecnico2, setPermisoFirmaTecnico2] = useState("");
+    const [permisoTecnicosAdicionales, setPermisoTecnicosAdicionales] = useState([]);
     const [permisoRecepcionaNombre, setPermisoRecepcionaNombre] = useState("");
+    const [permisoRecepcionaRut, setPermisoRecepcionaRut] = useState("");
+    const [permisoFirmaRecepciona, setPermisoFirmaRecepciona] = useState("");
     const [permisoPuntosGps, setPermisoPuntosGps] = useState([{ lat: "", lng: "" }]);
+    const [permisoSellos, setPermisoSellos] = useState([{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }]);
+    const [permisoArmadoEquipos, setPermisoArmadoEquipos] = useState([]);
     const [permisoMedicionFaseNeutro, setPermisoMedicionFaseNeutro] = useState("");
     const [permisoMedicionNeutroTierra, setPermisoMedicionNeutroTierra] = useState("");
     const [permisoHertz, setPermisoHertz] = useState("");
@@ -527,6 +595,13 @@ function InformesCentros() {
         () => centros.find((c) => String(c.id || c.id_centro) === String(permisoCentroIdForm)),
         [centros, permisoCentroIdForm]
     );
+    const permisoEquiposDevueltosOrca = useMemo(
+        () =>
+            (Array.isArray(permisoArmadoEquipos) ? permisoArmadoEquipos : []).filter(
+                (item) => normalizeText(item?.estado_uso || "") === "devuelto_bodega"
+            ),
+        [permisoArmadoEquipos]
+    );
 
     const permisosCentrosFormFiltrados = useMemo(() => {
         if (!permisoClienteIdForm) return centrosOrdenados;
@@ -544,6 +619,7 @@ function InformesCentros() {
         setFirmaTecnico1("");
         setTecnico2("");
         setFirmaTecnico2("");
+        setTecnicosAdicionalesActa([]);
         setRecepcionaNombre("");
         setFirmaRecepciona("");
         setEquiposConsiderados("");
@@ -572,17 +648,28 @@ function InformesCentros() {
 
     const resetFormularioPermiso = () => {
         setPermisoEditandoId(null);
+        setPermisoActaEntregaId(null);
         setPermisoClienteIdForm("");
         setPermisoCentroIdForm("");
         setPermisoFechaIngreso("");
         setPermisoFechaSalida("");
         setPermisoCorreoCentro("");
+        setPermisoTelefonoCentro("");
         setPermisoRegion("");
         setPermisoLocalidad("");
+        setPermisoBaseTierra("");
+        setPermisoCantidadRadares("");
         setPermisoTecnico1("");
+        setPermisoFirmaTecnico1("");
         setPermisoTecnico2("");
+        setPermisoFirmaTecnico2("");
+        setPermisoTecnicosAdicionales([]);
         setPermisoRecepcionaNombre("");
+        setPermisoRecepcionaRut("");
+        setPermisoFirmaRecepciona("");
         setPermisoPuntosGps([{ lat: "", lng: "" }]);
+        setPermisoSellos([{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }]);
+        setPermisoArmadoEquipos([]);
         setPermisoMedicionFaseNeutro("");
         setPermisoMedicionNeutroTierra("");
         setPermisoHertz("");
@@ -592,18 +679,29 @@ function InformesCentros() {
 
     const abrirNuevoPermiso = () => {
         setPermisoEditandoId(null);
+        setPermisoActaEntregaId(null);
         const clienteInicial = filtroCliente !== "all" ? clientesForm.find((c) => c.label === filtroCliente)?.key || "" : "";
         setPermisoClienteIdForm(clienteInicial);
         setPermisoCentroIdForm(filtroCentroId || "");
         setPermisoFechaIngreso(todayLocalInputDate());
         setPermisoFechaSalida("");
         setPermisoCorreoCentro("");
+        setPermisoTelefonoCentro("");
         setPermisoRegion("");
         setPermisoLocalidad("");
+        setPermisoBaseTierra("");
+        setPermisoCantidadRadares("");
         setPermisoTecnico1("");
+        setPermisoFirmaTecnico1("");
         setPermisoTecnico2("");
+        setPermisoFirmaTecnico2("");
+        setPermisoTecnicosAdicionales([]);
         setPermisoRecepcionaNombre("");
+        setPermisoRecepcionaRut("");
+        setPermisoFirmaRecepciona("");
         setPermisoPuntosGps([{ lat: "", lng: "" }]);
+        setPermisoSellos([{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }]);
+        setPermisoArmadoEquipos([]);
         setPermisoMedicionFaseNeutro("");
         setPermisoMedicionNeutroTierra("");
         setPermisoHertz("");
@@ -641,14 +739,20 @@ function InformesCentros() {
 
     useEffect(() => {
         if (!permisoCentroIdForm) {
+            setPermisoTelefonoCentro("");
             setPermisoRegion("");
             setPermisoLocalidad("");
+            setPermisoBaseTierra("");
+            setPermisoCantidadRadares("");
             return;
         }
         const centro = centros.find((c) => String(c.id || c.id_centro) === String(permisoCentroIdForm));
         if (!centro) return;
+        setPermisoTelefonoCentro(centro.telefono || "");
         setPermisoRegion(centro.area || centro.region || "");
         setPermisoLocalidad(centro.ubicacion || centro.localidad || centro.direccion || "");
+        setPermisoBaseTierra(normalizeBoolSelectValue(centro.base_tierra));
+        setPermisoCantidadRadares(centro.cantidad_radares == null ? "" : String(centro.cantidad_radares));
         const clienteKey = getCentroClienteKey(centro);
         if (clienteKey) setPermisoClienteIdForm(clienteKey);
     }, [permisoCentroIdForm, centros]);
@@ -751,6 +855,12 @@ function InformesCentros() {
             alert("Centro y fecha de registro son obligatorios.");
             return;
         }
+        const firmasTecnicosAdicionales = tecnicosAdicionalesActa
+            .map((item) => ({
+                nombre: String(item?.nombre || "").trim(),
+                firma: item?.firma || ""
+            }))
+            .filter((item) => item.nombre);
         const payload = {
             centro_id: Number(centroIdForm),
             fecha_registro: fechaRegistro,
@@ -760,6 +870,7 @@ function InformesCentros() {
             firma_tecnico_1: firmaTecnico1,
             tecnico_2: tecnico2,
             firma_tecnico_2: firmaTecnico2,
+            firmas_tecnicos_adicionales: firmasTecnicosAdicionales,
             recepciona_nombre: recepcionaNombre,
             firma_recepciona: firmaRecepciona,
             equipos_considerados: equiposConsiderados,
@@ -794,6 +905,7 @@ function InformesCentros() {
         setFirmaTecnico1(acta.firma_tecnico_1 || "");
         setTecnico2(acta.tecnico_2 || "");
         setFirmaTecnico2(acta.firma_tecnico_2 || "");
+        setTecnicosAdicionalesActa(getTecnicosAdicionalesActa(acta));
         setRecepcionaNombre(acta.recepciona_nombre || "");
         setFirmaRecepciona(acta.firma_recepciona || "");
         setEquiposConsiderados(acta.equipos_considerados || "");
@@ -803,6 +915,34 @@ function InformesCentros() {
             setClienteIdForm(getCentroClienteKey(centro));
         }
         setMostrarEditorActa(true);
+    };
+
+    const agregarTecnicoAdicionalActa = () => {
+        setTecnicosAdicionalesActa((prev) => [...prev, { nombre: "", firma: "" }]);
+    };
+
+    const actualizarTecnicoAdicionalActa = (index, campo, valor) => {
+        setTecnicosAdicionalesActa((prev) =>
+            prev.map((item, idx) => (idx === index ? { ...item, [campo]: valor } : item))
+        );
+    };
+
+    const eliminarTecnicoAdicionalActa = (index) => {
+        setTecnicosAdicionalesActa((prev) => prev.filter((_, idx) => idx !== index));
+    };
+
+    const agregarTecnicoAdicionalPermiso = () => {
+        setPermisoTecnicosAdicionales((prev) => [...prev, { nombre: "", firma: "" }]);
+    };
+
+    const actualizarTecnicoAdicionalPermiso = (index, campo, valor) => {
+        setPermisoTecnicosAdicionales((prev) =>
+            prev.map((item, idx) => (idx === index ? { ...item, [campo]: valor } : item))
+        );
+    };
+
+    const eliminarTecnicoAdicionalPermiso = (index) => {
+        setPermisoTecnicosAdicionales((prev) => prev.filter((_, idx) => idx !== index));
     };
 
     const handleEliminarActa = async (id) => {
@@ -845,16 +985,30 @@ function InformesCentros() {
 
             const centro = centros.find((c) => Number(c.id || c.id_centro || 0) === centroId);
             setPermisoEditandoId(null);
+            setPermisoActaEntregaId(acta.id_acta_entrega || null);
             setPermisoCentroIdForm(String(centroId));
             setPermisoFechaIngreso(todayLocalInputDate());
             setPermisoFechaSalida("");
-            setPermisoCorreoCentro("");
+            setPermisoCorreoCentro(centro?.correo_centro || "");
+            setPermisoTelefonoCentro(centro?.telefono || "");
             setPermisoRegion(centro?.area || centro?.region || acta.region || "");
             setPermisoLocalidad(centro?.ubicacion || centro?.localidad || centro?.direccion || acta.localidad || "");
+            setPermisoBaseTierra(normalizeBoolSelectValue(centro?.base_tierra));
+            setPermisoCantidadRadares(centro?.cantidad_radares == null ? "" : String(centro.cantidad_radares));
             setPermisoTecnico1(acta.tecnico_1 || "");
+            setPermisoFirmaTecnico1(acta.firma_tecnico_1 || "");
             setPermisoTecnico2(acta.tecnico_2 || "");
+            setPermisoFirmaTecnico2(acta.firma_tecnico_2 || "");
+            setPermisoTecnicosAdicionales(getFirmasTecnicosAdicionales(acta.firmas_tecnicos_adicionales).map((item) => ({
+                nombre: String(item?.nombre || "").trim(),
+                firma: item?.firma || ""
+            })));
             setPermisoRecepcionaNombre(acta.recepciona_nombre || "");
+            setPermisoRecepcionaRut("");
+            setPermisoFirmaRecepciona(acta.firma_recepciona || "");
             setPermisoPuntosGps([{ lat: "", lng: "" }]);
+            setPermisoSellos([{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }]);
+            setPermisoArmadoEquipos(Array.isArray(acta.armado_equipos) ? acta.armado_equipos : []);
             setPermisoMedicionFaseNeutro("");
             setPermisoMedicionNeutroTierra("");
             setPermisoHertz("");
@@ -885,18 +1039,51 @@ function InformesCentros() {
             .filter((p) => p.lat && p.lng)
             .map((p) => `${p.lat},${p.lng}`)
             .join(" | ");
+        const selloRows = permisoSellos.map((item) => ({
+            ubicacion: String(item?.ubicacion || "").trim(),
+            numero_anterior: String(item?.numeroAnterior || "").trim(),
+            numero_nuevo: String(item?.numeroNuevo || "").trim()
+        }));
+        const hasInvalidSello = selloRows.some(
+            (item) =>
+                (!item.ubicacion && (item.numero_anterior || item.numero_nuevo)) ||
+                (item.ubicacion && !item.numero_anterior && !item.numero_nuevo)
+        );
+        if (hasInvalidSello) {
+            alert("Completa ubicacion y al menos un numero de sello antiguo o nuevo.");
+            return;
+        }
+        const sellosSerialized = JSON.stringify(
+            selloRows.filter((item) => item.ubicacion && (item.numero_anterior || item.numero_nuevo))
+        );
+        const firmasTecnicosAdicionales = permisoTecnicosAdicionales
+            .map((item) => ({
+                nombre: String(item?.nombre || "").trim(),
+                firma: item?.firma || ""
+            }))
+            .filter((item) => item.nombre);
 
         const payload = {
             centro_id: Number(permisoCentroIdForm),
+            acta_entrega_id: permisoActaEntregaId || null,
             fecha_ingreso: permisoFechaIngreso,
             fecha_salida: permisoFechaSalida || null,
             correo_centro: permisoCorreoCentro || null,
+            telefono_centro: permisoTelefonoCentro || null,
             region: permisoRegion || null,
             localidad: permisoLocalidad || null,
+            base_tierra: permisoBaseTierra || null,
+            cantidad_radares: permisoCantidadRadares || null,
             tecnico_1: permisoTecnico1 || null,
+            firma_tecnico_1: permisoFirmaTecnico1 || null,
             tecnico_2: permisoTecnico2 || null,
+            firma_tecnico_2: permisoFirmaTecnico2 || null,
+            firmas_tecnicos_adicionales: firmasTecnicosAdicionales,
             recepciona_nombre: permisoRecepcionaNombre || null,
+            recepciona_rut: permisoRecepcionaRut || null,
+            firma_recepciona: permisoFirmaRecepciona || null,
             puntos_gps: gpsSerialized || null,
+            sellos: sellosSerialized === "[]" ? null : sellosSerialized,
             medicion_fase_neutro: normalizeMeasureInput(permisoMedicionFaseNeutro) || null,
             medicion_neutro_tierra: normalizeMeasureInput(permisoMedicionNeutroTierra) || null,
             hertz: normalizeMeasureInput(permisoHertz) || null,
@@ -922,16 +1109,30 @@ function InformesCentros() {
 
     const handleEditarPermiso = (permiso) => {
         setPermisoEditandoId(permiso.id_permiso_trabajo);
+        setPermisoActaEntregaId(permiso.acta_entrega_id || null);
         setPermisoCentroIdForm(String(permiso.centro_id || ""));
         setPermisoFechaIngreso(toInputDate(permiso.fecha_ingreso));
         setPermisoFechaSalida(toInputDate(permiso.fecha_salida));
         setPermisoCorreoCentro(permiso.correo_centro || "");
+        setPermisoTelefonoCentro(permiso.telefono_centro || "");
         setPermisoRegion(permiso.region || "");
         setPermisoLocalidad(permiso.localidad || "");
+        setPermisoBaseTierra(normalizeBoolSelectValue(permiso.base_tierra));
+        setPermisoCantidadRadares(permiso.cantidad_radares == null ? "" : String(permiso.cantidad_radares));
         setPermisoTecnico1(permiso.tecnico_1 || "");
+        setPermisoFirmaTecnico1(permiso.firma_tecnico_1 || "");
         setPermisoTecnico2(permiso.tecnico_2 || "");
+        setPermisoFirmaTecnico2(permiso.firma_tecnico_2 || "");
+        setPermisoTecnicosAdicionales(getFirmasTecnicosAdicionales(permiso.firmas_tecnicos_adicionales).map((item) => ({
+            nombre: String(item?.nombre || "").trim(),
+            firma: item?.firma || ""
+        })));
         setPermisoRecepcionaNombre(permiso.recepciona_nombre || "");
+        setPermisoRecepcionaRut(permiso.recepciona_rut || "");
+        setPermisoFirmaRecepciona(permiso.firma_recepciona || "");
         setPermisoPuntosGps(parseGpsPoints(permiso.puntos_gps));
+        setPermisoSellos(parseSellos(permiso.sellos));
+        setPermisoArmadoEquipos(Array.isArray(permiso.armado_equipos) ? permiso.armado_equipos : []);
         setPermisoMedicionFaseNeutro(normalizeMeasureInput(permiso.medicion_fase_neutro || ""));
         setPermisoMedicionNeutroTierra(normalizeMeasureInput(permiso.medicion_neutro_tierra || ""));
         setPermisoHertz(normalizeMeasureInput(permiso.hertz || ""));
@@ -1013,6 +1214,529 @@ function InformesCentros() {
         }
     };
 
+    const renderPermisoEditor = () => (
+        <div className="informes-editor-overlay">
+            <div className="card informes-editor-card">
+                <div className="card-header d-flex justify-content-between align-items-center informes-editor-header">
+                    <div>
+                        <h5 className="mb-0">{permisoEditandoId ? "Editar permiso de trabajo" : "Nuevo permiso de trabajo"}</h5>
+                        <small className="informes-editor-subtitle">Completa los datos del centro, equipo tecnico, recepcion, GPS, mediciones y firmas.</small>
+                    </div>
+                    <button className="btn btn-sm btn-outline-secondary informes-editor-close-btn" onClick={resetFormularioPermiso}>
+                        <i className="fas fa-times" />
+                    </button>
+                </div>
+                <div className="card-body">
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Datos del centro</h6>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Informacion del centro</strong>
+                                    <small>Datos de referencia cargados automaticamente.</small>
+                                </div>
+                            </div>
+                            <div className="informes-info-grid">
+                                <div className="informes-info-card">
+                                    <small>Empresa</small>
+                                    <strong>{permisoCentroSeleccionadoForm?.cliente || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Centro</small>
+                                    <strong>{permisoCentroSeleccionadoForm?.nombre || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Codigo ponton</small>
+                                    <strong>{permisoCentroSeleccionadoForm?.nombre_ponton || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Region</small>
+                                    <strong>{permisoRegion || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Localidad</small>
+                                    <strong>{permisoLocalidad || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Telefono centro</small>
+                                    <strong>{permisoTelefonoCentro || "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Base tierra</small>
+                                    <strong>{permisoBaseTierra === "si" ? "Si" : permisoBaseTierra === "no" ? "No" : "-"}</strong>
+                                </div>
+                                <div className="informes-info-card">
+                                    <small>Cantidad radares</small>
+                                    <strong>{permisoCantidadRadares || "-"}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Seleccion y registro</strong>
+                                    <small>Campos editables del permiso.</small>
+                                </div>
+                            </div>
+                            <div className="informes-filtros-grid">
+                                <div>
+                                    <label>Cliente</label>
+                                    <select className="form-control" value={permisoClienteIdForm} onChange={(e) => setPermisoClienteIdForm(e.target.value)}>
+                                        <option value="">Seleccionar cliente</option>
+                                        {clientesForm.map((cliente) => (
+                                            <option key={cliente.key} value={cliente.key}>
+                                                {cliente.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Centro</label>
+                                    <select className="form-control" value={permisoCentroIdForm} onChange={(e) => setPermisoCentroIdForm(e.target.value)}>
+                                        <option value="">Seleccionar centro</option>
+                                        {permisosCentrosFormFiltrados.map((centro) => (
+                                            <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
+                                                {centro.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Fecha ingreso</label>
+                                    <input className="form-control" type="date" value={permisoFechaIngreso} onChange={(e) => setPermisoFechaIngreso(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label>Fecha salida</label>
+                                    <input className="form-control" type="date" value={permisoFechaSalida} onChange={(e) => setPermisoFechaSalida(e.target.value)} />
+                                </div>
+                                <div className="informes-col-span-2">
+                                    <label>Correo centro</label>
+                                    <input className="form-control" value={permisoCorreoCentro} onChange={(e) => setPermisoCorreoCentro(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label>Telefono centro</label>
+                                    <input className="form-control" value={permisoTelefonoCentro} onChange={(e) => setPermisoTelefonoCentro(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label>Base tierra</label>
+                                    <select className="form-control" value={permisoBaseTierra} onChange={(e) => setPermisoBaseTierra(e.target.value)}>
+                                        <option value="">Seleccionar</option>
+                                        <option value="si">Si</option>
+                                        <option value="no">No</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Cantidad de radares</label>
+                                    <input
+                                        className="form-control"
+                                        inputMode="numeric"
+                                        value={permisoCantidadRadares}
+                                        onChange={(e) => setPermisoCantidadRadares(String(e.target.value || "").replace(/\D/g, ""))}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Equipo tecnico y recepcion</h6>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Tecnicos del permiso</strong>
+                                    <small>Principal, apoyo y tecnicos adicionales.</small>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={agregarTecnicoAdicionalPermiso}
+                                >
+                                    <i className="fas fa-user-plus mr-1" />
+                                    Agregar tecnico
+                                </button>
+                            </div>
+                            <div className="informes-tecnicos-grid">
+                                <div className="informes-tecnico-card">
+                                    <div className="informes-tecnico-card-head">
+                                        <span className="informes-tecnico-badge">Tecnico 1</span>
+                                    </div>
+                                    <div>
+                                        <label>Nombre</label>
+                                        <input className="form-control" value={permisoTecnico1} onChange={(e) => setPermisoTecnico1(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label>
+                                            Firma tecnico 1 {permisoFirmaTecnico1 ? <span className="firma-check">✓</span> : null}
+                                        </label>
+                                        {isSignatureImage(permisoFirmaTecnico1) ? (
+                                            <div className="signature-preview-box">
+                                                <img src={permisoFirmaTecnico1} alt="Firma tecnico 1 permiso" className="signature-preview-img" />
+                                            </div>
+                                        ) : (
+                                            <input className="form-control" value={permisoFirmaTecnico1} onChange={(e) => setPermisoFirmaTecnico1(e.target.value)} />
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="informes-tecnico-card">
+                                    <div className="informes-tecnico-card-head">
+                                        <span className="informes-tecnico-badge">Tecnico 2</span>
+                                    </div>
+                                    <div>
+                                        <label>Nombre</label>
+                                        <input className="form-control" value={permisoTecnico2} onChange={(e) => setPermisoTecnico2(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label>
+                                            Firma tecnico 2 {permisoFirmaTecnico2 ? <span className="firma-check">✓</span> : null}
+                                        </label>
+                                        {isSignatureImage(permisoFirmaTecnico2) ? (
+                                            <div className="signature-preview-box">
+                                                <img src={permisoFirmaTecnico2} alt="Firma tecnico 2 permiso" className="signature-preview-img" />
+                                            </div>
+                                        ) : (
+                                            <input className="form-control" value={permisoFirmaTecnico2} onChange={(e) => setPermisoFirmaTecnico2(e.target.value)} />
+                                        )}
+                                    </div>
+                                </div>
+                                {permisoTecnicosAdicionales.map((item, index) => (
+                                    <div className="informes-tecnico-card informes-tecnico-card-extra" key={`permiso-tec-extra-${index}`}>
+                                        <div className="informes-tecnico-card-head">
+                                            <span className="informes-tecnico-badge">Tecnico {index + 3}</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-sm btn-link text-danger p-0"
+                                                onClick={() => eliminarTecnicoAdicionalPermiso(index)}
+                                                title="Quitar tecnico"
+                                            >
+                                                <i className="fas fa-trash-alt" />
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label>Nombre</label>
+                                            <input
+                                                className="form-control"
+                                                value={item.nombre}
+                                                onChange={(e) => actualizarTecnicoAdicionalPermiso(index, "nombre", e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>
+                                                Firma tecnico {index + 3} {item.firma ? <span className="firma-check">✓</span> : null}
+                                            </label>
+                                            {isSignatureImage(item.firma) ? (
+                                                <div className="signature-preview-box">
+                                                    <img src={item.firma} alt={`Firma tecnico permiso ${index + 3}`} className="signature-preview-img" />
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    className="form-control"
+                                                    value={item.firma}
+                                                    onChange={(e) => actualizarTecnicoAdicionalPermiso(index, "firma", e.target.value)}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="informes-editor-subsection informes-editor-subsection-recepcion">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Recepcion</strong>
+                                    <small>Persona que recepciona el trabajo en terreno.</small>
+                                </div>
+                            </div>
+                            <div className="informes-tecnicos-grid informes-recepcion-grid">
+                                <div className="informes-tecnico-card informes-recepcion-card">
+                                    <div>
+                                        <label>Recepciona</label>
+                                        <input className="form-control" value={permisoRecepcionaNombre} onChange={(e) => setPermisoRecepcionaNombre(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label>RUT recepciona</label>
+                                        <input className="form-control" value={permisoRecepcionaRut} onChange={(e) => setPermisoRecepcionaRut(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label>
+                                            Firma recepciona {permisoFirmaRecepciona ? <span className="firma-check">✓</span> : null}
+                                        </label>
+                                        {isSignatureImage(permisoFirmaRecepciona) ? (
+                                            <div className="signature-preview-box">
+                                                <img src={permisoFirmaRecepciona} alt="Firma recepciona permiso" className="signature-preview-img" />
+                                            </div>
+                                        ) : (
+                                            <input className="form-control" value={permisoFirmaRecepciona} onChange={(e) => setPermisoFirmaRecepciona(e.target.value)} />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Puntos GPS</h6>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Ubicaciones registradas</strong>
+                                    <small>Agrega uno o varios puntos para el permiso.</small>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={() => setPermisoPuntosGps((prev) => [...prev, { lat: "", lng: "" }])}
+                                >
+                                    <i className="fas fa-map-marker-alt mr-1" />
+                                    Agregar punto
+                                </button>
+                            </div>
+                            <div className="informes-permiso-gps-grid">
+                                {permisoPuntosGps.map((punto, idx) => (
+                                    <div key={`permiso-gps-${idx}`} className="informes-tecnico-card informes-permiso-gps-card">
+                                        <div className="informes-tecnico-card-head">
+                                            <span className="informes-tecnico-badge">Punto {idx + 1}</span>
+                                            {permisoPuntosGps.length > 1 ? (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-link text-danger p-0"
+                                                    onClick={() => setPermisoPuntosGps((prev) => prev.filter((_, i) => i !== idx))}
+                                                    title="Quitar punto"
+                                                >
+                                                    <i className="fas fa-trash-alt" />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <div>
+                                            <label>Latitud</label>
+                                            <input
+                                                className="form-control"
+                                                placeholder={`Latitud ${idx + 1}`}
+                                                value={punto.lat}
+                                                onChange={(e) =>
+                                                    setPermisoPuntosGps((prev) =>
+                                                        prev.map((it, i) =>
+                                                            i === idx ? { ...it, lat: normalizeGpsPointInput(e.target.value) } : it
+                                                        )
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>Longitud</label>
+                                            <input
+                                                className="form-control"
+                                                placeholder={`Longitud ${idx + 1}`}
+                                                value={punto.lng}
+                                                onChange={(e) =>
+                                                    setPermisoPuntosGps((prev) =>
+                                                        prev.map((it, i) =>
+                                                            i === idx ? { ...it, lng: normalizeGpsPointInput(e.target.value) } : it
+                                                        )
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Sellos</h6>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Registro de sellos</strong>
+                                    <small>Ingresa la ubicacion y el numero antiguo o nuevo por sello.</small>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={() => setPermisoSellos((prev) => [...prev, { ubicacion: "", numeroAnterior: "", numeroNuevo: "" }])}
+                                >
+                                    <i className="fas fa-plus mr-1" />
+                                    Agregar sello
+                                </button>
+                            </div>
+                            <div className="informes-permiso-gps-grid">
+                                {permisoSellos.map((sello, idx) => (
+                                    <div key={`permiso-sello-${idx}`} className="informes-tecnico-card informes-permiso-gps-card">
+                                        <div className="informes-tecnico-card-head">
+                                            <span className="informes-tecnico-badge">Sello {idx + 1}</span>
+                                            {permisoSellos.length > 1 ? (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-link text-danger p-0"
+                                                    onClick={() => setPermisoSellos((prev) => prev.filter((_, i) => i !== idx))}
+                                                    title="Quitar sello"
+                                                >
+                                                    <i className="fas fa-trash-alt" />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <div>
+                                            <label>Ubicacion</label>
+                                            <input
+                                                className="form-control"
+                                                value={sello.ubicacion}
+                                                onChange={(e) =>
+                                                    setPermisoSellos((prev) =>
+                                                        prev.map((item, i) => (i === idx ? { ...item, ubicacion: e.target.value } : item))
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>Nro antiguo</label>
+                                            <input
+                                                className="form-control"
+                                                value={sello.numeroAnterior}
+                                                onChange={(e) =>
+                                                    setPermisoSellos((prev) =>
+                                                        prev.map((item, i) =>
+                                                            i === idx ? { ...item, numeroAnterior: normalizeSelloNumero(e.target.value) } : item
+                                                        )
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>Nro nuevo</label>
+                                            <input
+                                                className="form-control"
+                                                value={sello.numeroNuevo}
+                                                onChange={(e) =>
+                                                    setPermisoSellos((prev) =>
+                                                        prev.map((item, i) =>
+                                                            i === idx ? { ...item, numeroNuevo: normalizeSelloNumero(e.target.value) } : item
+                                                        )
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Mediciones y detalle</h6>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Mediciones de energia</strong>
+                                    <small>Valores de referencia tomados en terreno.</small>
+                                </div>
+                            </div>
+                            <div className="informes-tecnicos-grid">
+                                <div className="informes-tecnico-card">
+                                    <div className="informes-tecnico-card-head">
+                                        <span className="informes-tecnico-badge">Fase / neutro</span>
+                                    </div>
+                                    <div>
+                                        <label>Medicion</label>
+                                        <input
+                                            className="form-control"
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="Ej: 220.5"
+                                            value={permisoMedicionFaseNeutro}
+                                            onChange={(e) => setPermisoMedicionFaseNeutro(normalizeMeasureInput(e.target.value))}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="informes-tecnico-card">
+                                    <div className="informes-tecnico-card-head">
+                                        <span className="informes-tecnico-badge">Neutro / tierra</span>
+                                    </div>
+                                    <div>
+                                        <label>Medicion</label>
+                                        <input
+                                            className="form-control"
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="Ej: 0.8"
+                                            value={permisoMedicionNeutroTierra}
+                                            onChange={(e) => setPermisoMedicionNeutroTierra(normalizeMeasureInput(e.target.value))}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="informes-tecnico-card">
+                                    <div className="informes-tecnico-card-head">
+                                        <span className="informes-tecnico-badge">Frecuencia</span>
+                                    </div>
+                                    <div>
+                                        <label>Hertz</label>
+                                        <input
+                                            className="form-control"
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="Ej: 50.0"
+                                            value={permisoHertz}
+                                            onChange={(e) => setPermisoHertz(normalizeMeasureInput(e.target.value))}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Equipos devueltos a orca</strong>
+                                    <small>Equipos marcados en terreno para retorno a bodega.</small>
+                                </div>
+                            </div>
+                            {permisoEquiposDevueltosOrca.length ? (
+                                <div className="informes-permiso-devueltos-list">
+                                    {permisoEquiposDevueltosOrca.map((equipo, index) => (
+                                        <div key={`permiso-devuelto-${index}`} className="informes-info-card">
+                                            <small>{`Equipo ${index + 1}`}</small>
+                                            <strong>{equipo?.nombre || "Equipo"}</strong>
+                                            <span className="informes-permiso-devuelto-serie">{`N Serie: ${equipo?.numero_serie || "-"}`}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="informes-empty py-2 mb-0">No hay equipos devueltos a orca registrados en este permiso.</div>
+                            )}
+                        </div>
+                        <div className="informes-editor-subsection">
+                            <div className="informes-editor-subsection-head">
+                                <div>
+                                    <strong>Descripcion del trabajo</strong>
+                                    <small>Resumen operativo del permiso.</small>
+                                </div>
+                            </div>
+                            <div className="informes-filtros-grid">
+                                <div className="informes-col-span-2">
+                                    <textarea
+                                        className="form-control"
+                                        rows={4}
+                                        value={permisoDescripcionTrabajo}
+                                        onChange={(e) => setPermisoDescripcionTrabajo(e.target.value)}
+                                        placeholder="Detalle del trabajo realizado"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-col-span-2 d-flex gap-2 align-items-end informes-permiso-actions">
+                        <button className="btn btn-primary" onClick={handleGuardarPermiso} disabled={savingPermiso}>
+                            <i className={`mr-2 fas ${savingPermiso ? "fa-spinner fa-spin" : permisoEditandoId ? "fa-save" : "fa-check-circle"}`} />
+                            {savingPermiso ? "Guardando..." : permisoEditandoId ? "Actualizar permiso" : "Guardar permiso"}
+                        </button>
+                        <button className="btn btn-outline-secondary" onClick={resetFormularioPermiso}>
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
     const openPreviewPdf = (title, bodyHtml) => {
         const w = window.open("", "_blank", "width=980,height=760");
         if (!w) {
@@ -1090,6 +1814,7 @@ function InformesCentros() {
     };
 
     const verActaPdf = (acta) => {
+        const tecnicosAdicionales = getTecnicosAdicionalesActa(acta);
         const body = `
         <div class="doc-top">
           <div class="orca-logo">
@@ -1106,6 +1831,7 @@ function InformesCentros() {
             <div class="meta-line">Fecha y hora: ${esc(toDisplayDate(acta.fecha_registro))}, ${esc(toDisplayHour(acta.created_at))}</div>
             <div class="meta-line">Tecnico 1: ${esc(acta.tecnico_1 || "-")}</div>
             ${acta.tecnico_2 ? `<div class="meta-line">Tecnico 2: ${esc(acta.tecnico_2)}</div>` : ""}
+            ${tecnicosAdicionales.map((item, index) => `<div class="meta-line">Tecnico ${index + 3}: ${esc(item.nombre)}</div>`).join("")}
             ${acta.recepciona_nombre ? `<div class="meta-line">Recepciona: ${esc(acta.recepciona_nombre)}</div>` : ""}
           </div>
         </div>
@@ -1137,6 +1863,12 @@ function InformesCentros() {
             <div class="sig-box">${signatureHtml(acta.firma_tecnico_2)}</div>
             <div style="margin-top:6px;font-size:12px;font-weight:700;color:#334155;text-align:center;">${esc(acta.tecnico_2 || "Sin nombre")}</div>
           </div>
+          ${tecnicosAdicionales.map((item, index) => `
+          <div class="field">
+            <b>Firma tecnico ${index + 3}</b>
+            <div class="sig-box">${signatureHtml(item.firma)}</div>
+            <div style="margin-top:6px;font-size:12px;font-weight:700;color:#334155;text-align:center;">${esc(item.nombre || "Sin nombre")}</div>
+          </div>`).join("")}
           <div class="field wide">
             <b>Firma recepciona</b>
             <div class="sig-box">${signatureHtml(acta.firma_recepciona)}</div>
@@ -1152,6 +1884,7 @@ function InformesCentros() {
         const incluirResponsabilidad = !!opts.incluirResponsabilidad;
 	    const correlativo = String(permiso?.[idField] || "sin-numero");
 	    const hasEvidence = !!String(permiso?.evidencia_foto || "").trim();
+        const tecnicosAdicionales = getFirmasTecnicosAdicionales(permiso.firmas_tecnicos_adicionales);
         const gpsItems = String(permiso.puntos_gps || "")
             .split("|")
             .map((p) => p.trim())
@@ -1189,6 +1922,9 @@ function InformesCentros() {
         const baseTierraText =
             permiso.base_tierra === true ? "Si" : permiso.base_tierra === false ? "No" : esc(permiso.base_tierra || "-");
         const cambiosEquipo = Array.isArray(permiso.cambios_equipo) ? permiso.cambios_equipo : [];
+        const equiposDevueltosOrca = Array.isArray(permiso.armado_equipos)
+            ? permiso.armado_equipos.filter((item) => normalizeText(item?.estado_uso || "") === "devuelto_bodega")
+            : [];
         const cambiosEquipoHtml = cambiosEquipo.length
             ? cambiosEquipo
                   .map(
@@ -1202,6 +1938,19 @@ function InformesCentros() {
                   )
                   .join("")
             : `<div class="sig-empty">Sin cambios de equipo registrados</div>`;
+        const equiposDevueltosOrcaHtml = equiposDevueltosOrca.length
+            ? equiposDevueltosOrca
+                  .map(
+                      (equipo, idx) => `
+                        <div style="padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:8px;">
+                          <div style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">Equipo ${idx + 1}</div>
+                          <div><b>Nombre:</b> ${esc(equipo?.nombre || "Equipo")}</div>
+                          <div><b>N Serie:</b> ${esc(equipo?.numero_serie || "-")}</div>
+                        </div>
+                      `
+                  )
+                  .join("")
+            : `<div class="sig-empty">No hay equipos devueltos a orca registrados en este permiso</div>`;
 
         const body = `
         <div class="doc-top">
@@ -1219,6 +1968,7 @@ function InformesCentros() {
             <div class="meta-line">Fecha y hora: ${esc(toDisplayDate(permiso.fecha_ingreso))}, ${esc(toDisplayHour(permiso.created_at))}</div>
             <div class="meta-line">Tecnico 1: ${esc(permiso.tecnico_1 || "-")}</div>
             ${permiso.tecnico_2 ? `<div class="meta-line">Tecnico 2: ${esc(permiso.tecnico_2)}</div>` : ""}
+            ${tecnicosAdicionales.map((item, index) => `<div class="meta-line">Tecnico ${index + 3}: ${esc(item.nombre)}</div>`).join("")}
           </div>
         </div>
 
@@ -1267,6 +2017,11 @@ function InformesCentros() {
           <div class="field wide"><b>Detalle</b>${sellosHtml}</div>
         </div>
 
+        <div class="sec-title">Equipos devueltos a orca</div>
+        <div class="grid">
+          <div class="field wide"><b>Detalle</b>${equiposDevueltosOrcaHtml}</div>
+        </div>
+
         <div class="sec-title">Descripcion del trabajo</div>
         <div class="grid">
           <div class="field wide"><b>Descripcion del trabajo</b>${esc(permiso.descripcion_trabajo || "-")}</div>
@@ -1299,6 +2054,12 @@ function InformesCentros() {
             <div class="sig-box">${signatureHtml(permiso.firma_tecnico_2)}</div>
             <div style="margin-top:6px;font-size:12px;font-weight:700;color:#334155;text-align:center;">${esc(permiso.tecnico_2 || "Sin nombre")}</div>
           </div>
+          ${tecnicosAdicionales.map((item, index) => `
+          <div class="field">
+            <b>Firma tecnico ${index + 3}</b>
+            <div class="sig-box">${signatureHtml(item.firma)}</div>
+            <div style="margin-top:6px;font-size:12px;font-weight:700;color:#334155;text-align:center;">${esc(item.nombre || "Sin nombre")}</div>
+          </div>`).join("")}
           <div class="field wide">
             <b>Firma recepciona</b>
             <div class="sig-box">${signatureHtml(permiso.firma_recepciona)}</div>
@@ -1700,6 +2461,7 @@ function InformesCentros() {
                                                     <th>Fecha registro</th>
                                                     <th>Tecnico 1</th>
                                                     <th>Tecnico 2</th>
+                                                    <th>Tecnico 3</th>
                                                     <th>Recepciona</th>
                                                     <th>Equipos considerados en este sistema</th>
                                                     <th>Centro origen (traslado)</th>
@@ -1720,6 +2482,7 @@ function InformesCentros() {
                                                         <td>{toDisplayDate(acta.fecha_registro)}</td>
                                                         <td>{acta.tecnico_1 || "-"}</td>
                                                         <td>{acta.tecnico_2 || "-"}</td>
+                                                        <td>{getTecnicosAdicionalesActa(acta).map((item) => item.nombre).join(", ") || "-"}</td>
                                                         <td>{acta.recepciona_nombre || "-"}</td>
                                                         <td className="equipos-col">{acta.equipos_considerados || "-"}</td>
                                                         <td>{acta.centro_origen_traslado || "-"}</td>
@@ -1809,106 +2572,201 @@ function InformesCentros() {
                                 <div className="card-body">
                                     <div className="informes-editor-section">
                                         <h6 className="informes-editor-section-title">Datos del centro</h6>
-                                        <div className="informes-filtros-grid">
-                                            <div>
-                                                <label>Cliente</label>
-                                                <select className="form-control" value={clienteIdForm} onChange={(e) => setClienteIdForm(e.target.value)}>
-                                                    <option value="">Seleccionar cliente</option>
-                                                    {clientesForm.map((cliente) => (
-                                                        <option key={cliente.key} value={cliente.key}>
-                                                            {cliente.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                        <div className="informes-editor-subsection">
+                                            <div className="informes-editor-subsection-head">
+                                                <div>
+                                                    <strong>Informacion del centro</strong>
+                                                    <small>Datos de referencia cargados automaticamente.</small>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label>Centro (acta)</label>
-                                                <select className="form-control" value={centroIdForm} onChange={(e) => setCentroIdForm(e.target.value)}>
-                                                    <option value="">Seleccionar centro</option>
-                                                    {centrosFormFiltrados.map((centro) => (
-                                                        <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
-                                                            {centro.nombre}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                            <div className="informes-info-grid">
+                                                <div className="informes-info-card">
+                                                    <small>Empresa</small>
+                                                    <strong>{centroSeleccionadoForm?.cliente || "-"}</strong>
+                                                </div>
+                                                <div className="informes-info-card">
+                                                    <small>Centro</small>
+                                                    <strong>{centroSeleccionadoForm?.nombre || "-"}</strong>
+                                                </div>
+                                                <div className="informes-info-card">
+                                                    <small>Codigo ponton</small>
+                                                    <strong>{centroSeleccionadoForm?.nombre_ponton || "-"}</strong>
+                                                </div>
+                                                <div className="informes-info-card">
+                                                    <small>Region</small>
+                                                    <strong>{region || "-"}</strong>
+                                                </div>
+                                                <div className="informes-info-card">
+                                                    <small>Localidad</small>
+                                                    <strong>{localidad || "-"}</strong>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label>Empresa (cliente)</label>
-                                                <input className="form-control" value={centroSeleccionadoForm?.cliente || ""} disabled />
+                                        </div>
+                                        <div className="informes-editor-subsection">
+                                            <div className="informes-editor-subsection-head">
+                                                <div>
+                                                    <strong>Seleccion y registro</strong>
+                                                    <small>Campos editables del acta.</small>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label>Centro</label>
-                                                <input className="form-control" value={centroSeleccionadoForm?.nombre || ""} disabled />
-                                            </div>
-                                            <div>
-                                                <label>Codigo ponton</label>
-                                                <input className="form-control" value={centroSeleccionadoForm?.nombre_ponton || ""} disabled />
-                                            </div>
-                                            <div>
-                                                <label>Fecha de registro</label>
-                                                <input className="form-control" type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} />
-                                            </div>
-                                            <div>
-                                                <label>Region</label>
-                                                <input className="form-control" value={region} disabled />
-                                            </div>
-                                            <div>
-                                                <label>Localidad</label>
-                                                <input className="form-control" value={localidad} disabled />
+                                            <div className="informes-filtros-grid">
+                                                <div>
+                                                    <label>Cliente</label>
+                                                    <select className="form-control" value={clienteIdForm} onChange={(e) => setClienteIdForm(e.target.value)}>
+                                                        <option value="">Seleccionar cliente</option>
+                                                        {clientesForm.map((cliente) => (
+                                                            <option key={cliente.key} value={cliente.key}>
+                                                                {cliente.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label>Centro (acta)</label>
+                                                    <select className="form-control" value={centroIdForm} onChange={(e) => setCentroIdForm(e.target.value)}>
+                                                        <option value="">Seleccionar centro</option>
+                                                        {centrosFormFiltrados.map((centro) => (
+                                                            <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
+                                                                {centro.nombre}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label>Fecha de registro</label>
+                                                    <input className="form-control" type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className="informes-editor-section">
                                         <h6 className="informes-editor-section-title">Equipo tecnico y recepcion</h6>
-                                        <div className="informes-filtros-grid">
-                                            <div>
-                                                <label>Tecnico 1</label>
-                                                <input className="form-control" value={tecnico1} onChange={(e) => setTecnico1(e.target.value)} />
+                                        <div className="informes-editor-subsection">
+                                            <div className="informes-editor-subsection-head">
+                                                <div>
+                                                    <strong>Tecnicos del acta</strong>
+                                                    <small>Principal, apoyo y tecnicos adicionales.</small>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-primary"
+                                                    onClick={agregarTecnicoAdicionalActa}
+                                                >
+                                                    <i className="fas fa-user-plus mr-1" />
+                                                    Agregar tecnico
+                                                </button>
                                             </div>
-                                            <div>
-                                                <label>
-                                                    Firma tecnico 1 {firmaTecnico1 ? <span className="firma-check">✓</span> : null}
-                                                </label>
-                                                {isSignatureImage(firmaTecnico1) ? (
-                                                    <div className="signature-preview-box">
-                                                        <img src={firmaTecnico1} alt="Firma tecnico 1" className="signature-preview-img" />
+                                            <div className="informes-tecnicos-grid">
+                                                <div className="informes-tecnico-card">
+                                                    <div className="informes-tecnico-card-head">
+                                                        <span className="informes-tecnico-badge">Tecnico 1</span>
                                                     </div>
-                                                ) : (
-                                                    <input className="form-control" value={firmaTecnico1} onChange={(e) => setFirmaTecnico1(e.target.value)} />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label>Tecnico 2</label>
-                                                <input className="form-control" value={tecnico2} onChange={(e) => setTecnico2(e.target.value)} />
-                                            </div>
-                                            <div>
-                                                <label>
-                                                    Firma tecnico 2 {firmaTecnico2 ? <span className="firma-check">✓</span> : null}
-                                                </label>
-                                                {isSignatureImage(firmaTecnico2) ? (
-                                                    <div className="signature-preview-box">
-                                                        <img src={firmaTecnico2} alt="Firma tecnico 2" className="signature-preview-img" />
+                                                    <div>
+                                                        <label>Nombre</label>
+                                                        <input className="form-control" value={tecnico1} onChange={(e) => setTecnico1(e.target.value)} />
                                                     </div>
-                                                ) : (
-                                                    <input className="form-control" value={firmaTecnico2} onChange={(e) => setFirmaTecnico2(e.target.value)} />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label>Recepciona sistema</label>
-                                                <input className="form-control" value={recepcionaNombre} onChange={(e) => setRecepcionaNombre(e.target.value)} />
-                                            </div>
-                                            <div>
-                                                <label>
-                                                    Firma recepciona {firmaRecepciona ? <span className="firma-check">✓</span> : null}
-                                                </label>
-                                                {isSignatureImage(firmaRecepciona) ? (
-                                                    <div className="signature-preview-box">
-                                                        <img src={firmaRecepciona} alt="Firma recepciona" className="signature-preview-img" />
+                                                    <div>
+                                                        <label>
+                                                            Firma tecnico 1 {firmaTecnico1 ? <span className="firma-check">✓</span> : null}
+                                                        </label>
+                                                        {isSignatureImage(firmaTecnico1) ? (
+                                                            <div className="signature-preview-box">
+                                                                <img src={firmaTecnico1} alt="Firma tecnico 1" className="signature-preview-img" />
+                                                            </div>
+                                                        ) : (
+                                                            <input className="form-control" value={firmaTecnico1} onChange={(e) => setFirmaTecnico1(e.target.value)} />
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <input className="form-control" value={firmaRecepciona} onChange={(e) => setFirmaRecepciona(e.target.value)} />
-                                                )}
+                                                </div>
+                                                <div className="informes-tecnico-card">
+                                                    <div className="informes-tecnico-card-head">
+                                                        <span className="informes-tecnico-badge">Tecnico 2</span>
+                                                    </div>
+                                                    <div>
+                                                        <label>Nombre</label>
+                                                        <input className="form-control" value={tecnico2} onChange={(e) => setTecnico2(e.target.value)} />
+                                                    </div>
+                                                    <div>
+                                                        <label>
+                                                            Firma tecnico 2 {firmaTecnico2 ? <span className="firma-check">✓</span> : null}
+                                                        </label>
+                                                        {isSignatureImage(firmaTecnico2) ? (
+                                                            <div className="signature-preview-box">
+                                                                <img src={firmaTecnico2} alt="Firma tecnico 2" className="signature-preview-img" />
+                                                            </div>
+                                                        ) : (
+                                                            <input className="form-control" value={firmaTecnico2} onChange={(e) => setFirmaTecnico2(e.target.value)} />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {tecnicosAdicionalesActa.map((item, index) => (
+                                                    <div className="informes-tecnico-card informes-tecnico-card-extra" key={`tec-extra-${index}`}>
+                                                        <div className="informes-tecnico-card-head">
+                                                            <span className="informes-tecnico-badge">Tecnico {index + 3}</span>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-link text-danger p-0"
+                                                                onClick={() => eliminarTecnicoAdicionalActa(index)}
+                                                                title="Quitar tecnico"
+                                                            >
+                                                                <i className="fas fa-trash-alt" />
+                                                            </button>
+                                                        </div>
+                                                        <div>
+                                                            <label>Nombre</label>
+                                                            <input
+                                                                className="form-control"
+                                                                value={item.nombre}
+                                                                onChange={(e) => actualizarTecnicoAdicionalActa(index, "nombre", e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label>
+                                                                Firma tecnico {index + 3} {item.firma ? <span className="firma-check">✓</span> : null}
+                                                            </label>
+                                                            {isSignatureImage(item.firma) ? (
+                                                                <div className="signature-preview-box">
+                                                                    <img src={item.firma} alt={`Firma tecnico ${index + 3}`} className="signature-preview-img" />
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    className="form-control"
+                                                                    value={item.firma}
+                                                                    onChange={(e) => actualizarTecnicoAdicionalActa(index, "firma", e.target.value)}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="informes-editor-subsection informes-editor-subsection-recepcion">
+                                            <div className="informes-editor-subsection-head">
+                                                <div>
+                                                    <strong>Recepcion</strong>
+                                                    <small>Persona que recibe y confirma el sistema.</small>
+                                                </div>
+                                            </div>
+                                            <div className="informes-tecnicos-grid informes-recepcion-grid">
+                                                <div className="informes-tecnico-card informes-recepcion-card">
+                                                    <div>
+                                                        <label>Recepciona sistema</label>
+                                                        <input className="form-control" value={recepcionaNombre} onChange={(e) => setRecepcionaNombre(e.target.value)} />
+                                                    </div>
+                                                    <div>
+                                                        <label>
+                                                            Firma recepciona {firmaRecepciona ? <span className="firma-check">✓</span> : null}
+                                                        </label>
+                                                        {isSignatureImage(firmaRecepciona) ? (
+                                                            <div className="signature-preview-box">
+                                                                <img src={firmaRecepciona} alt="Firma recepciona" className="signature-preview-img" />
+                                                            </div>
+                                                        ) : (
+                                                            <input className="form-control" value={firmaRecepciona} onChange={(e) => setFirmaRecepciona(e.target.value)} />
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -2321,186 +3179,7 @@ function InformesCentros() {
                         </div>
                     </div>
 
-                    {mostrarEditorPermiso ? (
-                        <div className="informes-editor-overlay">
-                            <div className="card informes-editor-card">
-                                <div className="card-header d-flex justify-content-between align-items-center">
-                                    <h5 className="mb-0">{permisoEditandoId ? "Editar permiso de trabajo" : "Nuevo permiso de trabajo"}</h5>
-                                    <button className="btn btn-sm btn-outline-secondary informes-editor-close-btn" onClick={resetFormularioPermiso}>
-                                        <i className="fas fa-times" />
-                                    </button>
-                                </div>
-                                <div className="card-body informes-filtros-grid">
-                                    <div>
-                                        <label>Cliente</label>
-                                        <select className="form-control" value={permisoClienteIdForm} onChange={(e) => setPermisoClienteIdForm(e.target.value)}>
-                                            <option value="">Seleccionar cliente</option>
-                                            {clientesForm.map((cliente) => (
-                                                <option key={cliente.key} value={cliente.key}>
-                                                    {cliente.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label>Centro</label>
-                                        <select className="form-control" value={permisoCentroIdForm} onChange={(e) => setPermisoCentroIdForm(e.target.value)}>
-                                            <option value="">Seleccionar centro</option>
-                                            {permisosCentrosFormFiltrados.map((centro) => (
-                                                <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
-                                                    {centro.nombre}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label>Empresa (cliente)</label>
-                                        <input className="form-control" value={permisoCentroSeleccionadoForm?.cliente || ""} disabled />
-                                    </div>
-                                    <div>
-                                        <label>Codigo ponton</label>
-                                        <input className="form-control" value={permisoCentroSeleccionadoForm?.nombre_ponton || ""} disabled />
-                                    </div>
-                                    <div>
-                                        <label>Fecha ingreso</label>
-                                        <input className="form-control" type="date" value={permisoFechaIngreso} onChange={(e) => setPermisoFechaIngreso(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label>Fecha salida</label>
-                                        <input className="form-control" type="date" value={permisoFechaSalida} onChange={(e) => setPermisoFechaSalida(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label>Correo centro</label>
-                                        <input className="form-control" value={permisoCorreoCentro} onChange={(e) => setPermisoCorreoCentro(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label>Region</label>
-                                        <input className="form-control" value={permisoRegion} disabled />
-                                    </div>
-                                    <div>
-                                        <label>Localidad</label>
-                                        <input className="form-control" value={permisoLocalidad} disabled />
-                                    </div>
-                                    <div>
-                                        <label>Tecnico 1</label>
-                                        <input className="form-control" value={permisoTecnico1} onChange={(e) => setPermisoTecnico1(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label>Tecnico 2</label>
-                                        <input className="form-control" value={permisoTecnico2} onChange={(e) => setPermisoTecnico2(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label>Recepciona</label>
-                                        <input className="form-control" value={permisoRecepcionaNombre} onChange={(e) => setPermisoRecepcionaNombre(e.target.value)} />
-                                    </div>
-                                    <div className="informes-col-span-2">
-                                        <label>Puntos GPS</label>
-                                        <div className="d-flex flex-column gap-2">
-                                            {permisoPuntosGps.map((punto, idx) => (
-                                                <div key={`permiso-gps-${idx}`} className="d-flex gap-2 align-items-center">
-                                                    <input
-                                                        className="form-control"
-                                                        placeholder={`Latitud ${idx + 1}`}
-                                                        value={punto.lat}
-                                                        onChange={(e) =>
-                                                            setPermisoPuntosGps((prev) =>
-                                                                prev.map((it, i) =>
-                                                                    i === idx ? { ...it, lat: normalizeGpsPointInput(e.target.value) } : it
-                                                                )
-                                                            )
-                                                        }
-                                                    />
-                                                    <input
-                                                        className="form-control"
-                                                        placeholder={`Longitud ${idx + 1}`}
-                                                        value={punto.lng}
-                                                        onChange={(e) =>
-                                                            setPermisoPuntosGps((prev) =>
-                                                                prev.map((it, i) =>
-                                                                    i === idx ? { ...it, lng: normalizeGpsPointInput(e.target.value) } : it
-                                                                )
-                                                            )
-                                                        }
-                                                    />
-                                                    {permisoPuntosGps.length > 1 ? (
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-secondary btn-sm"
-                                                            onClick={() =>
-                                                                setPermisoPuntosGps((prev) => prev.filter((_, i) => i !== idx))
-                                                            }
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    ) : null}
-                                                </div>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                className="btn btn-outline-primary btn-sm align-self-start"
-                                                onClick={() => setPermisoPuntosGps((prev) => [...prev, { lat: "", lng: "" }])}
-                                            >
-                                                + Agregar punto GPS
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="informes-col-span-2">
-                                        <h6 className="mb-1">Mediciones de energia</h6>
-                                    </div>
-                                    <div>
-                                        <label>Medicion fase/neutro</label>
-                                        <input
-                                            className="form-control"
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="Ej: 220.5"
-                                            value={permisoMedicionFaseNeutro}
-                                            onChange={(e) => setPermisoMedicionFaseNeutro(normalizeMeasureInput(e.target.value))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label>Medicion neutro/tierra</label>
-                                        <input
-                                            className="form-control"
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="Ej: 0.8"
-                                            value={permisoMedicionNeutroTierra}
-                                            onChange={(e) => setPermisoMedicionNeutroTierra(normalizeMeasureInput(e.target.value))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label>Hertz</label>
-                                        <input
-                                            className="form-control"
-                                            type="text"
-                                            inputMode="decimal"
-                                            placeholder="Ej: 50.0"
-                                            value={permisoHertz}
-                                            onChange={(e) => setPermisoHertz(normalizeMeasureInput(e.target.value))}
-                                        />
-                                    </div>
-                                    <div className="informes-col-span-2">
-                                        <label>Descripcion del trabajo</label>
-                                        <textarea
-                                            className="form-control"
-                                            rows={3}
-                                            value={permisoDescripcionTrabajo}
-                                            onChange={(e) => setPermisoDescripcionTrabajo(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="informes-col-span-2 d-flex gap-2 align-items-end">
-                                        <button className="btn btn-primary" onClick={handleGuardarPermiso} disabled={savingPermiso}>
-                                            {savingPermiso ? "Guardando..." : permisoEditandoId ? "Actualizar permiso" : "Guardar permiso"}
-                                        </button>
-                                        <button className="btn btn-outline-secondary" onClick={resetFormularioPermiso}>
-                                            Cerrar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
+                    {mostrarEditorPermiso ? renderPermisoEditor() : null}
                 </>
             ) : (
                 <div className="card informes-centros-tabla">
@@ -2512,186 +3191,7 @@ function InformesCentros() {
                 </div>
             )}
 
-            {subcategoria !== "intervencion" && mostrarEditorPermiso ? (
-                <div className="informes-editor-overlay">
-                    <div className="card informes-editor-card">
-                        <div className="card-header d-flex justify-content-between align-items-center">
-                            <h5 className="mb-0">{permisoEditandoId ? "Editar permiso de trabajo" : "Nuevo permiso de trabajo"}</h5>
-                            <button className="btn btn-sm btn-outline-secondary informes-editor-close-btn" onClick={resetFormularioPermiso}>
-                                <i className="fas fa-times" />
-                            </button>
-                        </div>
-                        <div className="card-body informes-filtros-grid">
-                            <div>
-                                <label>Cliente</label>
-                                <select className="form-control" value={permisoClienteIdForm} onChange={(e) => setPermisoClienteIdForm(e.target.value)}>
-                                    <option value="">Seleccionar cliente</option>
-                                    {clientesForm.map((cliente) => (
-                                        <option key={cliente.key} value={cliente.key}>
-                                            {cliente.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label>Centro</label>
-                                <select className="form-control" value={permisoCentroIdForm} onChange={(e) => setPermisoCentroIdForm(e.target.value)}>
-                                    <option value="">Seleccionar centro</option>
-                                    {permisosCentrosFormFiltrados.map((centro) => (
-                                        <option key={centro.id || centro.id_centro} value={centro.id || centro.id_centro}>
-                                            {centro.nombre}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label>Empresa (cliente)</label>
-                                <input className="form-control" value={permisoCentroSeleccionadoForm?.cliente || ""} disabled />
-                            </div>
-                            <div>
-                                <label>Codigo ponton</label>
-                                <input className="form-control" value={permisoCentroSeleccionadoForm?.nombre_ponton || ""} disabled />
-                            </div>
-                            <div>
-                                <label>Fecha ingreso</label>
-                                <input className="form-control" type="date" value={permisoFechaIngreso} onChange={(e) => setPermisoFechaIngreso(e.target.value)} />
-                            </div>
-                            <div>
-                                <label>Fecha salida</label>
-                                <input className="form-control" type="date" value={permisoFechaSalida} onChange={(e) => setPermisoFechaSalida(e.target.value)} />
-                            </div>
-                            <div>
-                                <label>Correo centro</label>
-                                <input className="form-control" value={permisoCorreoCentro} onChange={(e) => setPermisoCorreoCentro(e.target.value)} />
-                            </div>
-                            <div>
-                                <label>Region</label>
-                                <input className="form-control" value={permisoRegion} disabled />
-                            </div>
-                            <div>
-                                <label>Localidad</label>
-                                <input className="form-control" value={permisoLocalidad} disabled />
-                            </div>
-                            <div>
-                                <label>Tecnico 1</label>
-                                <input className="form-control" value={permisoTecnico1} onChange={(e) => setPermisoTecnico1(e.target.value)} />
-                            </div>
-                            <div>
-                                <label>Tecnico 2</label>
-                                <input className="form-control" value={permisoTecnico2} onChange={(e) => setPermisoTecnico2(e.target.value)} />
-                            </div>
-                            <div>
-                                <label>Recepciona</label>
-                                <input className="form-control" value={permisoRecepcionaNombre} onChange={(e) => setPermisoRecepcionaNombre(e.target.value)} />
-                            </div>
-                            <div className="informes-col-span-2">
-                                <label>Puntos GPS</label>
-                                <div className="d-flex flex-column gap-2">
-                                    {permisoPuntosGps.map((punto, idx) => (
-                                        <div key={`permiso-gps-fallback-${idx}`} className="d-flex gap-2 align-items-center">
-                                            <input
-                                                className="form-control"
-                                                placeholder={`Latitud ${idx + 1}`}
-                                                value={punto.lat}
-                                                onChange={(e) =>
-                                                    setPermisoPuntosGps((prev) =>
-                                                        prev.map((it, i) =>
-                                                            i === idx ? { ...it, lat: normalizeGpsPointInput(e.target.value) } : it
-                                                        )
-                                                    )
-                                                }
-                                            />
-                                            <input
-                                                className="form-control"
-                                                placeholder={`Longitud ${idx + 1}`}
-                                                value={punto.lng}
-                                                onChange={(e) =>
-                                                    setPermisoPuntosGps((prev) =>
-                                                        prev.map((it, i) =>
-                                                            i === idx ? { ...it, lng: normalizeGpsPointInput(e.target.value) } : it
-                                                        )
-                                                    )
-                                                }
-                                            />
-                                            {permisoPuntosGps.length > 1 ? (
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-secondary btn-sm"
-                                                    onClick={() =>
-                                                        setPermisoPuntosGps((prev) => prev.filter((_, i) => i !== idx))
-                                                    }
-                                                >
-                                                    ✕
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-primary btn-sm align-self-start"
-                                        onClick={() => setPermisoPuntosGps((prev) => [...prev, { lat: "", lng: "" }])}
-                                    >
-                                        + Agregar punto GPS
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="informes-col-span-2">
-                                <h6 className="mb-1">Mediciones de energia</h6>
-                            </div>
-                            <div>
-                                <label>Medicion fase/neutro</label>
-                                <input
-                                    className="form-control"
-                                    type="text"
-                                    inputMode="decimal"
-                                    placeholder="Ej: 220.5"
-                                    value={permisoMedicionFaseNeutro}
-                                    onChange={(e) => setPermisoMedicionFaseNeutro(normalizeMeasureInput(e.target.value))}
-                                />
-                            </div>
-                            <div>
-                                <label>Medicion neutro/tierra</label>
-                                <input
-                                    className="form-control"
-                                    type="text"
-                                    inputMode="decimal"
-                                    placeholder="Ej: 0.8"
-                                    value={permisoMedicionNeutroTierra}
-                                    onChange={(e) => setPermisoMedicionNeutroTierra(normalizeMeasureInput(e.target.value))}
-                                />
-                            </div>
-                            <div>
-                                <label>Hertz</label>
-                                <input
-                                    className="form-control"
-                                    type="text"
-                                    inputMode="decimal"
-                                    placeholder="Ej: 50.0"
-                                    value={permisoHertz}
-                                    onChange={(e) => setPermisoHertz(normalizeMeasureInput(e.target.value))}
-                                />
-                            </div>
-                            <div className="informes-col-span-2">
-                                <label>Descripcion del trabajo</label>
-                                <textarea
-                                    className="form-control"
-                                    rows={3}
-                                    value={permisoDescripcionTrabajo}
-                                    onChange={(e) => setPermisoDescripcionTrabajo(e.target.value)}
-                                />
-                            </div>
-                            <div className="informes-col-span-2 d-flex gap-2 align-items-end">
-                                <button className="btn btn-primary" onClick={handleGuardarPermiso} disabled={savingPermiso}>
-                                    {savingPermiso ? "Guardando..." : permisoEditandoId ? "Actualizar permiso" : "Guardar permiso"}
-                                </button>
-                                <button className="btn btn-outline-secondary" onClick={resetFormularioPermiso}>
-                                    Cerrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
+            {subcategoria !== "intervencion" && mostrarEditorPermiso ? renderPermisoEditor() : null}
 
         </div>
     );
