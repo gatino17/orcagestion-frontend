@@ -253,6 +253,34 @@ const normalizeCorrelativoSearch = (value = "") =>
         .replace(/^n\s*/i, "")
         .replace(/[^\d]/g, "");
 
+const OVERVIEW_PERIODS = [
+    { value: "7d", label: "7 dias" },
+    { value: "30d", label: "30 dias" },
+    { value: "month", label: "Este mes" },
+    { value: "all", label: "Todos" }
+];
+
+const startOfToday = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const startOfCurrentMonth = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+};
+
+const parseComparableDate = (value) => {
+    const iso = toInputDate(value);
+    if (iso) {
+        const [y, m, d] = iso.split("-").map(Number);
+        return new Date(y, (m || 1) - 1, d || 1);
+    }
+    if (!value) return null;
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
 const SINONIMOS_EQUIPOS = {
     "ip pc": "pc",
     "ip pc nvr": "pc",
@@ -418,6 +446,14 @@ function InformesCentros() {
 
     const [actasEntrega, setActasEntrega] = useState([]);
     const [permisosTrabajo, setPermisosTrabajo] = useState([]);
+    const [overviewLoading, setOverviewLoading] = useState(false);
+    const [overviewPeriodo, setOverviewPeriodo] = useState("30d");
+    const [overviewActasEntrega, setOverviewActasEntrega] = useState([]);
+    const [overviewReapuntamientos, setOverviewReapuntamientos] = useState([]);
+    const [overviewPermisos, setOverviewPermisos] = useState([]);
+    const [overviewMantenciones, setOverviewMantenciones] = useState([]);
+    const [overviewRetiros, setOverviewRetiros] = useState([]);
+    const [overviewLevantamientos, setOverviewLevantamientos] = useState([]);
     const [savingPermiso, setSavingPermiso] = useState(false);
     const [permisoEditandoId, setPermisoEditandoId] = useState(null);
     const [permisoActaEntregaId, setPermisoActaEntregaId] = useState(null);
@@ -549,6 +585,198 @@ function InformesCentros() {
             return true;
         });
     }, [permisosTrabajo, filtroCliente, filtroCentroId, filtroFechaDesde, filtroFechaHasta, filtroCorrelativo, subcategoria]);
+
+    const overviewRowsBase = useMemo(() => {
+        const pushRow = (target, item) => target.push(item);
+        const clienteMatch = (rawCliente) =>
+            filtroCliente === "all" || normalizeText(rawCliente || "") === normalizeText(filtroCliente);
+
+        const rows = [];
+
+        overviewActasEntrega.forEach((acta) => {
+            const cliente = acta.empresa || acta.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = acta.created_at || acta.updated_at || acta.fecha_registro;
+            pushRow(rows, {
+                id: `acta-${acta.id_acta_entrega}`,
+                tipo: "acta_entrega",
+                tipoLabel: "Instalacion",
+                correlativo: `N${acta.id_acta_entrega || "-"}`,
+                cliente,
+                centro: acta.centro || "-",
+                tecnico: [acta.tecnico_1, acta.tecnico_2, ...getTecnicosAdicionalesActa(acta).map((item) => item.nombre)].filter(Boolean).join(", ") || "-",
+                estado: "Acta registrada",
+                descripcion: acta.equipos_considerados || acta.codigo_ponton || "-",
+                fechaPrincipal: acta.fecha_registro,
+                fechaOrden: parseComparableDate(fechaBase || acta.fecha_registro),
+                raw: acta
+            });
+        });
+
+        overviewReapuntamientos.forEach((acta) => {
+            const cliente = acta.empresa || acta.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = acta.created_at || acta.updated_at || acta.fecha_registro;
+            pushRow(rows, {
+                id: `reap-${acta.id_acta_entrega}`,
+                tipo: "reapuntamiento",
+                tipoLabel: "Reapuntamiento",
+                correlativo: `N${acta.id_acta_entrega || "-"}`,
+                cliente,
+                centro: acta.centro || "-",
+                tecnico: [acta.tecnico_1, acta.tecnico_2, ...getTecnicosAdicionalesActa(acta).map((item) => item.nombre)].filter(Boolean).join(", ") || "-",
+                estado: "Acta registrada",
+                descripcion: acta.equipos_considerados || acta.codigo_ponton || "-",
+                fechaPrincipal: acta.fecha_registro,
+                fechaOrden: parseComparableDate(fechaBase || acta.fecha_registro),
+                raw: acta
+            });
+        });
+
+        overviewPermisos.forEach((permiso) => {
+            const cliente = permiso.empresa || permiso.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = permiso.created_at || permiso.updated_at || permiso.fecha_ingreso;
+            pushRow(rows, {
+                id: `perm-${permiso.id_permiso_trabajo}`,
+                tipo: "intervencion",
+                tipoLabel: "Permiso",
+                correlativo: `N${permiso.id_permiso_trabajo || "-"}`,
+                cliente,
+                centro: permiso.centro || "-",
+                tecnico: [permiso.tecnico_1, permiso.tecnico_2, ...getFirmasTecnicosAdicionales(permiso.firmas_tecnicos_adicionales).map((item) => item.nombre)].filter(Boolean).join(", ") || "-",
+                estado: "Permiso creado",
+                descripcion: permiso.descripcion_trabajo || "-",
+                fechaPrincipal: permiso.fecha_ingreso,
+                fechaOrden: parseComparableDate(fechaBase || permiso.fecha_ingreso),
+                raw: permiso
+            });
+        });
+
+        overviewMantenciones.forEach((item) => {
+            const cliente = item.empresa || item.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = item.created_at || item.updated_at || item.fecha_ingreso;
+            pushRow(rows, {
+                id: `mant-${item.id_mantencion_terreno}`,
+                tipo: "mantencion",
+                tipoLabel: "Mantencion",
+                correlativo: `N${item.id_mantencion_terreno || "-"}`,
+                cliente,
+                centro: item.centro || "-",
+                tecnico: [item.tecnico_1, item.tecnico_2, ...getFirmasTecnicosAdicionales(item.firmas_tecnicos_adicionales).map((tecnico) => tecnico.nombre)].filter(Boolean).join(", ") || "-",
+                estado: "Finalizado",
+                descripcion: item.descripcion_trabajo || "-",
+                fechaPrincipal: item.fecha_ingreso,
+                fechaOrden: parseComparableDate(fechaBase || item.fecha_ingreso),
+                raw: item
+            });
+        });
+
+        overviewRetiros.forEach((item) => {
+            const cliente = item.empresa || item.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = item.created_at || item.updated_at || item.fecha_retiro;
+            const estadoEdicion = String(item.estado_edicion || "finalizado").trim().toLowerCase();
+            pushRow(rows, {
+                id: `ret-${item.id_retiro_terreno}`,
+                tipo: "retiro",
+                tipoLabel: "Retiro",
+                correlativo: `N${item.id_retiro_terreno || "-"}`,
+                cliente,
+                centro: item.centro || "-",
+                tecnico: [item.tecnico_1, item.tecnico_2, ...getFirmasTecnicosAdicionales(item.firmas_tecnicos_adicionales).map((tecnico) => tecnico.nombre)].filter(Boolean).join(", ") || "-",
+                estado:
+                    estadoEdicion === "edicion_solicitada"
+                        ? "Edicion solicitada"
+                        : estadoEdicion === "edicion_autorizada"
+                            ? "Edicion autorizada"
+                            : estadoEdicion === "edicion_rechazada"
+                                ? "Edicion rechazada"
+                                : "Finalizado",
+                descripcion: item.descripcion_trabajo || "-",
+                fechaPrincipal: item.fecha_retiro,
+                fechaOrden: parseComparableDate(fechaBase || item.fecha_retiro),
+                raw: item
+            });
+        });
+
+        overviewLevantamientos.forEach((item) => {
+            const cliente = item.empresa || item.cliente || "";
+            if (!clienteMatch(cliente)) return;
+            const fechaBase = item.created_at || item.updated_at || item.fecha_levantamiento;
+            pushRow(rows, {
+                id: `lev-${item.id_levantamiento_terreno}`,
+                tipo: "levantamiento",
+                tipoLabel: "Levantamiento",
+                correlativo: `N${item.id_levantamiento_terreno || "-"}`,
+                cliente,
+                centro: item.centro || "-",
+                tecnico: "-",
+                estado: String(item.estado || "finalizado").trim() || "-",
+                descripcion: item.resumen || item.observaciones || "-",
+                fechaPrincipal: item.fecha_levantamiento,
+                fechaOrden: parseComparableDate(fechaBase || item.fecha_levantamiento),
+                raw: item
+            });
+        });
+
+        return rows.sort((a, b) => {
+            const ta = a.fechaOrden ? a.fechaOrden.getTime() : 0;
+            const tb = b.fechaOrden ? b.fechaOrden.getTime() : 0;
+            return tb - ta;
+        });
+    }, [
+        overviewActasEntrega,
+        overviewReapuntamientos,
+        overviewPermisos,
+        overviewMantenciones,
+        overviewRetiros,
+        overviewLevantamientos,
+        filtroCliente
+    ]);
+
+    const overviewRowsPeriodo = useMemo(() => {
+        if (overviewPeriodo === "all") return overviewRowsBase;
+        const inicioHoy = startOfToday();
+        const fechaMinima =
+            overviewPeriodo === "month"
+                ? startOfCurrentMonth()
+                : new Date(inicioHoy.getFullYear(), inicioHoy.getMonth(), inicioHoy.getDate() - (overviewPeriodo === "7d" ? 6 : 29));
+        return overviewRowsBase.filter((item) => item.fechaOrden && item.fechaOrden >= fechaMinima);
+    }, [overviewRowsBase, overviewPeriodo]);
+
+    const overviewRowsRecientes = useMemo(() => overviewRowsPeriodo.slice(0, 12), [overviewRowsPeriodo]);
+
+    const overviewTotalesRapidos = useMemo(() => {
+        const inicioMes = startOfCurrentMonth();
+        const inicio30 = new Date(startOfToday().getFullYear(), startOfToday().getMonth(), startOfToday().getDate() - 29);
+        return {
+            esteMes: overviewRowsBase.filter((item) => item.fechaOrden && item.fechaOrden >= inicioMes).length,
+            ultimos30: overviewRowsBase.filter((item) => item.fechaOrden && item.fechaOrden >= inicio30).length
+        };
+    }, [overviewRowsBase]);
+
+    const overviewCentrosIntervenidos = useMemo(() => {
+        const set = new Set(
+            overviewRowsPeriodo
+                .map((item) => normalizeText(item.centro || ""))
+                .filter(Boolean)
+        );
+        return set.size;
+    }, [overviewRowsPeriodo]);
+
+    const overviewResumenCards = useMemo(() => {
+        const countBy = (tipo) => overviewRowsPeriodo.filter((item) => item.tipo === tipo).length;
+        return [
+            { key: "acta_entrega", label: "Instalaciones", value: countBy("acta_entrega"), icon: "fa-file-signature", tone: "blue" },
+            { key: "reapuntamiento", label: "Reapuntamientos", value: countBy("reapuntamiento"), icon: "fa-crosshairs", tone: "sky" },
+            { key: "intervencion", label: "Permisos", value: countBy("intervencion"), icon: "fa-clipboard-check", tone: "indigo" },
+            { key: "mantencion", label: "Mantenciones", value: countBy("mantencion"), icon: "fa-tools", tone: "green" },
+            { key: "retiro", label: "Retiros", value: countBy("retiro"), icon: "fa-truck-loading", tone: "amber" },
+            { key: "levantamiento", label: "Levantamientos", value: countBy("levantamiento"), icon: "fa-satellite-dish", tone: "red" }
+        ];
+    }, [overviewRowsPeriodo]);
 
     const totalActaPages = Math.max(1, Math.ceil(actasFiltradas.length / actaPageSize));
     const totalPermisoPages = Math.max(1, Math.ceil(permisosFiltrados.length / permisoPageSize));
@@ -831,6 +1059,57 @@ function InformesCentros() {
         };
         fetchCentros();
     }, []);
+
+    useEffect(() => {
+        let activo = true;
+        const cargarOverview = async () => {
+            setOverviewLoading(true);
+            try {
+                const commonParams = {
+                    centro_id: filtroCentroId || undefined,
+                    fecha_desde: filtroFechaDesde || undefined,
+                    fecha_hasta: filtroFechaHasta || undefined
+                };
+                const [
+                    actasInstalacion,
+                    actasReapuntamiento,
+                    permisosIntervencion,
+                    mantenciones,
+                    retiros,
+                    levantamientos
+                ] = await Promise.all([
+                    obtenerActasEntrega({ ...commonParams, tipo_instalacion: "instalacion" }),
+                    obtenerActasEntrega({ ...commonParams, tipo_instalacion: "reapuntamiento" }),
+                    obtenerPermisosTrabajo(commonParams),
+                    obtenerMantencionesTerreno(commonParams),
+                    obtenerRetirosTerreno(commonParams),
+                    obtenerLevantamientosTerreno(commonParams)
+                ]);
+                if (!activo) return;
+                setOverviewActasEntrega(Array.isArray(actasInstalacion) ? actasInstalacion : []);
+                setOverviewReapuntamientos(Array.isArray(actasReapuntamiento) ? actasReapuntamiento : []);
+                setOverviewPermisos(Array.isArray(permisosIntervencion) ? permisosIntervencion : []);
+                setOverviewMantenciones(Array.isArray(mantenciones) ? mantenciones : []);
+                setOverviewRetiros(Array.isArray(retiros) ? retiros : []);
+                setOverviewLevantamientos(Array.isArray(levantamientos) ? levantamientos : []);
+            } catch (error) {
+                if (!activo) return;
+                console.error("Error al cargar overview de informes:", error);
+                setOverviewActasEntrega([]);
+                setOverviewReapuntamientos([]);
+                setOverviewPermisos([]);
+                setOverviewMantenciones([]);
+                setOverviewRetiros([]);
+                setOverviewLevantamientos([]);
+            } finally {
+                if (activo) setOverviewLoading(false);
+            }
+        };
+        cargarOverview();
+        return () => {
+            activo = false;
+        };
+    }, [filtroCentroId, filtroFechaDesde, filtroFechaHasta]);
 
     useEffect(() => {
         if (subcategoria === "acta_entrega" || subcategoria === "reapuntamiento") {
@@ -1938,19 +2217,25 @@ function InformesCentros() {
                   )
                   .join("")
             : `<div class="sig-empty">Sin cambios de equipo registrados</div>`;
-        const equiposDevueltosOrcaHtml = equiposDevueltosOrca.length
-            ? equiposDevueltosOrca
-                  .map(
-                      (equipo, idx) => `
-                        <div style="padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:8px;">
-                          <div style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">Equipo ${idx + 1}</div>
-                          <div><b>Nombre:</b> ${esc(equipo?.nombre || "Equipo")}</div>
-                          <div><b>N Serie:</b> ${esc(equipo?.numero_serie || "-")}</div>
-                        </div>
-                      `
-                  )
-                  .join("")
-            : `<div class="sig-empty">No hay equipos devueltos a orca registrados en este permiso</div>`;
+        const equiposDevueltosOrcaHtml = equiposDevueltosOrca
+            .map(
+                (equipo, idx) => `
+                    <div style="padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;background:#f8fbff;margin-bottom:8px;">
+                      <div style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">Equipo ${idx + 1}</div>
+                      <div><b>Nombre:</b> ${esc(equipo?.nombre || "Equipo")}</div>
+                      <div><b>N Serie:</b> ${esc(equipo?.numero_serie || "-")}</div>
+                    </div>
+                  `
+            )
+            .join("");
+        const equiposDevueltosOrcaSection = equiposDevueltosOrca.length
+            ? `
+                <div class="sec-title">Equipos devueltos a orca</div>
+                <div class="grid">
+                  <div class="field wide"><b>Detalle</b>${equiposDevueltosOrcaHtml}</div>
+                </div>
+              `
+            : "";
 
         const body = `
         <div class="doc-top">
@@ -2017,10 +2302,7 @@ function InformesCentros() {
           <div class="field wide"><b>Detalle</b>${sellosHtml}</div>
         </div>
 
-        <div class="sec-title">Equipos devueltos a orca</div>
-        <div class="grid">
-          <div class="field wide"><b>Detalle</b>${equiposDevueltosOrcaHtml}</div>
-        </div>
+        ${equiposDevueltosOrcaSection}
 
         <div class="sec-title">Descripcion del trabajo</div>
         <div class="grid">
@@ -2347,6 +2629,34 @@ function InformesCentros() {
         }
     };
 
+    const handleAbrirRegistroReciente = (item) => {
+        if (!item?.raw) return;
+        if (item.tipo === "acta_entrega" || item.tipo === "reapuntamiento") {
+            setSubcategoria(item.tipo);
+            handleEditarActa(item.raw);
+            return;
+        }
+        if (item.tipo === "intervencion") {
+            setSubcategoria("intervencion");
+            handleEditarPermiso(item.raw);
+            return;
+        }
+        if (item.tipo === "mantencion") {
+            setSubcategoria("mantencion");
+            verMantencionPdf(item.raw);
+            return;
+        }
+        if (item.tipo === "retiro") {
+            setSubcategoria("retiro");
+            verRetiroPdf(item.raw);
+            return;
+        }
+        if (item.tipo === "levantamiento") {
+            setSubcategoria("levantamiento");
+            verLevantamientoPdf(item.raw);
+        }
+    };
+
     return (
         <div className="informes-centros-page container-fluid">
             <div className="card informes-centros-hero">
@@ -2415,6 +2725,105 @@ function InformesCentros() {
                             />
                         </div>
                     ) : null}
+                </div>
+            </div>
+
+            <div className="card informes-overview-card">
+                <div className="card-body">
+                    <div className="informes-overview-head">
+                        <div>
+                            <h5 className="mb-1">Actividad reciente</h5>
+                            <p className="text-muted mb-0">Vista consolidada para revisar lo ultimo registrado sin entrar a cada subcategoria.</p>
+                        </div>
+                        <div className="informes-overview-quickstats">
+                            <div className="informes-overview-pill">
+                                <small>Este mes</small>
+                                <strong>{overviewTotalesRapidos.esteMes}</strong>
+                            </div>
+                            <div className="informes-overview-pill">
+                                <small>Ultimos 30 dias</small>
+                                <strong>{overviewTotalesRapidos.ultimos30}</strong>
+                            </div>
+                            <div className="informes-overview-pill">
+                                <small>Centros</small>
+                                <strong>{overviewCentrosIntervenidos}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-overview-periods">
+                        {OVERVIEW_PERIODS.map((periodo) => (
+                            <button
+                                key={periodo.value}
+                                type="button"
+                                className={`btn btn-sm ${overviewPeriodo === periodo.value ? "btn-primary" : "btn-outline-primary"}`}
+                                onClick={() => setOverviewPeriodo(periodo.value)}>
+                                {periodo.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="informes-overview-grid">
+                        {overviewResumenCards.map((card) => (
+                            <div key={card.key} className={`informes-overview-metric informes-overview-${card.tone}`}>
+                                <div className="informes-overview-metric-icon">
+                                    <i className={`fas ${card.icon}`} />
+                                </div>
+                                <div>
+                                    <small>{card.label}</small>
+                                    <strong>{card.value}</strong>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="informes-overview-table-wrap">
+                        {overviewLoading ? (
+                            <div className="informes-empty">Cargando actividad reciente...</div>
+                        ) : !overviewRowsRecientes.length ? (
+                            <div className="informes-empty">No hay actividad reciente para el periodo seleccionado.</div>
+                        ) : (
+                            <div className="table-responsive">
+                                <table className="table table-sm table-hover informes-table informes-overview-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Tipo</th>
+                                            <th>Correlativo</th>
+                                            <th>Cliente</th>
+                                            <th>Centro</th>
+                                            <th>Tecnicos</th>
+                                            <th>Estado</th>
+                                            <th>Resumen</th>
+                                            <th>Accion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {overviewRowsRecientes.map((item) => (
+                                            <tr key={item.id}>
+                                                <td>{toDisplayDate(item.fechaPrincipal)}</td>
+                                                <td>
+                                                    <span className={`informes-overview-type type-${item.tipo}`}>{item.tipoLabel}</span>
+                                                </td>
+                                                <td>{item.correlativo}</td>
+                                                <td>{item.cliente || "-"}</td>
+                                                <td>{item.centro || "-"}</td>
+                                                <td className="equipos-col">{item.tecnico || "-"}</td>
+                                                <td>{item.estado || "-"}</td>
+                                                <td className="equipos-col">{item.descripcion || "-"}</td>
+                                                <td className="acciones-col">
+                                                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleAbrirRegistroReciente(item)}>
+                                                        <i className="fas fa-arrow-right mr-1" />
+                                                        Abrir
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

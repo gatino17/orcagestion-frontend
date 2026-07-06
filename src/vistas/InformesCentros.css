@@ -138,6 +138,190 @@
 
 .metrica-card-centrales .metrica-icon { color: #7e22ce; }
 
+.informes-overview-card {
+  border: 1px solid #dbeafe;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+}
+
+.informes-overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.informes-overview-quickstats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.informes-overview-pill {
+  min-width: 118px;
+  padding: 0.7rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+
+.informes-overview-pill small {
+  display: block;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.informes-overview-pill strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.informes-overview-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.informes-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.informes-overview-metric {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.informes-overview-metric-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.informes-overview-metric small {
+  display: block;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.informes-overview-metric strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+.informes-overview-blue .informes-overview-metric-icon {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.informes-overview-sky .informes-overview-metric-icon {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.informes-overview-indigo .informes-overview-metric-icon {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.informes-overview-green .informes-overview-metric-icon {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.informes-overview-amber .informes-overview-metric-icon {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.informes-overview-red .informes-overview-metric-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.informes-overview-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.informes-overview-table thead th {
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+}
+
+.informes-overview-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.informes-overview-type.type-acta_entrega {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.informes-overview-type.type-reapuntamiento {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.informes-overview-type.type-intervencion {
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+
+.informes-overview-type.type-mantencion {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.informes-overview-type.type-retiro {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.informes-overview-type.type-levantamiento {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
 .informes-centros-tabla {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
@@ -397,6 +581,15 @@
 }
 
 @media (max-width: 992px) {
+  .informes-overview-head {
+    flex-direction: column;
+  }
+
+  .informes-overview-quickstats {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .informes-col-span-2 {
     grid-column: span 1;
   }
