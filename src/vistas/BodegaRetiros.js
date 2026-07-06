@@ -167,12 +167,16 @@ export default function BodegaRetiros() {
   const [mostrarTablaAsignaciones, setMostrarTablaAsignaciones] = useState(false);
   const [mostrarTablaBajas, setMostrarTablaBajas] = useState(false);
   const [mostrarTablaDespachos, setMostrarTablaDespachos] = useState(false);
+  const [mostrarTablaCentros, setMostrarTablaCentros] = useState(false);
   const [filtroHistorial, setFiltroHistorial] = useState("");
   const [filtroInventario, setFiltroInventario] = useState("");
   const [filtroSerieBodega, setFiltroSerieBodega] = useState("");
   const [filtroSerieBaja, setFiltroSerieBaja] = useState("");
   const [filtroTecnicoAsignacion, setFiltroTecnicoAsignacion] = useState("");
   const [filtroDespachoCentro, setFiltroDespachoCentro] = useState("");
+  const [filtroEquiposCentro, setFiltroEquiposCentro] = useState("");
+  const [equiposCentroPage, setEquiposCentroPage] = useState(1);
+  const [equiposCentroPageSize, setEquiposCentroPageSize] = useState(10);
   const [inventarioManual, setInventarioManual] = useState([]);
   const [showIngresoInventario, setShowIngresoInventario] = useState(false);
   const [inventarioEditandoId, setInventarioEditandoId] = useState(null);
@@ -199,6 +203,7 @@ export default function BodegaRetiros() {
   });
   const [historialCentro, setHistorialCentro] = useState(null);
   const [historialCentroLoading, setHistorialCentroLoading] = useState(false);
+  const [historialEquipo, setHistorialEquipo] = useState(null);
   const [retiroRevision, setRetiroRevision] = useState(null);
   const [revisionEquiposArea, setRevisionEquiposArea] = useState([]);
   const [asignandoRevision, setAsignandoRevision] = useState(false);
@@ -415,6 +420,10 @@ export default function BodegaRetiros() {
   useEffect(() => {
     cargarRetiros();
   }, [clienteId, centroId]);
+
+  useEffect(() => {
+    setEquiposCentroPage(1);
+  }, [filtroEquiposCentro, equiposCentroPageSize, clienteId, centroId]);
 
   const enTransito = useMemo(
     () => retiros.filter((r) => String(r.estado_logistico || "") === "en_transito"),
@@ -830,15 +839,72 @@ export default function BodegaRetiros() {
     [inventarioEquipos]
   );
 
-  const totalEquiposEnCentros = useMemo(
-    () =>
-      (inventarioEquipos || []).filter((x) => {
-        const centro = String(x?.centro || "-").trim();
-        const ubicacion = normalizeText(x?.ubicacion || "");
-        return centro && centro !== "-" && ubicacion !== "bodega central" && !ubicacion.includes("bodega");
-      }).length,
-    [inventarioEquipos]
+  const equiposTrabajandoRows = useMemo(() => {
+    const latestBySerie = new Map();
+    (Array.isArray(actasEntrega) ? actasEntrega : []).forEach((acta) => {
+      const cliente = acta?.empresa || acta?.cliente || "-";
+      const centro = acta?.centro || "-";
+      const fechaInstalacion = acta?.fecha_registro || null;
+      const fechaOrden = new Date(acta?.updated_at || acta?.created_at || acta?.fecha_registro || 0).getTime();
+      const tecnicos = [acta?.tecnico_1, acta?.tecnico_2]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .join(", ");
+      const equipos = Array.isArray(acta?.armado_equipos) ? acta.armado_equipos : [];
+      equipos.forEach((eq, idx) => {
+        const serie = String(eq?.numero_serie || "").trim();
+        if (!serie) return;
+        const estadoUso = normalizeText(eq?.estado_uso || "instalado");
+        const estadoLogistico = normalizeText(eq?.estado_logistico || "sin_movimiento");
+        const key = serie.toUpperCase();
+        const previo = latestBySerie.get(key);
+        if (previo && Number(previo.fechaOrden || 0) > fechaOrden) return;
+        latestBySerie.set(key, {
+          rowKey: `trabajo-${acta?.id_acta_entrega || "0"}-${idx}-${key}`,
+          serie,
+          codigo: String(eq?.codigo || "").trim() || "-",
+          equipo: String(eq?.nombre || "Equipo").trim() || "Equipo",
+          cliente,
+          centro,
+          fechaInstalacion,
+          fechaOrden,
+          tecnico: tecnicos || "-",
+          estadoUso,
+          estadoLogistico,
+        });
+      });
+    });
+
+    return Array.from(latestBySerie.values())
+      .filter((item) => item.estadoUso !== "devuelto_bodega")
+      .sort((a, b) => Number(b.fechaOrden || 0) - Number(a.fechaOrden || 0));
+  }, [actasEntrega]);
+
+  const equiposTrabajandoFiltrados = useMemo(() => {
+    const q = normalizeText(filtroEquiposCentro);
+    return equiposTrabajandoRows.filter((item) => {
+      if (!q) return true;
+      return normalizeText(`${item.serie} ${item.codigo} ${item.equipo} ${item.cliente} ${item.centro}`).includes(q);
+    });
+  }, [equiposTrabajandoRows, filtroEquiposCentro]);
+
+  const totalEquiposCentroPages = useMemo(
+    () => Math.max(1, Math.ceil(equiposTrabajandoFiltrados.length / equiposCentroPageSize)),
+    [equiposTrabajandoFiltrados.length, equiposCentroPageSize]
   );
+
+  const equiposTrabajandoPaginados = useMemo(() => {
+    const start = (equiposCentroPage - 1) * equiposCentroPageSize;
+    return equiposTrabajandoFiltrados.slice(start, start + equiposCentroPageSize);
+  }, [equiposTrabajandoFiltrados, equiposCentroPage, equiposCentroPageSize]);
+
+  const totalEquiposEnCentros = useMemo(() => equiposTrabajandoRows.length, [equiposTrabajandoRows]);
+
+  useEffect(() => {
+    if (equiposCentroPage > totalEquiposCentroPages) {
+      setEquiposCentroPage(totalEquiposCentroPages);
+    }
+  }, [equiposCentroPage, totalEquiposCentroPages]);
 
   const totalEquiposBaja = useMemo(
     () =>
@@ -1021,7 +1087,7 @@ export default function BodegaRetiros() {
   }, [armadosDespachoFiltrados, guiasPorArmado]);
 
   const algunToggleLogisticaActivo =
-    mostrarTablaTransito || mostrarTablaBodega || mostrarTablaAsignaciones || mostrarTablaBajas || mostrarTablaDespachos;
+    mostrarTablaTransito || mostrarTablaBodega || mostrarTablaAsignaciones || mostrarTablaBajas || mostrarTablaDespachos || mostrarTablaCentros;
 
   const armadosSeguimientoResumen = useMemo(() => {
     const lista = Array.isArray(armadosSeguimientoVisibles) ? armadosSeguimientoVisibles : [];
@@ -1170,6 +1236,23 @@ export default function BodegaRetiros() {
     if (e === "en_bodega") return <span className="badge badge-success">En bodega</span>;
     if (e === "en_transito") return <span className="badge badge-warning">En transito</span>;
     return <span className="badge badge-secondary">Retirado del centro</span>;
+  };
+
+  const getBadgeEstadoUsoInstalacion = (estado) => {
+    const e = normalizeText(estado || "instalado");
+    if (e === "devuelto_bodega") return <span className="badge badge-warning">Devuelto a bodega</span>;
+    return <span className="badge badge-success">Instalado</span>;
+  };
+
+  const getBadgeLogisticaInstalacion = (estadoLogistico, estadoUso = "instalado") => {
+    const uso = normalizeText(estadoUso || "instalado");
+    const estado = normalizeText(estadoLogistico || "sin_movimiento");
+    if (uso !== "devuelto_bodega") return <span className="badge badge-success">Operativo en centro</span>;
+    if (estado === "en_transito_bodega") return <span className="badge badge-warning">En transito a bodega</span>;
+    if (estado === "recepcionado_bodega") return <span className="badge badge-success">Recepcionado en bodega</span>;
+    if (estado === "revision_bodega") return <span className="badge badge-info">En revision</span>;
+    if (estado === "baja_bodega") return <span className="badge badge-danger">Baja</span>;
+    return <span className="badge badge-secondary">Sin movimiento</span>;
   };
 
   const confirmarRecepcion = async () => {
@@ -1359,6 +1442,7 @@ export default function BodegaRetiros() {
       setMostrarTablaAsignaciones(false);
       setMostrarTablaBajas(false);
       setMostrarTablaDespachos(false);
+      setMostrarTablaCentros(false);
       return next;
     });
   };
@@ -1370,6 +1454,7 @@ export default function BodegaRetiros() {
       setMostrarTablaAsignaciones(false);
       setMostrarTablaBajas(false);
       setMostrarTablaDespachos(false);
+      setMostrarTablaCentros(false);
       return next;
     });
   };
@@ -1381,6 +1466,7 @@ export default function BodegaRetiros() {
       setMostrarTablaBodega(false);
       setMostrarTablaBajas(false);
       setMostrarTablaDespachos(false);
+      setMostrarTablaCentros(false);
       return next;
     });
   };
@@ -1392,6 +1478,7 @@ export default function BodegaRetiros() {
       setMostrarTablaBodega(false);
       setMostrarTablaAsignaciones(false);
       setMostrarTablaDespachos(false);
+      setMostrarTablaCentros(false);
       return next;
     });
   };
@@ -1403,7 +1490,69 @@ export default function BodegaRetiros() {
       setMostrarTablaBodega(false);
       setMostrarTablaAsignaciones(false);
       setMostrarTablaBajas(false);
+      setMostrarTablaCentros(false);
       return next;
+    });
+  };
+
+  const toggleSoloCentros = () => {
+    setMostrarTablaCentros((prev) => {
+      const next = !prev;
+      setMostrarTablaTransito(false);
+      setMostrarTablaBodega(false);
+      setMostrarTablaAsignaciones(false);
+      setMostrarTablaBajas(false);
+      setMostrarTablaDespachos(false);
+      return next;
+    });
+  };
+
+  const abrirHistorialEquipoTrabajo = (item) => {
+    const serieClave = String(item?.serie || "").trim().toUpperCase();
+    if (!serieClave) return;
+
+    const rows = (Array.isArray(actasEntrega) ? actasEntrega : [])
+      .flatMap((acta) => {
+        const equipos = Array.isArray(acta?.armado_equipos) ? acta.armado_equipos : [];
+        const permiso = permisosPorActaId.get(Number(acta?.id_acta_entrega || 0)) || null;
+        return equipos
+          .filter((eq) => String(eq?.numero_serie || "").trim().toUpperCase() === serieClave)
+          .map((eq, idx) => ({
+            rowKey: `hist-eq-${acta?.id_acta_entrega || "0"}-${idx}-${serieClave}`,
+            fecha: acta?.fecha_registro || acta?.updated_at || acta?.created_at || null,
+            cliente: acta?.empresa || acta?.cliente || "-",
+            centro: acta?.centro || "-",
+            actaId: acta?.id_acta_entrega || null,
+            permisoId: permiso?.id_permiso_trabajo || null,
+            tipoInstalacion:
+              normalizeText(acta?.tipo_instalacion || "") === "reapuntamiento" ? "Reapuntamiento" : "Instalacion",
+            tecnico: [acta?.tecnico_1, acta?.tecnico_2]
+              .map((value) => String(value || "").trim())
+              .filter(Boolean)
+              .join(", ") || "-",
+            estado_uso: eq?.estado_uso || "instalado",
+            estado_logistico: eq?.estado_logistico || "sin_movimiento",
+            recepcion_bodega_por: eq?.recepcion_bodega_por || "-",
+            fecha_recepcion_bodega: eq?.fecha_recepcion_bodega || null,
+          }));
+      })
+      .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+
+    const instalaciones = rows.filter((row) => normalizeText(row?.estado_uso || "") !== "devuelto_bodega").length;
+    const devoluciones = rows.filter((row) => normalizeText(row?.estado_uso || "") === "devuelto_bodega").length;
+    const pasoBodega = rows.some((row) => normalizeText(row?.estado_logistico || "") !== "sin_movimiento");
+
+    setHistorialEquipo({
+      serie: item?.serie || "-",
+      equipo: item?.equipo || "Equipo",
+      codigo: item?.codigo || "-",
+      clienteActual: item?.cliente || "-",
+      centroActual: item?.centro || "-",
+      fechaInstalacionActual: item?.fechaInstalacion || null,
+      instalaciones,
+      devoluciones,
+      pasoBodega,
+      rows,
     });
   };
 
@@ -1955,21 +2104,25 @@ export default function BodegaRetiros() {
           </button>
         </div>
         <div className="col-12 col-md-6 col-lg">
-          <div className="btn w-100 text-left bodega-toggle-card bodega-toggle-centros">
+          <button
+            type="button"
+            className={`btn w-100 text-left bodega-toggle-card bodega-toggle-centros ${mostrarTablaCentros ? "active" : ""}`}
+            onClick={toggleSoloCentros}
+          >
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <div className="small text-uppercase text-muted">Operación</div>
+                <div className="small text-uppercase text-muted">Equipos</div>
                 <div className="h5 mb-0">
                   <i className="fas fa-broadcast-tower mr-2 text-primary" />
-                  Equipos trabajando
+                  Instalados
                 </div>
               </div>
               <div className="text-right">
                 <div className="h4 mb-0">{totalEquiposEnCentros}</div>
-                <small className="text-muted">Instalados</small>
+                <small className="text-muted">{mostrarTablaCentros ? "Ocultar tabla" : "Ver tabla"}</small>
               </div>
             </div>
-          </div>
+          </button>
         </div>
         <div className="col-12 col-md-6 col-lg">
           <button
@@ -2322,6 +2475,124 @@ export default function BodegaRetiros() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+      ) : null}
+      {mostrarTablaCentros ? (
+      <div className="card shadow-sm border-0 mb-3 bodega-tabla">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
+          <strong>
+            <i className="fas fa-broadcast-tower mr-2 text-primary" />
+            Instalados ({equiposTrabajandoFiltrados.length})
+          </strong>
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: 6 }}>
+            <input
+              className="form-control form-control-sm"
+              style={{ width: 290 }}
+              placeholder="Buscar por N serie, equipo, cliente o centro"
+              value={filtroEquiposCentro}
+              onChange={(e) => setFiltroEquiposCentro(e.target.value)}
+            />
+            <button className="btn btn-outline-primary btn-sm" onClick={cargarRetiros}>
+              <i className="fas fa-sync-alt mr-1" />
+              Recargar
+            </button>
+          </div>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-sm mb-0 bodega-table">
+              <thead className="thead-light">
+                <tr>
+                  <th>N</th>
+                  <th>N serie</th>
+                  <th>Equipo</th>
+                  <th>Codigo</th>
+                  <th>Cliente</th>
+                  <th>Centro actual</th>
+                  <th>Fecha instalacion</th>
+                  <th>Tecnico</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-3">
+                      Cargando...
+                    </td>
+                  </tr>
+                ) : !equiposTrabajandoFiltrados.length ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-3 text-muted">
+                      No hay equipos instalados para los filtros actuales.
+                    </td>
+                  </tr>
+                ) : (
+                  equiposTrabajandoPaginados.map((item, index) => (
+                    <tr key={item.rowKey}>
+                      <td>{(equiposCentroPage - 1) * equiposCentroPageSize + index + 1}</td>
+                      <td>{item.serie || "-"}</td>
+                      <td>{item.equipo || "-"}</td>
+                      <td>{item.codigo || "-"}</td>
+                      <td>{item.cliente || "-"}</td>
+                      <td>{item.centro || "-"}</td>
+                      <td>{formatDate(item.fechaInstalacion)}</td>
+                      <td>{item.tecnico || "-"}</td>
+                      <td>
+                        <button className="btn btn-outline-primary btn-sm" onClick={() => abrirHistorialEquipoTrabajo(item)}>
+                          <i className="fas fa-history mr-1" />
+                          Ver historial
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
+          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+            <span className="text-muted small">Ver</span>
+            <select
+              className="form-control form-control-sm d-inline-block"
+              style={{ width: 88 }}
+              value={equiposCentroPageSize}
+              onChange={(e) => setEquiposCentroPageSize(Number(e.target.value) || 10)}
+            >
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+            </select>
+            <span className="text-muted small">registros</span>
+          </div>
+          <small className="text-muted">
+            Mostrando {equiposTrabajandoFiltrados.length ? (equiposCentroPage - 1) * equiposCentroPageSize + 1 : 0}
+            -
+            {Math.min(equiposCentroPage * equiposCentroPageSize, equiposTrabajandoFiltrados.length)} de {equiposTrabajandoFiltrados.length}
+          </small>
+          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              disabled={equiposCentroPage <= 1}
+              onClick={() => setEquiposCentroPage((prev) => Math.max(1, prev - 1))}
+            >
+              <i className="fas fa-chevron-left mr-1" />
+              Anterior
+            </button>
+            <span className="small text-muted">
+              Pagina {equiposCentroPage} / {totalEquiposCentroPages}
+            </span>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              disabled={equiposCentroPage >= totalEquiposCentroPages}
+              onClick={() => setEquiposCentroPage((prev) => Math.min(totalEquiposCentroPages, prev + 1))}
+            >
+              Siguiente
+              <i className="fas fa-chevron-right ml-1" />
+            </button>
           </div>
         </div>
       </div>
@@ -3544,6 +3815,107 @@ export default function BodegaRetiros() {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setHistorialCentro(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {historialEquipo ? (
+        <div className="modal d-block bodega-historial-modal" tabIndex="-1" role="dialog">
+          <div className="modal-dialog modal-xl" role="document">
+            <div className="modal-content">
+              <div className="modal-header bodega-historial-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-microscope mr-2" />
+                  Historial de equipo - {historialEquipo.equipo}
+                </h5>
+                <button type="button" className="close" onClick={() => setHistorialEquipo(null)}>
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="bodega-historial-meta mb-3">
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-barcode" />
+                    Serie: {historialEquipo.serie}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-building" />
+                    {historialEquipo.clienteActual}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-map-marker-alt" />
+                    {historialEquipo.centroActual}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-calendar-alt" />
+                    Instalado: {formatDate(historialEquipo.fechaInstalacionActual)}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-list" />
+                    Registros: {Array.isArray(historialEquipo.rows) ? historialEquipo.rows.length : 0}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-exchange-alt" />
+                    Devueltos: {historialEquipo.devoluciones || 0}
+                  </div>
+                  <div className="bodega-historial-chip">
+                    <i className="fas fa-warehouse" />
+                    {historialEquipo.pasoBodega ? "Paso por bodega" : "Sin paso por bodega"}
+                  </div>
+                </div>
+                <div className="table-responsive">
+                  <table className="table table-sm mb-0 bodega-table">
+                    <thead className="thead-light">
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Centro</th>
+                        <th>Acta</th>
+                        <th>Permiso</th>
+                        <th>Tipo</th>
+                        <th>Tecnico</th>
+                        <th>Estado uso</th>
+                        <th>Logistica</th>
+                        <th>Recepcion bodega</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!historialEquipo.rows.length ? (
+                        <tr>
+                          <td colSpan={10} className="text-center text-muted py-3">
+                            No hay historial disponible para esta serie.
+                          </td>
+                        </tr>
+                      ) : historialEquipo.rows.map((row) => (
+                        <tr key={row.rowKey}>
+                          <td>{formatDate(row.fecha)}</td>
+                          <td>{row.cliente || "-"}</td>
+                          <td>{row.centro || "-"}</td>
+                          <td>{row.actaId ? `N${row.actaId}` : "-"}</td>
+                          <td>{row.permisoId ? `N${row.permisoId}` : "-"}</td>
+                          <td>{row.tipoInstalacion || "-"}</td>
+                          <td>{row.tecnico || "-"}</td>
+                          <td>{getBadgeEstadoUsoInstalacion(row.estado_uso)}</td>
+                          <td>{getBadgeLogisticaInstalacion(row.estado_logistico, row.estado_uso)}</td>
+                          <td>
+                            {normalizeText(row.estado_logistico || "") === "recepcionado_bodega"
+                              ? `${row.recepcion_bodega_por || "Bodega"} · ${formatDate(row.fecha_recepcion_bodega)}`
+                              : row.fecha_recepcion_bodega
+                                ? formatDate(row.fecha_recepcion_bodega)
+                                : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setHistorialEquipo(null)}>
                   Cerrar
                 </button>
               </div>
