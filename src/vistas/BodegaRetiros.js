@@ -18,7 +18,9 @@ import {
   obtenerArmados,
   obtenerActasEntrega,
   obtenerPermisosTrabajo,
+  obtenerMantencionesTerreno,
   actualizarActaEntrega,
+  actualizarEstadoCambioEquipoMantencion,
   obtenerMaterialesArmado,
   obtenerEquipos,
   obtenerMovimientosArmado,
@@ -213,6 +215,7 @@ export default function BodegaRetiros() {
   const [guiasSalida, setGuiasSalida] = useState([]);
   const [actasEntrega, setActasEntrega] = useState([]);
   const [permisosTrabajo, setPermisosTrabajo] = useState([]);
+  const [mantencionesTerreno, setMantencionesTerreno] = useState([]);
   const [showGuiaModal, setShowGuiaModal] = useState(false);
   const [armadoGuia, setArmadoGuia] = useState(null);
   const [guiaSeleccionadaId, setGuiaSeleccionadaId] = useState(null);
@@ -376,7 +379,7 @@ export default function BodegaRetiros() {
   const cargarRetiros = async () => {
     setLoading(true);
     try {
-      const [data, ordenes, actas, permisos] = await Promise.all([
+      const [data, ordenes, actas, permisos, mantenciones] = await Promise.all([
         obtenerRetirosTerreno({
           cliente_id: clienteId || undefined,
           centro_id: centroId || undefined,
@@ -390,16 +393,22 @@ export default function BodegaRetiros() {
           cliente_id: clienteId || undefined,
           centro_id: centroId || undefined,
         }),
+        obtenerMantencionesTerreno({
+          cliente_id: clienteId || undefined,
+          centro_id: centroId || undefined,
+        }),
       ]);
       setRetiros(Array.isArray(data) ? data : []);
       setOrdenesRevision(Array.isArray(ordenes) ? ordenes : []);
       setActasEntrega(Array.isArray(actas) ? actas : []);
       setPermisosTrabajo(Array.isArray(permisos) ? permisos : []);
+      setMantencionesTerreno(Array.isArray(mantenciones) ? mantenciones : []);
     } catch {
       setRetiros([]);
       setOrdenesRevision([]);
       setActasEntrega([]);
       setPermisosTrabajo([]);
+      setMantencionesTerreno([]);
     } finally {
       setLoading(false);
     }
@@ -498,6 +507,45 @@ export default function BodegaRetiros() {
       }));
     });
   }, [actasEntrega]);
+  const devolucionesMantencionEnTransito = useMemo(() => {
+    return (Array.isArray(mantencionesTerreno) ? mantencionesTerreno : []).flatMap((mantencion) => {
+      const cambios = Array.isArray(mantencion?.cambios_equipo) ? mantencion.cambios_equipo : [];
+      return cambios
+        .filter((item) => normalizeText(item?.estado_logistico || "en_transito_bodega") === "en_transito_bodega")
+        .map((item) => ({
+          tipoFila: "mantencion_devuelta",
+          rowKey: `mant-dev-${item?.id_cambio_equipo_mantencion || Math.random()}`,
+          mantencion,
+          cambio: item,
+        }));
+    });
+  }, [mantencionesTerreno]);
+  const devolucionesMantencionEnBodega = useMemo(() => {
+    return (Array.isArray(mantencionesTerreno) ? mantencionesTerreno : []).flatMap((mantencion) => {
+      const cambios = Array.isArray(mantencion?.cambios_equipo) ? mantencion.cambios_equipo : [];
+      return cambios
+        .filter((item) => normalizeText(item?.estado_logistico || "") === "recepcionado_bodega")
+        .map((item) => ({
+          tipoFila: "mantencion_bodega",
+          rowKey: `mant-bodega-${item?.id_cambio_equipo_mantencion || Math.random()}`,
+          mantencion,
+          cambio: item,
+        }));
+    });
+  }, [mantencionesTerreno]);
+  const devolucionesMantencionBaja = useMemo(() => {
+    return (Array.isArray(mantencionesTerreno) ? mantencionesTerreno : []).flatMap((mantencion) => {
+      const cambios = Array.isArray(mantencion?.cambios_equipo) ? mantencion.cambios_equipo : [];
+      return cambios
+        .filter((item) => normalizeText(item?.estado_logistico || "") === "baja_bodega")
+        .map((item) => ({
+          tipoFila: "mantencion_baja",
+          rowKey: `mant-baja-${item?.id_cambio_equipo_mantencion || Math.random()}`,
+          mantencion,
+          cambio: item,
+        }));
+    });
+  }, [mantencionesTerreno]);
   const enBodega = useMemo(
     () => retiros.filter((r) => String(r.estado_logistico || "") === "en_bodega"),
     [retiros]
@@ -552,8 +600,9 @@ export default function BodegaRetiros() {
     () => [
       ...(enBodega || []).map((retiro) => ({ tipoFila: "retiro_bodega", rowKey: `ret-bod-${retiro.id_retiro_terreno}`, retiro })),
       ...devolucionesInstalacionEnBodega,
+      ...devolucionesMantencionEnBodega,
     ],
-    [enBodega, devolucionesInstalacionEnBodega]
+    [enBodega, devolucionesInstalacionEnBodega, devolucionesMantencionEnBodega]
   );
 
   const enBodegaFiltrados = useMemo(() => {
@@ -565,19 +614,25 @@ export default function BodegaRetiros() {
           normalizeText(`${eq?.numero_serie || ""} ${eq?.codigo || ""} ${eq?.nombre || ""}`).includes(qSerie)
         );
       }
+      if (row.tipoFila === "mantencion_bodega") {
+        const cambio = row?.cambio || {};
+        return normalizeText(`${cambio?.serie_anterior || ""} ${cambio?.codigo_anterior || ""} ${cambio?.equipo || ""}`).includes(qSerie);
+      }
       const r = row.retiro;
       return (Array.isArray(r?.equipos) ? r.equipos : []).some((eq) =>
         normalizeText(`${eq?.numero_serie || ""} ${eq?.codigo || ""}`).includes(qSerie)
       );
     });
   }, [enBodegaRows, filtroSerieBodega]);
-  const totalPendienteTransito = enTransito.length + devolucionesInstalacionEnTransito.length;
+  const totalPendienteTransito =
+    enTransito.length + devolucionesInstalacionEnTransito.length + devolucionesMantencionEnTransito.length;
   const transitoRows = useMemo(
     () => [
       ...(enTransito || []).map((retiro) => ({ tipoFila: "retiro", rowKey: `ret-${retiro.id_retiro_terreno}`, retiro })),
       ...devolucionesInstalacionEnTransito,
+      ...devolucionesMantencionEnTransito,
     ],
-    [enTransito, devolucionesInstalacionEnTransito]
+    [enTransito, devolucionesInstalacionEnTransito, devolucionesMantencionEnTransito]
   );
   const totalEquiposRetirados = (retiro) =>
     Array.isArray(retiro?.equipos) ? retiro.equipos.filter((e) => !!e.retirado).length : 0;
@@ -875,10 +930,47 @@ export default function BodegaRetiros() {
       });
     });
 
+    (Array.isArray(mantencionesTerreno) ? mantencionesTerreno : []).forEach((mantencion) => {
+      const cliente = mantencion?.empresa || mantencion?.cliente || "-";
+      const centro = mantencion?.centro || "-";
+      const fechaInstalacion = mantencion?.fecha_ingreso || null;
+      const fechaOrden = new Date(mantencion?.updated_at || mantencion?.created_at || mantencion?.fecha_ingreso || 0).getTime();
+      const tecnicos = [mantencion?.tecnico_1, mantencion?.tecnico_2]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .join(", ");
+      const cambios = Array.isArray(mantencion?.cambios_equipo) ? mantencion.cambios_equipo : [];
+
+      cambios.forEach((cambio, idx) => {
+        const serieAnterior = String(cambio?.serie_anterior || "").trim();
+        if (serieAnterior) {
+          latestBySerie.delete(serieAnterior.toUpperCase());
+        }
+        const serieNueva = String(cambio?.serie_nueva || "").trim();
+        if (!serieNueva) return;
+        const key = serieNueva.toUpperCase();
+        const previo = latestBySerie.get(key);
+        if (previo && Number(previo.fechaOrden || 0) > fechaOrden) return;
+        latestBySerie.set(key, {
+          rowKey: `trabajo-mant-${mantencion?.id_mantencion_terreno || "0"}-${idx}-${key}`,
+          serie: serieNueva,
+          codigo: String(cambio?.codigo_nuevo || "").trim() || "-",
+          equipo: String(cambio?.equipo || "Equipo").trim() || "Equipo",
+          cliente,
+          centro,
+          fechaInstalacion,
+          fechaOrden,
+          tecnico: tecnicos || "-",
+          estadoUso: "instalado",
+          estadoLogistico: "sin_movimiento",
+        });
+      });
+    });
+
     return Array.from(latestBySerie.values())
       .filter((item) => item.estadoUso !== "devuelto_bodega")
       .sort((a, b) => Number(b.fechaOrden || 0) - Number(a.fechaOrden || 0));
-  }, [actasEntrega]);
+  }, [actasEntrega, mantencionesTerreno]);
 
   const equiposTrabajandoFiltrados = useMemo(() => {
     const q = normalizeText(filtroEquiposCentro);
@@ -944,8 +1036,23 @@ export default function BodegaRetiros() {
           updated_at: x?.equipo?.fecha_recepcion_bodega || x?.acta?.updated_at || null,
         },
       })),
+      ...devolucionesMantencionBaja.map((x) => ({
+        tipoFila: "mantencion_baja",
+        rowKey: x.rowKey,
+        item: {
+          numero_serie: x?.cambio?.serie_anterior || "-",
+          codigo: x?.cambio?.codigo_anterior || "-",
+          equipo_nombre: x?.cambio?.equipo || "-",
+          modelo: "-",
+          cliente: x?.mantencion?.empresa || x?.mantencion?.cliente || "-",
+          centro: x?.mantencion?.centro || "-",
+          ubicacion: x?.mantencion?.centro || "-",
+          estado_equipo: "Devuelto / baja",
+          updated_at: x?.cambio?.updated_at || x?.cambio?.fecha_recepcion_bodega || null,
+        },
+      })),
     ],
-    [equiposBaja, devolucionesInstalacionBaja]
+    [equiposBaja, devolucionesInstalacionBaja, devolucionesMantencionBaja]
   );
 
   const equiposBajaFiltrados = useMemo(() => {
@@ -1308,6 +1415,23 @@ export default function BodegaRetiros() {
     }
   };
 
+  const confirmarRecepcionDevolucionMantencion = async (row) => {
+    const cambioId = Number(row?.cambio?.id_cambio_equipo_mantencion || 0);
+    if (!cambioId) return;
+    setSavingId(`mant-${cambioId}`);
+    try {
+      await actualizarEstadoCambioEquipoMantencion(cambioId, {
+        estado_logistico: "recepcionado_bodega",
+        recepcion_bodega_por: usuario.nombre || "Bodega",
+      });
+      await cargarRetiros();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo recepcionar la devolución de mantención.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const actualizarEstadoDevolucionInstalacion = async (row, transformador) => {
     const actaId = Number(row?.acta?.id_acta_entrega || 0);
     if (!actaId) return;
@@ -1336,6 +1460,28 @@ export default function BodegaRetiros() {
       acta: row?.acta || null,
       centro: row?.acta?.centro || "-",
       empresa: row?.acta?.empresa || row?.acta?.cliente || "-",
+      row,
+    });
+  };
+
+  const abrirRevisionDevolucionMantencion = (row) => {
+    const cambio = row?.cambio || {};
+    setRevisionEquiposArea([
+      {
+        id_retiro_equipo: `mant-${cambio?.id_cambio_equipo_mantencion || 0}`,
+        equipo_nombre: cambio?.equipo || "-",
+        numero_serie: cambio?.serie_anterior || "",
+        codigo: cambio?.codigo_anterior || "",
+        area: "",
+        bloqueado: false,
+      },
+    ]);
+    setRetiroRevision({
+      tipoFuente: "mantencion_bodega",
+      mantencion: row?.mantencion || null,
+      cambio,
+      centro: row?.mantencion?.centro || "-",
+      empresa: row?.mantencion?.empresa || row?.mantencion?.cliente || "-",
       row,
     });
   };
@@ -1376,6 +1522,40 @@ export default function BodegaRetiros() {
     }
   };
 
+  const enviarDevolucionMantencionABaja = async (row) => {
+    const cambioId = Number(row?.cambio?.id_cambio_equipo_mantencion || 0);
+    if (!cambioId) return;
+    if (!window.confirm("Enviar este equipo a baja?")) return;
+    setSavingId(`mant-baja-${cambioId}`);
+    try {
+      await actualizarEstadoCambioEquipoMantencion(cambioId, {
+        estado_logistico: "baja_bodega",
+      });
+      await cargarRetiros();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo enviar la devolución de mantención a baja.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const volverDevolucionMantencionATransito = async (row) => {
+    const cambioId = Number(row?.cambio?.id_cambio_equipo_mantencion || 0);
+    if (!cambioId) return;
+    if (!window.confirm("Volver este equipo a transito hacia bodega?")) return;
+    setSavingId(`mant-trans-${cambioId}`);
+    try {
+      await actualizarEstadoCambioEquipoMantencion(cambioId, {
+        estado_logistico: "en_transito_bodega",
+      });
+      await cargarRetiros();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo volver la devolución de mantención a tránsito.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const eliminarDevolucionInstalacionEnBodega = async (row) => {
     const actaId = Number(row?.acta?.id_acta_entrega || 0);
     if (!actaId) return;
@@ -1397,6 +1577,23 @@ export default function BodegaRetiros() {
     }
   };
   const cancelarDevolucionInstalacionEnBodega = eliminarDevolucionInstalacionEnBodega;
+
+  const eliminarDevolucionMantencionEnBodega = async (row) => {
+    const cambioId = Number(row?.cambio?.id_cambio_equipo_mantencion || 0);
+    if (!cambioId) return;
+    if (!window.confirm("Eliminar este registro logístico de bodega para el equipo devuelto?")) return;
+    setSavingId(`mant-del-${cambioId}`);
+    try {
+      await actualizarEstadoCambioEquipoMantencion(cambioId, {
+        estado_logistico: "eliminado",
+      });
+      await cargarRetiros();
+    } catch (e) {
+      alert(e?.response?.data?.error || "No se pudo eliminar la devolución de mantención.");
+    } finally {
+      setSavingId(null);
+    }
+  };
   const asignarEquipoATecnico = async (row) => {
     const id = Number(row?.id_bodega_equipo || 0);
     const tecnicoId = Number(tecnicoAsignacionId || 0);
@@ -2436,6 +2633,46 @@ export default function BodegaRetiros() {
                         </tr>
                       );
                     }
+                    if (row.tipoFila === "mantencion_devuelta") {
+                      const mantencion = row.mantencion || {};
+                      const cambio = row.cambio || {};
+                      return (
+                        <tr key={row.rowKey}>
+                          <td>{mantencion?.id_mantencion_terreno || "-"}</td>
+                          <td>{`MANT-${mantencion?.id_mantencion_terreno || "-"}`}</td>
+                          <td>{formatDate(cambio?.created_at || mantencion?.fecha_ingreso)}</td>
+                          <td>{mantencion?.empresa || mantencion?.cliente || "-"}</td>
+                          <td>{mantencion?.centro || "-"}</td>
+                          <td>Cambio mantencion</td>
+                          <td>
+                            <span className="badge badge-warning">En transito a bodega</span>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column" style={{ gap: 4 }}>
+                              <small className="font-weight-bold">{cambio?.equipo || "Equipo"}</small>
+                              <small style={{ lineHeight: 1.25 }}>
+                                {cambio?.serie_anterior ? `N Serie: ${cambio.serie_anterior}` : cambio?.codigo_anterior ? `Codigo: ${cambio.codigo_anterior}` : "-"}
+                              </small>
+                              {cambio?.serie_nueva ? (
+                                <small className="text-muted" style={{ lineHeight: 1.25 }}>
+                                  Reemplazado por: {cambio.serie_nueva}
+                                </small>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-success btn-sm"
+                              onClick={() => confirmarRecepcionDevolucionMantencion(row)}
+                              disabled={savingId === `mant-${cambio?.id_cambio_equipo_mantencion || 0}`}
+                            >
+                              <i className="fas fa-check mr-1" />
+                              Recepcionar
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
                     const r = row.retiro;
                     return (
                       <tr key={row.rowKey}>
@@ -2733,6 +2970,76 @@ export default function BodegaRetiros() {
                                   className="btn btn-outline-danger btn-sm"
                                   onClick={() => cancelarDevolucionInstalacionEnBodega(row)}
                                   disabled={savingId === `acta-cancel-${acta?.id_acta_entrega || 0}`}
+                                >
+                                  <i className="fas fa-trash-alt mr-1" />
+                                  Eliminar
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    if (row.tipoFila === "mantencion_bodega") {
+                      const mantencion = row.mantencion || {};
+                      const cambio = row.cambio || {};
+                      return (
+                        <tr key={row.rowKey}>
+                          <td>{mantencion?.id_mantencion_terreno || "-"}</td>
+                          <td>{`MANT-${mantencion?.id_mantencion_terreno || "-"}`}</td>
+                          <td>{formatDate(cambio?.created_at || mantencion?.fecha_ingreso)}</td>
+                          <td>{mantencion?.centro || "-"}</td>
+                          <td>
+                            <span className="badge badge-secondary">En bodega desde mantencion</span>
+                          </td>
+                          <td>{cambio?.recepcion_bodega_por || "-"}</td>
+                          <td>{formatDate(cambio?.fecha_recepcion_bodega)}</td>
+                          <td>
+                            <div className="d-flex flex-column" style={{ gap: 4 }}>
+                              <small style={{ lineHeight: 1.25 }}>
+                                <strong>{cambio?.equipo || "Equipo"}</strong>
+                              </small>
+                              <small style={{ lineHeight: 1.25 }}>
+                                {cambio?.serie_anterior ? `N Serie: ${cambio.serie_anterior}` : cambio?.codigo_anterior ? `Codigo: ${cambio.codigo_anterior}` : "-"}
+                              </small>
+                              {cambio?.serie_nueva ? (
+                                <small className="text-muted" style={{ lineHeight: 1.25 }}>
+                                  Serie nueva instalada: {cambio.serie_nueva}
+                                </small>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="text-center">
+                            <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => abrirRevisionDevolucionMantencion(row)}
+                                disabled={String(savingId || "").startsWith(`mant-${cambio?.id_cambio_equipo_mantencion || 0}`)}
+                              >
+                                <i className="fas fa-stethoscope mr-1" />
+                                Revision
+                              </button>
+                              <button
+                                className="btn btn-outline-warning btn-sm"
+                                onClick={() => enviarDevolucionMantencionABaja(row)}
+                                disabled={savingId === `mant-baja-${cambio?.id_cambio_equipo_mantencion || 0}`}
+                              >
+                                <i className="fas fa-exclamation-triangle mr-1" />
+                                Baja
+                              </button>
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => volverDevolucionMantencionATransito(row)}
+                                disabled={savingId === `mant-trans-${cambio?.id_cambio_equipo_mantencion || 0}`}
+                              >
+                                <i className="fas fa-truck-loading mr-1" />
+                                Anular recepcion
+                              </button>
+                              {usuario?.rol === "admin" ? (
+                                <button
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() => eliminarDevolucionMantencionEnBodega(row)}
+                                  disabled={savingId === `mant-del-${cambio?.id_cambio_equipo_mantencion || 0}`}
                                 >
                                   <i className="fas fa-trash-alt mr-1" />
                                   Eliminar
@@ -3575,7 +3882,7 @@ export default function BodegaRetiros() {
 	          <div className="modal-dialog modal-lg" role="document">
 	            <div className="modal-content">
 	              <div className="modal-header">
-	                <h5 className="modal-title">{retiroRevision?.tipoFuente === "instalacion_bodega" ? "Enviar devolucion a revision" : "Asignar a revision"}</h5>
+		                <h5 className="modal-title">{["instalacion_bodega", "mantencion_bodega"].includes(String(retiroRevision?.tipoFuente || "")) ? "Enviar devolucion a revision" : "Asignar a revision"}</h5>
                 <button type="button" className="close" onClick={() => setRetiroRevision(null)}>
                   <span>&times;</span>
                 </button>
@@ -3650,11 +3957,13 @@ export default function BodegaRetiros() {
                 <button
                   className="btn btn-primary"
                   disabled={asignandoRevision}
-	                  onClick={async () => {
-	                    const esInstalacionBodega = retiroRevision?.tipoFuente === "instalacion_bodega";
-	                    const retiroId = Number(retiroRevision?.id_retiro_terreno || 0);
-	                    const activos = esInstalacionBodega ? null : revisionActivaPorRetiro.get(retiroId);
-	                    if (!esInstalacionBodega && !retiroId) return;
+		                  onClick={async () => {
+		                    const esBodegaDirecta = ["instalacion_bodega", "mantencion_bodega"].includes(String(retiroRevision?.tipoFuente || ""));
+		                    const esInstalacionBodega = retiroRevision?.tipoFuente === "instalacion_bodega";
+		                    const esMantencionBodega = retiroRevision?.tipoFuente === "mantencion_bodega";
+		                    const retiroId = Number(retiroRevision?.id_retiro_terreno || 0);
+		                    const activos = esBodegaDirecta ? null : revisionActivaPorRetiro.get(retiroId);
+		                    if (!esBodegaDirecta && !retiroId) return;
 	                    const areasActivas = activos?.porArea || new Set();
 	                    const pendientesSinArea = revisionEquiposArea.filter(
 	                      (eq) => !eq.bloqueado && !["camaras", "pc", "energia"].includes(String(eq.area || "").toLowerCase())
@@ -3683,25 +3992,39 @@ export default function BodegaRetiros() {
                       return;
                     }
 	                    try {
-	                      setAsignandoRevision(true);
-	                      for (const [area, equipos] of Object.entries(grupos)) {
-	                        await crearOrdenRevisionEquipos({
-	                          ...(esInstalacionBodega ? { centro_id: Number(retiroRevision?.acta?.centro_id || retiroRevision?.acta?.centro?.id_centro || 0) } : { retiro_terreno_id: retiroId }),
-	                          area,
-	                          detalles: equipos.map((eq) => ({
-	                            ...(esInstalacionBodega ? {} : { retiro_equipo_id: eq.id_retiro_equipo }),
-	                            equipo_nombre: eq.equipo_nombre,
-	                            numero_serie: eq.numero_serie,
-	                            codigo: eq.codigo,
-	                          })),
-	                        });
-	                      }
-	                      if (esInstalacionBodega && retiroRevision?.row) {
-	                        await actualizarEstadoDevolucionInstalacion(retiroRevision.row, (item) => ({
-	                          ...item,
-	                          estado_logistico: "revision_bodega",
-	                        }));
-	                      }
+		                      setAsignandoRevision(true);
+		                      for (const [area, equipos] of Object.entries(grupos)) {
+		                        await crearOrdenRevisionEquipos({
+		                          ...(esBodegaDirecta
+		                            ? {
+		                                centro_id: Number(
+		                                  retiroRevision?.acta?.centro_id ||
+		                                    retiroRevision?.acta?.centro?.id_centro ||
+		                                    retiroRevision?.mantencion?.centro_id ||
+		                                    0
+		                                ),
+		                              }
+		                            : { retiro_terreno_id: retiroId }),
+		                          area,
+		                          detalles: equipos.map((eq) => ({
+		                            ...(esBodegaDirecta ? {} : { retiro_equipo_id: eq.id_retiro_equipo }),
+		                            equipo_nombre: eq.equipo_nombre,
+		                            numero_serie: eq.numero_serie,
+		                            codigo: eq.codigo,
+		                          })),
+		                        });
+		                      }
+		                      if (esInstalacionBodega && retiroRevision?.row) {
+		                        await actualizarEstadoDevolucionInstalacion(retiroRevision.row, (item) => ({
+		                          ...item,
+		                          estado_logistico: "revision_bodega",
+		                        }));
+		                      } else if (esMantencionBodega && retiroRevision?.row?.cambio?.id_cambio_equipo_mantencion) {
+		                        await actualizarEstadoCambioEquipoMantencion(
+		                          Number(retiroRevision.row.cambio.id_cambio_equipo_mantencion),
+		                          { estado_logistico: "revision_bodega" }
+		                        );
+		                      }
 	                      alert("Orden(es) de revision creada(s).");
 	                      setRetiroRevision(null);
 	                      setRevisionEquiposArea([]);

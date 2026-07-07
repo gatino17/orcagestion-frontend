@@ -1956,6 +1956,26 @@ export const obtenerMantencionesTerreno = async (params = {}) => {
     }
 };
 
+export const crearMantencionTerreno = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/mantenciones_terreno/`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al crear mantencion en terreno:", error);
+        throw error;
+    }
+};
+
+export const actualizarMantencionTerreno = async (idMantencionTerreno, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/mantenciones_terreno/${idMantencionTerreno}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar mantencion en terreno:", error);
+        throw error;
+    }
+};
+
 export const eliminarMantencionTerreno = async (idMantencionTerreno) => {
     try {
         const response = await axios.delete(`${BASE_URL}/mantenciones_terreno/${idMantencionTerreno}`);
@@ -1972,6 +1992,16 @@ export const obtenerCambiosEquipoMantencion = async (idMantencionTerreno) => {
         return response.data;
     } catch (error) {
         console.error("Error al obtener cambios de equipo de mantencion:", error);
+        throw error;
+    }
+};
+
+export const actualizarEstadoCambioEquipoMantencion = async (idCambioEquipoMantencion, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/mantenciones_terreno/cambios_equipo/${idCambioEquipoMantencion}/estado_logistico`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar estado logístico del cambio de equipo de mantencion:", error);
         throw error;
     }
 };

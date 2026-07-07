@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import {
     obtenerEquipos,
@@ -10,6 +10,8 @@ import {
     obtenerMaterialesArmado,
     obtenerPermisosTrabajo,
     obtenerMantencionesTerreno,
+    crearMantencionTerreno,
+    actualizarMantencionTerreno,
     obtenerRetirosTerreno,
     obtenerLevantamientosTerreno,
     resolverEdicionLevantamientoTerreno,
@@ -227,6 +229,40 @@ const normalizeMeasureInput = (value) => {
 };
 
 const normalizeSelloNumero = (value) => String(value || "").replace(/\D/g, "");
+
+const parseEvidencePhotos = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 3);
+        }
+    } catch (error) {
+        return [raw];
+    }
+    return [raw];
+};
+
+const parseChecklistEquipos = (value) => {
+    if (!value) return [];
+    try {
+        const parsed = Array.isArray(value) ? value : JSON.parse(String(value));
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .map((item) => ({
+                equipo_id: Number(item?.equipo_id || 0) || null,
+                equipo_nombre: String(item?.equipo_nombre || "").trim(),
+                numero_serie: String(item?.numero_serie || "").trim(),
+                codigo: String(item?.codigo || "").trim(),
+                revisado: !!item?.revisado,
+                observacion: String(item?.observacion || "").trim()
+            }))
+            .filter((item) => item.equipo_nombre || item.numero_serie || item.codigo);
+    } catch (error) {
+        return [];
+    }
+};
 
 const normalizeGpsPointInput = (value) => {
     let text = String(value ?? "").replace(/[^\d.\-]/g, "");
@@ -465,6 +501,7 @@ function InformesCentros() {
     const [permisoTelefonoCentro, setPermisoTelefonoCentro] = useState("");
     const [permisoRegion, setPermisoRegion] = useState("");
     const [permisoLocalidad, setPermisoLocalidad] = useState("");
+    const [permisoResponsabilidad, setPermisoResponsabilidad] = useState("");
     const [permisoBaseTierra, setPermisoBaseTierra] = useState("");
     const [permisoCantidadRadares, setPermisoCantidadRadares] = useState("");
     const [permisoTecnico1, setPermisoTecnico1] = useState("");
@@ -482,6 +519,11 @@ function InformesCentros() {
     const [permisoMedicionNeutroTierra, setPermisoMedicionNeutroTierra] = useState("");
     const [permisoHertz, setPermisoHertz] = useState("");
     const [permisoDescripcionTrabajo, setPermisoDescripcionTrabajo] = useState("");
+    const [permisoChecklistEquiposRaw, setPermisoChecklistEquiposRaw] = useState("");
+    const [permisoEvidencias, setPermisoEvidencias] = useState([]);
+    const [permisoEvidenciaTargetIndex, setPermisoEvidenciaTargetIndex] = useState(null);
+    const [permisoCambiosEquipo, setPermisoCambiosEquipo] = useState([]);
+    const permisoEvidenciaInputRef = useRef(null);
     const [actaPage, setActaPage] = useState(1);
     const [permisoPage, setPermisoPage] = useState(1);
     const [actaPageSize, setActaPageSize] = useState(10);
@@ -830,6 +872,10 @@ function InformesCentros() {
             ),
         [permisoArmadoEquipos]
     );
+    const permisoChecklistMantencion = useMemo(
+        () => parseChecklistEquipos(permisoChecklistEquiposRaw),
+        [permisoChecklistEquiposRaw]
+    );
 
     const permisosCentrosFormFiltrados = useMemo(() => {
         if (!permisoClienteIdForm) return centrosOrdenados;
@@ -885,6 +931,7 @@ function InformesCentros() {
         setPermisoTelefonoCentro("");
         setPermisoRegion("");
         setPermisoLocalidad("");
+        setPermisoResponsabilidad("");
         setPermisoBaseTierra("");
         setPermisoCantidadRadares("");
         setPermisoTecnico1("");
@@ -902,9 +949,12 @@ function InformesCentros() {
         setPermisoMedicionNeutroTierra("");
         setPermisoHertz("");
         setPermisoDescripcionTrabajo("");
+        setPermisoChecklistEquiposRaw("");
+        setPermisoEvidencias([]);
+        setPermisoEvidenciaTargetIndex(null);
+        setPermisoCambiosEquipo([]);
         setMostrarEditorPermiso(false);
     };
-
     const abrirNuevoPermiso = () => {
         setPermisoEditandoId(null);
         setPermisoActaEntregaId(null);
@@ -917,6 +967,7 @@ function InformesCentros() {
         setPermisoTelefonoCentro("");
         setPermisoRegion("");
         setPermisoLocalidad("");
+        setPermisoResponsabilidad("");
         setPermisoBaseTierra("");
         setPermisoCantidadRadares("");
         setPermisoTecnico1("");
@@ -934,8 +985,13 @@ function InformesCentros() {
         setPermisoMedicionNeutroTierra("");
         setPermisoHertz("");
         setPermisoDescripcionTrabajo("");
+        setPermisoChecklistEquiposRaw("");
+        setPermisoEvidencias([]);
+        setPermisoEvidenciaTargetIndex(null);
+        setPermisoCambiosEquipo([]);
         setMostrarEditorPermiso(true);
     };
+
 
     useEffect(() => {
         if (!centroIdForm) {
@@ -965,6 +1021,43 @@ function InformesCentros() {
         }
     }, [clienteIdForm, centroIdForm, centros]);
 
+    const abrirSelectorEvidenciaMantencion = (targetIndex = null) => {
+        setPermisoEvidenciaTargetIndex(Number.isInteger(targetIndex) ? targetIndex : null);
+        if (permisoEvidenciaInputRef.current) {
+            permisoEvidenciaInputRef.current.value = "";
+            permisoEvidenciaInputRef.current.click();
+        }
+    };
+
+    const handleSeleccionarEvidenciaMantencion = (event) => {
+        const file = event.target.files?.[0];
+        const targetIndex = Number.isInteger(permisoEvidenciaTargetIndex) ? permisoEvidenciaTargetIndex : null;
+        event.target.value = "";
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = String(reader.result || "").trim();
+            if (!dataUrl) return;
+            setPermisoEvidencias((prev) => {
+                if (targetIndex != null && prev[targetIndex] != null) {
+                    const next = [...prev];
+                    next[targetIndex] = dataUrl;
+                    return next.slice(0, 3);
+                }
+                if (prev.length >= 3) return prev;
+                return [...prev, dataUrl].slice(0, 3);
+            });
+            setPermisoEvidenciaTargetIndex(null);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleEliminarEvidenciaMantencion = (index) => {
+        setPermisoEvidencias((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+        setPermisoEvidenciaTargetIndex(null);
+    };
+
     useEffect(() => {
         if (!permisoCentroIdForm) {
             setPermisoTelefonoCentro("");
@@ -984,6 +1077,7 @@ function InformesCentros() {
         const clienteKey = getCentroClienteKey(centro);
         if (clienteKey) setPermisoClienteIdForm(clienteKey);
     }, [permisoCentroIdForm, centros]);
+
 
     useEffect(() => {
         if (!permisoClienteIdForm || !permisoCentroIdForm) return;
@@ -1351,6 +1445,7 @@ function InformesCentros() {
             telefono_centro: permisoTelefonoCentro || null,
             region: permisoRegion || null,
             localidad: permisoLocalidad || null,
+            responsabilidad: permisoResponsabilidad || null,
             base_tierra: permisoBaseTierra || null,
             cantidad_radares: permisoCantidadRadares || null,
             tecnico_1: permisoTecnico1 || null,
@@ -1368,19 +1463,30 @@ function InformesCentros() {
             hertz: normalizeMeasureInput(permisoHertz) || null,
             descripcion_trabajo: permisoDescripcionTrabajo || null
         };
+        if (subcategoria === "mantencion") {
+            payload.evidencia_foto = permisoEvidencias.length ? JSON.stringify(permisoEvidencias.slice(0, 3)) : null;
+        }
 
         setSavingPermiso(true);
         try {
-            if (permisoEditandoId) {
-                await actualizarPermisoTrabajo(permisoEditandoId, payload);
+            if (subcategoria === "mantencion") {
+                if (permisoEditandoId) {
+                    await actualizarMantencionTerreno(permisoEditandoId, payload);
+                } else {
+                    await crearMantencionTerreno(payload);
+                }
             } else {
-                await crearPermisoTrabajo(payload);
+                if (permisoEditandoId) {
+                    await actualizarPermisoTrabajo(permisoEditandoId, payload);
+                } else {
+                    await crearPermisoTrabajo(payload);
+                }
             }
             await cargarPermisos();
             resetFormularioPermiso();
         } catch (error) {
-            console.error("Error al guardar permiso de trabajo:", error);
-            alert("No se pudo guardar el permiso de trabajo.");
+            console.error(`Error al guardar ${subcategoria === "mantencion" ? "mantencion" : "permiso de trabajo"}:`, error);
+            alert(subcategoria === "mantencion" ? "No se pudo guardar la mantencion en terreno." : "No se pudo guardar el permiso de trabajo.");
         } finally {
             setSavingPermiso(false);
         }
@@ -1396,6 +1502,7 @@ function InformesCentros() {
         setPermisoTelefonoCentro(permiso.telefono_centro || "");
         setPermisoRegion(permiso.region || "");
         setPermisoLocalidad(permiso.localidad || "");
+        setPermisoResponsabilidad(permiso.responsabilidad || "");
         setPermisoBaseTierra(normalizeBoolSelectValue(permiso.base_tierra));
         setPermisoCantidadRadares(permiso.cantidad_radares == null ? "" : String(permiso.cantidad_radares));
         setPermisoTecnico1(permiso.tecnico_1 || "");
@@ -1416,9 +1523,59 @@ function InformesCentros() {
         setPermisoMedicionNeutroTierra(normalizeMeasureInput(permiso.medicion_neutro_tierra || ""));
         setPermisoHertz(normalizeMeasureInput(permiso.hertz || ""));
         setPermisoDescripcionTrabajo(permiso.descripcion_trabajo || "");
+        setPermisoChecklistEquiposRaw("");
+        setPermisoEvidencias([]);
+        setPermisoEvidenciaTargetIndex(null);
+        setPermisoCambiosEquipo([]);
         const centro = centros.find((c) => String(c.id || c.id_centro) === String(permiso.centro_id || ""));
         if (centro) setPermisoClienteIdForm(getCentroClienteKey(centro));
         setMostrarEditorPermiso(true);
+    };
+
+    const handleEditarMantencion = async (mantencion) => {
+        setPermisoEditandoId(mantencion.id_mantencion_terreno);
+        setPermisoActaEntregaId(null);
+        setPermisoCentroIdForm(String(mantencion.centro_id || ""));
+        setPermisoFechaIngreso(toInputDate(mantencion.fecha_ingreso));
+        setPermisoFechaSalida(toInputDate(mantencion.fecha_salida));
+        setPermisoCorreoCentro(mantencion.correo_centro || "");
+        setPermisoTelefonoCentro(mantencion.telefono_centro || "");
+        setPermisoRegion(mantencion.region || "");
+        setPermisoLocalidad(mantencion.localidad || "");
+        setPermisoResponsabilidad(mantencion.responsabilidad || "");
+        setPermisoBaseTierra(normalizeBoolSelectValue(mantencion.base_tierra));
+        setPermisoCantidadRadares(mantencion.cantidad_radares == null ? "" : String(mantencion.cantidad_radares));
+        setPermisoTecnico1(mantencion.tecnico_1 || "");
+        setPermisoFirmaTecnico1(mantencion.firma_tecnico_1 || "");
+        setPermisoTecnico2(mantencion.tecnico_2 || "");
+        setPermisoFirmaTecnico2(mantencion.firma_tecnico_2 || "");
+        setPermisoTecnicosAdicionales(getFirmasTecnicosAdicionales(mantencion.firmas_tecnicos_adicionales).map((item) => ({
+            nombre: String(item?.nombre || "").trim(),
+            firma: item?.firma || ""
+        })));
+        setPermisoRecepcionaNombre(mantencion.recepciona_nombre || "");
+        setPermisoRecepcionaRut(mantencion.recepciona_rut || "");
+        setPermisoFirmaRecepciona(mantencion.firma_recepciona || "");
+        setPermisoPuntosGps(parseGpsPoints(mantencion.puntos_gps));
+        setPermisoSellos(parseSellos(mantencion.sellos));
+        setPermisoArmadoEquipos([]);
+        setPermisoMedicionFaseNeutro(normalizeMeasureInput(mantencion.medicion_fase_neutro || ""));
+        setPermisoMedicionNeutroTierra(normalizeMeasureInput(mantencion.medicion_neutro_tierra || ""));
+        setPermisoHertz(normalizeMeasureInput(mantencion.hertz || ""));
+        setPermisoDescripcionTrabajo(mantencion.descripcion_trabajo || "");
+        setPermisoChecklistEquiposRaw(mantencion.checklist_equipos || "");
+        setPermisoEvidencias(parseEvidencePhotos(mantencion.evidencia_foto || ""));
+        setPermisoEvidenciaTargetIndex(null);
+        setPermisoCambiosEquipo(Array.isArray(mantencion.cambios_equipo) ? mantencion.cambios_equipo : []);
+        const centro = centros.find((c) => String(c.id || c.id_centro) === String(mantencion.centro_id || ""));
+        if (centro) setPermisoClienteIdForm(getCentroClienteKey(centro));
+        setMostrarEditorPermiso(true);
+        try {
+            const cambios = await obtenerCambiosEquipoMantencion(mantencion.id_mantencion_terreno);
+            setPermisoCambiosEquipo(Array.isArray(cambios) ? cambios : []);
+        } catch (error) {
+            console.error("Error al cargar cambios de equipo para edicion:", error);
+        }
     };
 
     const handleEliminarPermiso = async (id) => {
@@ -1438,6 +1595,7 @@ function InformesCentros() {
         try {
             await eliminarMantencionTerreno(id);
             await cargarPermisos();
+            if (permisoEditandoId === id) resetFormularioPermiso();
         } catch (error) {
             console.error("Error al eliminar mantencion en terreno:", error);
             alert("No se pudo eliminar la mantencion en terreno.");
@@ -1498,8 +1656,16 @@ function InformesCentros() {
             <div className="card informes-editor-card">
                 <div className="card-header d-flex justify-content-between align-items-center informes-editor-header">
                     <div>
-                        <h5 className="mb-0">{permisoEditandoId ? "Editar permiso de trabajo" : "Nuevo permiso de trabajo"}</h5>
-                        <small className="informes-editor-subtitle">Completa los datos del centro, equipo tecnico, recepcion, GPS, mediciones y firmas.</small>
+                        <h5 className="mb-0">
+                            {subcategoria === "mantencion"
+                                ? (permisoEditandoId ? "Editar mantencion en terreno" : "Nueva mantencion en terreno")
+                                : (permisoEditandoId ? "Editar permiso de trabajo" : "Nuevo permiso de trabajo")}
+                        </h5>
+                        <small className="informes-editor-subtitle">
+                            {subcategoria === "mantencion"
+                                ? "Actualiza los datos del informe de mantencion, recepcion, GPS, mediciones y firmas."
+                                : "Completa los datos del centro, equipo tecnico, recepcion, GPS, mediciones y firmas."}
+                        </small>
                     </div>
                     <button className="btn btn-sm btn-outline-secondary informes-editor-close-btn" onClick={resetFormularioPermiso}>
                         <i className="fas fa-times" />
@@ -1548,6 +1714,12 @@ function InformesCentros() {
                                     <small>Cantidad radares</small>
                                     <strong>{permisoCantidadRadares || "-"}</strong>
                                 </div>
+                                {subcategoria === "mantencion" ? (
+                                    <div className="informes-info-card">
+                                        <small>Responsabilidad</small>
+                                        <strong>{permisoResponsabilidad || "-"}</strong>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                         <div className="informes-editor-subsection">
@@ -1580,6 +1752,16 @@ function InformesCentros() {
                                         ))}
                                     </select>
                                 </div>
+                                {subcategoria === "mantencion" ? (
+                                    <div>
+                                        <label>Responsabilidad</label>
+                                        <select className="form-control" value={permisoResponsabilidad} onChange={(e) => setPermisoResponsabilidad(e.target.value)}>
+                                            <option value="">Seleccionar responsabilidad</option>
+                                            <option value="orca">Orca</option>
+                                            <option value="cliente">Cliente</option>
+                                        </select>
+                                    </div>
+                                ) : null}
                                 <div>
                                     <label>Fecha ingreso</label>
                                     <input className="form-control" type="date" value={permisoFechaIngreso} onChange={(e) => setPermisoFechaIngreso(e.target.value)} />
@@ -1981,6 +2163,57 @@ function InformesCentros() {
                                 <div className="informes-empty py-2 mb-0">No hay equipos devueltos a orca registrados en este permiso.</div>
                             )}
                         </div>
+                        {subcategoria === "mantencion" ? (
+                            <div className="informes-editor-subsection">
+                                <div className="informes-editor-subsection-head">
+                                    <div>
+                                        <strong>Cambio de equipo</strong>
+                                        <small>Resumen de reemplazos registrados en la mantencion.</small>
+                                    </div>
+                                </div>
+                                {permisoCambiosEquipo.length ? (
+                                    <div className="informes-permiso-devueltos-list">
+                                        {permisoCambiosEquipo.map((cambio, index) => (
+                                            <div key={`permiso-cambio-${index}`} className="informes-info-card">
+                                                <small>{`Cambio ${index + 1}`}</small>
+                                                <strong>{cambio?.equipo || "Equipo"}</strong>
+                                                <span className="informes-permiso-devuelto-serie">{`Serie anterior: ${cambio?.serie_anterior || "-"}`}</span>
+                                                <span className="informes-permiso-devuelto-serie">{`Serie nueva: ${cambio?.serie_nueva || "-"}`}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="informes-empty py-2 mb-0">Sin cambios de equipo registrados.</div>
+                                )}
+                            </div>
+                        ) : null}
+                        {subcategoria === "mantencion" ? (
+                            <div className="informes-editor-subsection">
+                                <div className="informes-editor-subsection-head">
+                                    <div>
+                                        <strong>Checklist de equipos</strong>
+                                        <small>Equipos revisados desde mobile con su observacion.</small>
+                                    </div>
+                                </div>
+                                {permisoChecklistMantencion.length ? (
+                                    <div className="informes-permiso-devueltos-list">
+                                        {permisoChecklistMantencion.map((item, index) => (
+                                            <div key={`permiso-check-${index}`} className="informes-info-card">
+                                                <small>{item.revisado ? "Revisado" : "Pendiente"}</small>
+                                                <strong>{item.equipo_nombre || `Equipo ${index + 1}`}</strong>
+                                                <span className="informes-permiso-devuelto-serie">{`N Serie: ${item.numero_serie || "-"}`}</span>
+                                                <span className="informes-permiso-devuelto-serie">{`Codigo: ${item.codigo || "-"}`}</span>
+                                                {item.observacion ? (
+                                                    <span className="informes-permiso-devuelto-serie">{`Observacion: ${item.observacion}`}</span>
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="informes-empty py-2 mb-0">Sin checklist de equipos registrado.</div>
+                                )}
+                            </div>
+                        ) : null}
                         <div className="informes-editor-subsection">
                             <div className="informes-editor-subsection-head">
                                 <div>
@@ -2000,6 +2233,66 @@ function InformesCentros() {
                                 </div>
                             </div>
                         </div>
+                        {subcategoria === "mantencion" ? (
+                            <div className="informes-editor-subsection">
+                                <div className="informes-editor-subsection-head">
+                                    <div>
+                                        <strong>Evidencia</strong>
+                                        <small>Fotos adjuntas desde la mantencion en mobile. Puedes agregar, reemplazar o eliminar.</small>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="informes-evidencia-add-btn"
+                                        onClick={() => abrirSelectorEvidenciaMantencion()}
+                                        disabled={permisoEvidencias.length >= 3}
+                                    >
+                                        <i className="fas fa-camera" />
+                                        <span>Agregar evidencia</span>
+                                    </button>
+                                </div>
+                                <input
+                                    ref={permisoEvidenciaInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="d-none"
+                                    onChange={handleSeleccionarEvidenciaMantencion}
+                                />
+                                {permisoEvidencias.length ? (
+                                    <div className="informes-levantamiento-fotos">
+                                        {permisoEvidencias.map((foto, index) => (
+                                            <div key={`permiso-evidencia-${index}`} className="informes-levantamiento-foto">
+                                                {String(foto || "").startsWith("data:image") || String(foto || "").startsWith("http") ? (
+                                                    <img src={foto} alt={`Evidencia ${index + 1}`} />
+                                                ) : (
+                                                    <div className="p-3 text-muted small">{foto}</div>
+                                                )}
+                                                <span>{`Evidencia ${index + 1}`}</span>
+                                                <div className="informes-evidencia-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="informes-evidencia-action informes-evidencia-action-edit"
+                                                        onClick={() => abrirSelectorEvidenciaMantencion(index)}
+                                                    >
+                                                        <i className="fas fa-sync-alt" />
+                                                        <span>Reemplazar</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="informes-evidencia-action informes-evidencia-action-delete"
+                                                        onClick={() => handleEliminarEvidenciaMantencion(index)}
+                                                    >
+                                                        <i className="fas fa-trash-alt" />
+                                                        <span>Eliminar</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="informes-empty py-2 mb-0">Sin evidencia adjunta.</div>
+                                )}
+                            </div>
+                        ) : null}
                     </div>
 
                     <div className="informes-col-span-2 d-flex gap-2 align-items-end informes-permiso-actions">
@@ -3465,6 +3758,12 @@ function InformesCentros() {
                                                                         <>
                                                                             {subcategoria === "mantencion" ? (
                                                                                 <>
+                                                                                    <button
+                                                                                        className="btn btn-sm btn-outline-primary mr-2"
+                                                                                        onClick={() => handleEditarMantencion(permiso)}>
+                                                                                        <i className="fas fa-edit mr-1" />
+                                                                                        Editar
+                                                                                    </button>
                                                                                     <button
                                                                                         className="btn btn-sm btn-outline-secondary mr-2"
                                                                                         onClick={() => verMantencionPdf(permiso)}>
