@@ -32,7 +32,7 @@ const SUBCATEGORIAS_FALLA = {
     ENERGIA: ["VICTRON VRM", "CARGADOR", "BATERIAS", "TERCEROS", "UPS", "OTRA"],
     CAMARAS: ["CAMARA LASER", "CAMARA TERMAL", "CAMARA INTERIOR", "CAMARA SILO", "CAMARA ENSILAJE", "CAMARA ACCESO", "CAMARA MODULO", "OTRA"],
     RADAR: ["PANEL RADAR", "PLATAFORMA WEB", "CABLE RADAR", "CALIBRACION", "OTRA"],
-    SOFTWARE: ["DIGIFORT", "MAGOS", "PLANILLA", "METRICA DE ENERGIA", "OTRA"],
+    SOFTWARE: ["DIGIFORT", "MAGOS", "PLANILLA", "METRICA DE ENERGIA", "WINDOWS", "OTRA"],
     HARDWARE: ["PC", "NUC", "OTRA"],
     CONFIGURACION: ["PRESET", "ALARMAS AXIS", "CAMARA", "PC", "OTRA"],
     ALARMAS: ["FUENTE PODER", "AXIS", "FOCO LED", "BALIZA EXTERIOR", "BALIZA INTERIOR", "BOCINA EXTERIOR", "BOCINA INTERIOR", "OTRA"],
@@ -211,6 +211,7 @@ const Soporte = () => {
     const [solucion, setSolucion] = useState("");
     const [categoriaFalla, setCategoriaFalla] = useState("");
     const [subcategoriaFalla, setSubcategoriaFalla] = useState("");
+    const [permisoTrabajo, setPermisoTrabajo] = useState(false);
     const [cambioEquipo, setCambioEquipo] = useState(false);
     const [cantidadEquiposCambiados, setCantidadEquiposCambiados] = useState("");
     const [detalleEquiposCambiadosLista, setDetalleEquiposCambiadosLista] = useState([]);
@@ -460,6 +461,7 @@ const Soporte = () => {
         setSolucion("");
         setCategoriaFalla("");
         setSubcategoriaFalla("");
+        setPermisoTrabajo(false);
         setCambioEquipo(false);
         setCantidadEquiposCambiados("");
         setDetalleEquiposCambiadosLista([]);
@@ -548,6 +550,7 @@ const Soporte = () => {
             solucion,
             categoria_falla: categoriaFalla || null,
             subcategoria_falla: subcategoriaFalla || null,
+            permiso_trabajo: permisoTrabajo,
             cambio_equipo: cambioEquipo,
             equipo_cambiado: cambioEquipo
                 ? construirDetalleCambioEquipo(cantidadEquiposCambiados, detalleEquiposCambiadosLista)
@@ -632,6 +635,7 @@ const Soporte = () => {
         );
         setCategoriaFalla(categoriaResuelta.categoria);
         setSubcategoriaFalla(categoriaResuelta.subcategoria);
+        setPermisoTrabajo(Boolean(soporte.permiso_trabajo));
         setCambioEquipo(soporte.cambio_equipo);
         setCaseCode(String(soporte.case_code || ""));
         setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
@@ -907,7 +911,25 @@ const Soporte = () => {
         },
         { name: "Cierre", selector: (row) => (row.fecha_cierre ? formatearFecha(row.fecha_cierre) : "-"), sortable: true, width: "100px" },
         { name: "Solucion", selector: (row) => row.solucion || "-", sortable: true, wrap: true },
-        { name: "Categoria", selector: (row) => row.categoria_falla || "-", sortable: true, wrap: true },
+        {
+            name: "Categoria",
+            selector: (row) => row.categoria_falla || "-",
+            sortable: true,
+            wrap: true,
+            cell: (row) => (
+                <div className="soporte-categoria-cell">
+                    <span>{row.categoria_falla || "-"}</span>
+                    {row.permiso_trabajo ? (
+                        <span
+                            className="permiso-trabajo-badge activo"
+                            title="Requiere permiso de trabajo"
+                        >
+                            <i className="fas fa-user-cog"></i>
+                        </span>
+                    ) : null}
+                </div>
+            )
+        },
         { name: "Subcategoria", selector: (row) => row.subcategoria_falla || "-", sortable: true, wrap: true },
         {
             name: "Cambio equipo",
@@ -1520,13 +1542,30 @@ const Soporte = () => {
                                         <div className="estado-preview mt-2">
                                             {renderEstado(estado)}
                                         </div>
-                                        <label className="text-muted small font-weight-semibold mt-2">Case code</label>
-                                        <input
-                                            placeholder="Ej: CS-2026-001"
-                                            value={caseCode}
-                                            onChange={(e) => setCaseCode(String(e.target.value || "").trim())}
-                                            className="form-control"
-                                        />
+                                        <div className="form-row align-items-end mt-2">
+                                            <div className="form-group col-md-8 mb-0">
+                                                <label className="text-muted small font-weight-semibold">Case code</label>
+                                                <input
+                                                    placeholder="Ej: CS-2026-001"
+                                                    value={caseCode}
+                                                    onChange={(e) => setCaseCode(String(e.target.value || "").trim())}
+                                                    className="form-control"
+                                                />
+                                            </div>
+                                            <div className="form-group col-md-4 mb-0">
+                                                <label className="text-muted small font-weight-semibold d-block">Permiso trabajo</label>
+                                                <label className={`permiso-trabajo-toggle ${permisoTrabajo ? "activo" : "inactivo"}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={permisoTrabajo}
+                                                        onChange={(e) => setPermisoTrabajo(e.target.checked)}
+                                                    />
+                                                    <span className="permiso-trabajo-toggle-icon">
+                                                        <i className="fas fa-user-cog"></i>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold d-flex justify-content-between align-items-center">

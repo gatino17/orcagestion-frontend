@@ -95,6 +95,74 @@
     background: rgba(59, 130, 246, 0.08);
 }
 
+.permiso-trabajo-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 0;
+}
+
+.permiso-trabajo-toggle input {
+    display: none;
+}
+
+.permiso-trabajo-toggle-icon {
+    font-size: 1.1rem;
+    color: #94a3b8;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.permiso-trabajo-toggle.activo {
+    border-color: rgba(22, 163, 74, 0.28);
+    background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(187, 247, 208, 0.88));
+    box-shadow: 0 10px 24px rgba(22, 163, 74, 0.14);
+}
+
+.permiso-trabajo-toggle.activo .permiso-trabajo-toggle-icon {
+    color: #16a34a;
+    transform: scale(1.04);
+}
+
+.permiso-trabajo-toggle.inactivo {
+    background: #f8fafc;
+}
+
+.soporte-categoria-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    line-height: 1.2;
+}
+
+.permiso-trabajo-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 0.82rem;
+}
+
+.permiso-trabajo-badge.activo {
+    color: #16a34a;
+    border-color: rgba(22, 163, 74, 0.28);
+    background: rgba(220, 252, 231, 0.95);
+}
+
+.permiso-trabajo-badge.inactivo {
+    color: #94a3b8;
+}
+
 .status-summary-card {
     border: 1px solid #e2e8f0;
     border-radius: 16px;
