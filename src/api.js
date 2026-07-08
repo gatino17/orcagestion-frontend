@@ -2068,6 +2068,16 @@ export const recepcionarRetiroEnBodega = async (idRetiroTerreno, payload = {}) =
     }
 };
 
+export const actualizarLogisticaBodegaRetiro = async (idRetiroTerreno, payload = {}) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}/actualizar_logistica_bodega`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar logistica de bodega del retiro:", error);
+        throw error;
+    }
+};
+
 export const eliminarRetiroTerreno = async (idRetiroTerreno) => {
     try {
         const response = await axios.delete(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}`);

@@ -1435,6 +1435,11 @@ const ArmadoTecnico = () => {
         [historialResumen]
     );
 
+    const historialMaxSeriesAnteriores = useMemo(
+        () => historialResumen.reduce((max, r) => Math.max(max, Array.isArray(r?.series_anteriores) ? r.series_anteriores.length : 0), 0),
+        [historialResumen]
+    );
+
     // Historial global: recarga inmediata al cambiar pagina, limite o filtros.
     useEffect(() => {
         recargarMovimientosRecientes();
@@ -3747,6 +3752,7 @@ const ArmadoTecnico = () => {
                                                     const esDevueltoBodega = !!r?.devuelto_bodega;
                                                     const color = esDevueltoBodega ? "#fef2f2" : cambios > 0 ? "#fff7ed" : "#f8fafc";
                                                     const borde = esDevueltoBodega ? "#fca5a5" : cambios > 0 ? "#fdba74" : "#e2e8f0";
+                                                    const informeRetiro = r?.correlativo_retiro ? `N${r.correlativo_retiro}` : null;
                                                     return (
                                                         <div className="col-md-6 mb-2" key={`card-${r.item_id}`}>
                                                             <div className="p-2 border rounded" style={{ background: color, borderColor: borde }}>
@@ -3765,6 +3771,7 @@ const ArmadoTecnico = () => {
                                                                 {esDevueltoBodega && (
                                                                     <div className="small mt-1" style={{ color: "#b91c1c", fontWeight: 600 }}>
                                                                         Fecha devolucion: {formatearFechaHora(r?.fecha_devuelto_bodega)}
+                                                                        {informeRetiro ? ` | Informe retiro: ${informeRetiro}` : ""}
                                                                     </div>
                                                                 )}
                                                                 <div className="small text-muted mt-1">Ultima actualizacion: {formatearFechaHora(r.ultima_actualizacion)}</div>
@@ -3782,27 +3789,30 @@ const ArmadoTecnico = () => {
                                                     className="table table-sm table-striped table-bordered mb-0"
                                                     style={{
                                                         border: "1px solid #bfdbfe",
-                                                        borderRadius: 10,
-                                                        overflow: "hidden",
-                                                        background: "#ffffff",
                                                     }}
                                                 >
                                                     <thead>
                                                         <tr style={{ background: "linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)" }}>
                                                             <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Equipo</th>
                                                             <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie inicial</th>
-                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie anterior</th>
+                                                            {Array.from({ length: historialMaxSeriesAnteriores }).map((_, idx) => (
+                                                                <th key={`hist-prev-head-${idx}`} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>
+                                                                    {`Serie anterior ${idx + 1}`}
+                                                                </th>
+                                                            ))}
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie retirada</th>
                                                             <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Serie actual</th>
-                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Cambios</th>
+                                                            <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Estado</th>
                                                             <th style={{ color: "#fff", borderColor: "rgba(255,255,255,0.16)" }}>Ultima actualizacion</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {historialDetalleFilas.map((row, idx) => {
+                                                            const detalleColSpan = historialMaxSeriesAnteriores + 6;
                                                             if (row.tipo === "titulo") {
                                                                 return (
                                                                     <tr key={`h-title-${idx}`} style={{ background: "rgba(37, 99, 235, 0.12)" }}>
-                                                                        <td colSpan="6" style={{ color: "#1e3a8a", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                                                        <td colSpan={detalleColSpan} style={{ color: "#1e3a8a", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                                                             {row.titulo}
                                                                         </td>
                                                                     </tr>
@@ -3811,6 +3821,8 @@ const ArmadoTecnico = () => {
                                                             const r = row.data;
                                                             const tieneCambios = Number(r?.cambios || 0) > 0;
                                                             const esDevueltoBodega = !!r?.devuelto_bodega;
+                                                            const estadoHistorial = esDevueltoBodega ? "Devuelto a bodega" : tieneCambios ? "Con cambios" : "Activo";
+                                                            const seriesAnteriores = Array.isArray(r?.series_anteriores) ? r.series_anteriores : [];
                                                             return (
                                                                 <tr key={`h-item-${row.key}-${idx}`}>
                                                                     <td
@@ -3834,10 +3846,27 @@ const ArmadoTecnico = () => {
                                                                             {formatearFecha(r?.serie_inicial_fecha)}
                                                                         </small>
                                                                     </td>
+                                                                    {Array.from({ length: historialMaxSeriesAnteriores }).map((_, prevIdx) => {
+                                                                        const serieAnterior = seriesAnteriores[prevIdx];
+                                                                        return (
+                                                                            <td key={`hist-prev-${row.key}-${prevIdx}`}>
+                                                                                <div style={tieneCambios || esDevueltoBodega ? { color: "#c2410c", fontWeight: 700 } : undefined}>
+                                                                                    {serieAnterior?.serie || "-"}
+                                                                                </div>
+                                                                                <small className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                                                                    {formatearFecha(serieAnterior?.fecha)}
+                                                                                    {serieAnterior?.correlativo ? ` · N${serieAnterior.correlativo}` : ""}
+                                                                                </small>
+                                                                            </td>
+                                                                        );
+                                                                    })}
                                                                     <td>
-                                                                        <div style={tieneCambios || esDevueltoBodega ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_anterior_actual || "-"}</div>
-                                                                        <small className="text-muted" style={{ fontSize: "0.72rem" }}>
-                                                                            {formatearFecha(r?.serie_anterior_actual_fecha)}
+                                                                        <div style={esDevueltoBodega ? { color: "#b91c1c", fontWeight: 700 } : undefined}>
+                                                                            {r?.serie_retirada || (esDevueltoBodega ? (r?.serie_devuelta_bodega || "-") : "-")}
+                                                                        </div>
+                                                                        <small style={{ fontSize: "0.72rem", color: esDevueltoBodega ? "#b91c1c" : "#6b7280", fontWeight: esDevueltoBodega ? 600 : 400 }}>
+                                                                            {formatearFecha(r?.serie_retirada_fecha || r?.fecha_devuelto_bodega)}
+                                                                            {r?.correlativo_retiro ? ` · N${r.correlativo_retiro}` : ""}
                                                                         </small>
                                                                     </td>
                                                                     <td>
@@ -3853,17 +3882,25 @@ const ArmadoTecnico = () => {
                                                                                 <div style={tieneCambios ? { color: "#c2410c", fontWeight: 700 } : undefined}>{r?.serie_actual || "-"}</div>
                                                                                 <small className="text-muted" style={{ fontSize: "0.72rem" }}>
                                                                                     {formatearFecha(r?.serie_actual_fecha)}
-                                                                                    {r?.correlativo_ultimo ? ` Â· N${r.correlativo_ultimo}` : ""}
+                                                                                    {r?.correlativo_ultimo ? ` · N${r.correlativo_ultimo}` : ""}
                                                                                 </small>
                                                                             </>
                                                                         )}
                                                                     </td>
-                                                                    <td>{r?.cambios || 0}</td>
+                                                                    <td>
+                                                                        <span
+                                                                            className={`badge badge-pill ${
+                                                                                esDevueltoBodega ? "badge-danger" : tieneCambios ? "badge-warning" : "badge-success"
+                                                                            }`}
+                                                                        >
+                                                                            {estadoHistorial}
+                                                                        </span>
+                                                                    </td>
                                                                     <td>{formatearFechaHora(r?.ultima_actualizacion)}</td>
                                                                 </tr>
                                                             );
                                                         })}
-                                                        {!historialDetalleFilas.length && <tr><td colSpan="6" className="text-center text-muted">Sin datos para comparar.</td></tr>}
+                                                        {!historialDetalleFilas.length && <tr><td colSpan={historialMaxSeriesAnteriores + 6} className="text-center text-muted">Sin datos para comparar.</td></tr>}
                                                     </tbody>
                                                 </table>
                                             </div>

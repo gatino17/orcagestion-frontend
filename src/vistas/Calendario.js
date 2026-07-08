@@ -1292,11 +1292,13 @@ function Calendario() {
   const calendarEvents = useMemo(() => {
     return filteredActividades
       .filter((actividad) => actividad.fecha_inicio && actividad.fecha_termino)
-      .map((actividad) => {
+      .map((actividad, index) => {
         const fechaInicio = new Date(actividad.fecha_inicio);
         const fechaTermino = new Date(actividad.fecha_termino);
         fechaInicio.setUTCHours(12, 0, 0);
         fechaTermino.setUTCHours(12, 0, 0);
+        const fechaTerminoExclusive = new Date(fechaTermino);
+        fechaTerminoExclusive.setDate(fechaTerminoExclusive.getDate() + 1);
         const cliente = actividad.centro?.cliente || "Sin cliente";
         const centro = actividad.centro?.nombre || "Sin centro";
         const tipo = actividad.area || "Sin tipo";
@@ -1319,10 +1321,12 @@ function Calendario() {
         return {
           id: actividad.id_actividad,
           title: actividad.nombre_actividad,
-          start: fechaInicio.toISOString(),
-          end: fechaTermino.toISOString(),
+          start: toDateKey(fechaInicio),
+          end: toDateKey(fechaTerminoExclusive),
+          allDay: true,
           color: getColorByPrioridad(actividad.prioridad),
           extendedProps: {
+            numeroActividad: index + 1,
             estado: actividad.estado,
             prioridad: actividad.prioridad,
             centro,
@@ -2280,6 +2284,17 @@ function Calendario() {
                   right: "dayGridMonth,timeGridWeek,timeGridDay"
                 }}
                 events={calendarEvents}
+                eventContent={(info) => {
+                  const numeroActividad = info?.event?.extendedProps?.numeroActividad || info?.event?.id || "-";
+                  return (
+                    <div className="calendar-event-content">
+                      <span className="calendar-event-number">{numeroActividad}</span>
+                      <span className="calendar-event-title" title={info.event.title}>
+                        {info.event.title}
+                      </span>
+                    </div>
+                  );
+                }}
                 eventDidMount={(info) => {
                   const tip = info?.event?.extendedProps?.tooltipText;
                   if (tip) info.el.setAttribute("title", tip);
