@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 
 import { guardarLevantamientoActas, 
          guardarInventarioActas,
          guardarCeseActas,
          guardarRetiroActas,
          guardarTrasladoActas,
+         cargarActasEntregaSistema,
+         cargarInstalacionesActas,
          guardarInstalacionActas,
          guardarMantencionActas,
          cargarMantencionesActas,
+         cargarMantencionesSistema,
+         cargarPermisosTrabajoSistema,
          verDocumentoMantencionActas
 
      } from '../controllers/actasControllers';
@@ -38,9 +42,13 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     const [fechaMonitoreo, setFechaMonitoreo] = useState('');
     const [tipoTraslado, setTipoTraslado] = useState('');
     const [errorFecha, setErrorFecha] = useState(false);
+    const [instalaciones, setInstalaciones] = useState([]);
+    const [actasEntregaSistema, setActasEntregaSistema] = useState([]);
+    const [permisosTrabajoSistema, setPermisosTrabajoSistema] = useState([]);
 
 
     const [mantenciones, setMantenciones] = useState([]);
+    const [mantencionesSistema, setMantencionesSistema] = useState([]);
     const [fechaMantencion, setFechaMantencion] = useState('');
     const [documentoMantencion, setDocumentoMantencion] = useState(null);
     const [responsableMantencion, setResponsableMantencion] = useState('');
@@ -64,6 +72,14 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         return parsed.toISOString().split('T')[0];
     };
 
+    const formatDateDisplay = (value) => {
+        if (!value) return '-';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return String(value);
+        parsed.setMinutes(parsed.getMinutes() + parsed.getTimezoneOffset());
+        return parsed.toLocaleDateString('es-CL');
+    };
+
     useEffect(() => {
         setTipoActividad(tipoInicial || 'levantamiento');
     }, [tipoInicial]);
@@ -82,22 +98,22 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     }, [actividad, tipoActividad]);
 
     const handleGuardar = async () => {
-        // Verificar si el campo de fecha está vacío para los tipos de actividad que lo requieren
+        // Verificar si el campo de fecha estÃ¡ vacÃ­o para los tipos de actividad que lo requieren
         if ((tipoActividad === 'levantamiento' || tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado' || tipoActividad === 'instalacion') && !fecha) {
             setErrorFecha(true);  // Activar el error para mostrar en el campo
-            return;  // Salir de la función para evitar que se cierre el modal
+            return;  // Salir de la funciÃ³n para evitar que se cierre el modal
         }
 
-        setErrorFecha(false);  // Resetear el error si la fecha está completa
+        setErrorFecha(false);  // Resetear el error si la fecha estÃ¡ completa
         
         if (!actividad || !actividad.id_centro) {
-            console.error("Actividad no válida o falta id_centro:", actividad);
+            console.error("Actividad no vÃ¡lida o falta id_centro:", actividad);
             alert("No se puede guardar porque falta el ID del centro.");
             return;
         }
     
         const formData = new FormData();
-        formData.append('centro_id', actividad.id_centro);  // Asegúrate que es 'actividad', no 'actividadSeleccionada'
+        formData.append('centro_id', actividad.id_centro);  // AsegÃºrate que es 'actividad', no 'actividadSeleccionada'
     
         if (tipoActividad === 'levantamiento') {
             if (fecha) formData.append('fecha_levantamiento', fecha);
@@ -126,11 +142,11 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
             formData.append('centro_destino_id', centroDestino);       // Centro de destino seleccionado
             await guardarTrasladoActas(formData);
         } else if (tipoActividad === 'instalacion') {
-            if (fecha) formData.append('fecha_instalacion', fecha);  // ➤ FECHA DE INSTALACIÓN
-            if (fechaMonitoreo) formData.append('inicio_monitoreo', fechaMonitoreo);  // ➤ FECHA DE MONITOREO
+            if (fecha) formData.append('fecha_instalacion', fecha);  // âž¤ FECHA DE INSTALACIÃ“N
+            if (fechaMonitoreo) formData.append('inicio_monitoreo', fechaMonitoreo);  // âž¤ FECHA DE MONITOREO
             if (documento) formData.append('documento_acta', documento);
             if (observacion) formData.append('observacion', observacion);
-            await guardarInstalacionActas(formData);  // ➤ GUARDAR INSTALACIÓN
+            await guardarInstalacionActas(formData);  // âž¤ GUARDAR INSTALACIÃ“N
         }
         
     
@@ -143,15 +159,15 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     
     const handleEliminar = async () => {
         if (tipoActividad === 'levantamiento') {
-            // Asegúrate de que esta condición está revisando id_centro y no id_levantamiento
+            // AsegÃºrate de que esta condiciÃ³n estÃ¡ revisando id_centro y no id_levantamiento
             if (!actividad.id_centro) {
-                alert('No se encontró el ID del centro para eliminar los levantamientos.');
+                alert('No se encontrÃ³ el ID del centro para eliminar los levantamientos.');
                 return;
             }
             await eliminarLevantamientosPorCentro(actividad.id_centro);  // Eliminar todos los levantamientos del centro
         } else if (tipoActividad === 'inventario') {
             if (!actividad.id_centro) {
-                alert('No se encontró el ID del inventario para eliminar.');
+                alert('No se encontrÃ³ el ID del inventario para eliminar.');
                 return;
             }
             await eliminarInventariosPorCentro(actividad.id_centro);
@@ -162,7 +178,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         } else if (tipoActividad === 'traslado') {
             await eliminarTrasladosPorCentro(actividad.id_centro);
         } else if (tipoActividad === 'instalacion') {
-            await eliminarInstalacionesPorCentro(actividad.id_centro);  // ➤ ELIMINAR INSTALACIÓN
+            await eliminarInstalacionesPorCentro(actividad.id_centro);  // âž¤ ELIMINAR INSTALACIÃ“N
         }
         
     
@@ -171,7 +187,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         onClose();
     };
     
-    // Agregar nueva mantención
+    // Agregar nueva mantenciÃ³n
     const handleAgregarMantencion = async () => {
         let hasError = false;
     
@@ -204,7 +220,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
             setErrorObservacionMantencion(false);
         }
     
-        // Si hay algún error, no enviamos la solicitud
+        // Si hay algÃºn error, no enviamos la solicitud
         if (hasError) {
             alert("Todos los campos son obligatorios.");
             return;
@@ -220,9 +236,9 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     
             await guardarMantencionActas(formData);
     
-            alert("Mantención agregada exitosamente.");
+            alert("MantenciÃ³n agregada exitosamente.");
     
-            // Limpia los campos después de agregar
+            // Limpia los campos despuÃ©s de agregar
             setFechaMantencion('');
             setDocumentoMantencion(null);
             setResponsableMantencion('');
@@ -232,25 +248,25 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
             recargarDatos();
             onClose();
         } catch (error) {
-            console.error("Error al agregar la mantención:", error);
-            alert("Hubo un error al agregar la mantención.");
+            console.error("Error al agregar la mantenciÃ³n:", error);
+            alert("Hubo un error al agregar la mantenciÃ³n.");
         }
     };
     
     
     
 
-    // Eliminar una mantención
+    // Eliminar una mantenciÃ³n
     const handleEliminarMantencion = async (idMantencion) => {
         try {
-            await eliminarMantencionActas(idMantencion);  // Elimina la mantención en la base de datos
-            alert("Mantención eliminada exitosamente.");
+            await eliminarMantencionActas(idMantencion);  // Elimina la mantenciÃ³n en la base de datos
+            alert("MantenciÃ³n eliminada exitosamente.");
             
             recargarDatos(); // Recarga la lista de actividades para actualizar la tabla
             onClose(); // Cierra el modal
         } catch (error) {
-            console.error("Error al eliminar la mantención:", error);
-            alert("Hubo un error al eliminar la mantención.");
+            console.error("Error al eliminar la mantenciÃ³n:", error);
+            alert("Hubo un error al eliminar la mantenciÃ³n.");
         }
     };
     
@@ -266,8 +282,17 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     }, [tipoActividad]);
     
     useEffect(() => {
+        if (tipoActividad === 'instalacion') {
+            cargarInstalacionesActas(setInstalaciones, actividad.id_centro);
+            cargarActasEntregaSistema(setActasEntregaSistema, actividad.id_centro);
+            cargarPermisosTrabajoSistema(setPermisosTrabajoSistema, actividad.id_centro);
+        }
+    }, [tipoActividad, actividad.id_centro]);
+
+    useEffect(() => {
         if (tipoActividad === 'mantencion') {
             cargarMantencionesActas(setMantenciones, actividad.id_centro);
+            cargarMantencionesSistema(setMantencionesSistema, actividad.id_centro);
         }
     }, [tipoActividad, actividad.id_centro]);
     
@@ -291,18 +316,18 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                 onChange={(e) => setTipoActividad(e.target.value)}
                             >
                                 <option value="levantamiento">Levantamiento</option>
-                                <option value="instalacion">Instalación</option> 
+                                <option value="instalacion">InstalaciÃ³n</option> 
                                 <option value="mantencion">Mantencion</option>
                                 <option value="inventario">Inventario</option>
                                 <option value="cese">Cese</option>
                                 <option value="retiro">Retiro</option>
                                 <option value="traslado">Traslado</option>
                                 
-                                {/* Aquí agregaremos los otros tipos más adelante */}
+                                {/* AquÃ­ agregaremos los otros tipos mÃ¡s adelante */}
                             </select>
                         </div>
 
-                        {/* Mostrar campos según el tipo de actividad */}
+                        {/* Mostrar campos segÃºn el tipo de actividad */}
                         {(tipoActividad === 'levantamiento' || tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado') && (
                             <div className="form-group">
                                 <label>Fecha</label>
@@ -334,17 +359,17 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
 
 
-                           {/* Mostrar campos específicos para Retiro */}
+                           {/* Mostrar campos especÃ­ficos para Retiro */}
                         {tipoActividad === 'retiro' && (
                             <>
                                 <div className="form-group">
-                                    <label>Observación</label>
+                                    <label>ObservaciÃ³n</label>
                                     <input 
                                         type="text" 
                                         className="form-control" 
                                         value={observacion} 
                                         onChange={(e) => setObservacion(e.target.value)} 
-                                        placeholder="Ingrese una observación"
+                                        placeholder="Ingrese una observaciÃ³n"
                                     />
                                 </div>
 
@@ -361,7 +386,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </>
                         )}
 
-                        {/* Mostrar campos específicos para traslado */}
+                        {/* Mostrar campos especÃ­ficos para traslado */}
                         {tipoActividad === 'traslado' && (
                             <>
                                 <div className="form-group">
@@ -421,17 +446,18 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Observación</label>
+                                    <label>ObservaciÃ³n</label>
                                     <input 
                                         type="text" 
                                         className="form-control" 
                                         value={observacion} 
                                         onChange={(e) => setObservacion(e.target.value)} 
-                                        placeholder="Ingrese una observación"
+                                        placeholder="Ingrese una observaciÃ³n"
                                     />
                                 </div>
                             </>
                         )}
+
 
                           {/* Mostrar campos específicos para instalaciones */}
                         {tipoActividad === 'instalacion' && (
@@ -470,6 +496,62 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                     onChange={(e) => setObservacion(e.target.value)}
                                     placeholder="Ingrese una observación"
                                 />
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <h5 className="mb-0">Instalaciones manuales</h5>
+                                    <span className="badge badge-success">{instalaciones.length}</span>
+                                </div>
+                                <ul className="list-group">
+                                    {instalaciones.length ? instalaciones.map((instalacion, index) => (
+                                        <li key={`inst-man-${index}`} className="list-group-item">
+                                            <strong>Fecha:</strong> {formatDateDisplay(instalacion.fecha_instalacion)} <br />
+                                            <strong>Inicio monitoreo:</strong> {formatDateDisplay(instalacion.inicio_monitoreo)} <br />
+                                            <strong>Observación:</strong> {instalacion.observacion || '-'}
+                                        </li>
+                                    )) : (
+                                        <li className="list-group-item text-muted">Sin instalaciones manuales registradas.</li>
+                                    )}
+                                </ul>
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <h5 className="mb-0">Actas sistema</h5>
+                                    <span className="badge badge-primary">{actasEntregaSistema.length}</span>
+                                </div>
+                                <ul className="list-group">
+                                    {actasEntregaSistema.length ? actasEntregaSistema.map((acta) => (
+                                        <li key={`acta-sis-${acta.id_acta_entrega}`} className="list-group-item">
+                                            <strong>Fecha:</strong> {formatDateDisplay(acta.fecha_registro)} <br />
+                                            <strong>Técnico 1:</strong> {acta.tecnico_1 || '-'} <br />
+                                            <strong>Técnico 2:</strong> {acta.tecnico_2 || '-'} <br />
+                                            <strong>Tipo:</strong> {acta.tipo_instalacion || 'instalacion'}
+                                        </li>
+                                    )) : (
+                                        <li className="list-group-item text-muted">Sin actas del sistema registradas.</li>
+                                    )}
+                                </ul>
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <h5 className="mb-0">Permisos sistema</h5>
+                                    <span className="badge badge-primary">{permisosTrabajoSistema.length}</span>
+                                </div>
+                                <ul className="list-group">
+                                    {permisosTrabajoSistema.length ? permisosTrabajoSistema.map((permiso) => (
+                                        <li key={`perm-sis-${permiso.id_permiso_trabajo}`} className="list-group-item">
+                                            <strong>Fecha ingreso:</strong> {formatDateDisplay(permiso.fecha_ingreso)} <br />
+                                            <strong>Fecha salida:</strong> {formatDateDisplay(permiso.fecha_salida)} <br />
+                                            <strong>Técnico 1:</strong> {permiso.tecnico_1 || '-'} <br />
+                                            <strong>Técnico 2:</strong> {permiso.tecnico_2 || '-'}
+                                        </li>
+                                    )) : (
+                                        <li className="list-group-item text-muted">Sin permisos del sistema registrados.</li>
+                                    )}
+                                </ul>
                             </div>
                         </>
                     )}
@@ -535,41 +617,70 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                 <i className="fas fa-plus"></i> Agregar Mantención
                             </button>
 
-                            <h5 className="mt-3">Lista de Mantenciones</h5>
-                            <ul className="list-group">
-                                {mantenciones.map((mantencion, index) => (
-                                    <li key={index} className="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <strong>Fecha:</strong> {mantencion.fecha_mantencion} <br />
-                                            <strong>Responsable:</strong> {mantencion.responsable} <br />
-                                            <strong>Observación:</strong> {mantencion.observacion}
-                                        </div>
-                                        <div>
-                                            {mantencion.documento_mantencion ? (
+                            <div className="mt-4">
+                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <h5 className="mb-0">Mantenciones manuales</h5>
+                                    <span className="badge badge-success">{mantenciones.length}</span>
+                                </div>
+                                <ul className="list-group">
+                                    {mantenciones.length ? mantenciones.map((mantencion, index) => (
+                                        <li key={index} className="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>Fecha:</strong> {formatDateDisplay(mantencion.fecha_mantencion)} <br />
+                                                <strong>Responsable:</strong> {mantencion.responsable} <br />
+                                                <strong>Observación:</strong> {mantencion.observacion}
+                                            </div>
+                                            <div>
+                                                {mantencion.documento_mantencion ? (
+                                                    <button 
+                                                        className="btn btn-info btn-sm mr-2" 
+                                                        onClick={() => verDocumentoMantencionActas(mantencion.id_mantencion)}
+                                                    >
+                                                        <i className="fas fa-eye"></i> Ver Documento
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ color: 'red', fontWeight: 'bold' }}>No Disponible</span>
+                                                )}
                                                 <button 
-                                                    className="btn btn-info btn-sm mr-2" 
-                                                    onClick={() => verDocumentoMantencionActas(mantencion.id_mantencion)}
+                                                    className="btn btn-danger btn-sm" 
+                                                    onClick={() => handleEliminarMantencion(mantencion.id_mantencion)}
                                                 >
-                                                    <i className="fas fa-eye"></i> Ver Documento
+                                                    <i className="fas fa-trash-alt"></i>
                                                 </button>
-                                            ) : (
-                                                <span style={{ color: 'red', fontWeight: 'bold' }}>No Disponible</span>
-                                            )}
-                                            <button 
-                                                className="btn btn-danger btn-sm" 
-                                                onClick={() => handleEliminarMantencion(mantencion.id_mantencion)}
-                                            >
-                                                <i className="fas fa-trash-alt"></i>
-                                            </button>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
+                                            </div>
+                                        </li>
+                                    )) : (
+                                        <li className="list-group-item text-muted">Sin mantenciones manuales registradas.</li>
+                                    )}
+                                </ul>
+                            </div>
 
-
-
+                            <div className="mt-4">
+                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <h5 className="mb-0">Mantenciones sistema</h5>
+                                    <span className="badge badge-primary">{mantencionesSistema.length}</span>
+                                </div>
+                                <ul className="list-group">
+                                    {mantencionesSistema.length ? mantencionesSistema.map((mantencion) => (
+                                        <li key={`sys-${mantencion.id_mantencion_terreno}`} className="list-group-item">
+                                            <div className="d-flex align-items-start justify-content-between flex-wrap">
+                                                <div>
+                                                    <strong>Fecha ingreso:</strong> {formatDateDisplay(mantencion.fecha_ingreso)} <br />
+                                                    <strong>Fecha salida:</strong> {formatDateDisplay(mantencion.fecha_salida)} <br />
+                                                    <strong>Técnico 1:</strong> {mantencion.tecnico_1 || '-'} <br />
+                                                    <strong>Técnico 2:</strong> {mantencion.tecnico_2 || '-'} <br />
+                                                    <strong>Descripción:</strong> {mantencion.descripcion_trabajo || '-'}
+                                                </div>
+                                                <span className="badge badge-primary mt-2 mt-md-0">Informe sistema</span>
+                                            </div>
+                                        </li>
+                                    )) : (
+                                        <li className="list-group-item text-muted">Sin mantenciones del sistema registradas.</li>
+                                    )}
+                                </ul>
+                            </div>
                         </>
-                    )} 
+                    )}
 
                    
        
@@ -609,9 +720,9 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </button>
                         )}
                          
-                         {tipoActividad === 'instalacion' && actividad.instalacion_documento && (  // ➤ Cambiar 'traslado_documento' a 'instalacion_documento'
+                         {tipoActividad === 'instalacion' && actividad.instalacion_documento && (  // âž¤ Cambiar 'traslado_documento' a 'instalacion_documento'
                             <button type="button" className="btn btn-danger" onClick={handleEliminar}>
-                                <i className="fas fa-trash-alt"> Instalación</i>  {/* ➤ Cambiar texto de 'Traslado' a 'Instalación' */}
+                                <i className="fas fa-trash-alt"> InstalaciÃ³n</i>  {/* âž¤ Cambiar texto de 'Traslado' a 'InstalaciÃ³n' */}
                             </button>
                         )}
 

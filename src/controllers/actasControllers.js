@@ -31,12 +31,15 @@ import {
     registrarInstalacionActas,
     modificarInstalacionActas,
     borrarInstalacionesPorCentro,
+    obtenerActasEntrega,
+    obtenerPermisosTrabajo,
 
     obtenerMantencionesActas, 
     registrarMantencionActas, 
     modificarMantencionActas, 
     borrarMantencionPorId,
-    descargarDocumentoMantencionActas    
+    descargarDocumentoMantencionActas,
+    obtenerMantencionesTerreno    
 
     
 } from '../api';
@@ -328,6 +331,26 @@ export const cargarInstalacionesActas = async (setInstalaciones, centroId = null
     }
 };
 
+export const cargarActasEntregaSistema = async (setActasEntrega, centroId = null) => {
+    try {
+        const data = await obtenerActasEntrega(centroId ? { centro_id: centroId } : {});
+        setActasEntrega(Array.isArray(data) ? data : []);
+    } catch (error) {
+        console.error("Error al cargar actas de entrega del sistema:", error);
+        setActasEntrega([]);
+    }
+};
+
+export const cargarPermisosTrabajoSistema = async (setPermisosTrabajo, centroId = null) => {
+    try {
+        const data = await obtenerPermisosTrabajo(centroId ? { centro_id: centroId } : {});
+        setPermisosTrabajo(Array.isArray(data) ? data : []);
+    } catch (error) {
+        console.error("Error al cargar permisos de trabajo del sistema:", error);
+        setPermisosTrabajo([]);
+    }
+};
+
 // ➤ Guardar o editar una instalación
 export const guardarInstalacionActas = async (formData, id = null) => {
     try {
@@ -363,6 +386,16 @@ export const cargarMantencionesActas = async (setMantenciones, centroId = null) 
         setMantenciones(data || []);
     } catch (error) {
         console.error("Error al cargar mantenciones:", error);
+    }
+};
+
+export const cargarMantencionesSistema = async (setMantencionesSistema, centroId = null) => {
+    try {
+        const data = await obtenerMantencionesTerreno(centroId ? { centro_id: centroId } : {});
+        setMantencionesSistema(Array.isArray(data) ? data : []);
+    } catch (error) {
+        console.error("Error al cargar mantenciones del sistema:", error);
+        setMantencionesSistema([]);
     }
 };
 

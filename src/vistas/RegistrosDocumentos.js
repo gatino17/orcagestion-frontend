@@ -21,6 +21,15 @@ const esCentroTipoCentral = (actividad) => {
     return flagCentral || nombreCentro.includes('central');
 };
 
+const obtenerFechaMasReciente = (...fechas) => {
+    const validas = fechas
+        .filter(Boolean)
+        .map((fecha) => new Date(fecha))
+        .filter((fecha) => !Number.isNaN(fecha.getTime()));
+    if (!validas.length) return null;
+    return new Date(Math.max(...validas.map((fecha) => fecha.getTime()))).toISOString();
+};
+
 
 function RegistrosDocumentos() {
 
@@ -86,18 +95,24 @@ function RegistrosDocumentos() {
                     console.log("Actividades cargadas:", datosActividades);
     
                     //  Agrupar mantenciones por centro
-                    const agrupado = datosActividades.reduce((acc, act) => {
-                        const key = act.id_centro;
-                        if (!acc[key]) {
-                            acc[key] = {
-                                ...act,
-                                cantidad_mantenciones: 0,
-                                ultima_fecha_mantencion: null
-                            };
-                        } else {
-                            const target = acc[key];
-                            const camposDocumento = [
-                                'instalacion',
+                        const agrupado = datosActividades.reduce((acc, act) => {
+                            const key = act.id_centro;
+                            if (!acc[key]) {
+                                acc[key] = {
+                                    ...act,
+                                    cantidad_actas_sistema: Number(act.cantidad_actas_sistema || 0),
+                                    ultima_fecha_acta_sistema: act.ultima_fecha_acta_sistema || null,
+                                    cantidad_permisos_sistema: Number(act.cantidad_permisos_sistema || 0),
+                                    ultima_fecha_permiso_sistema: act.ultima_fecha_permiso_sistema || null,
+                                    cantidad_mantenciones: 0,
+                                    ultima_fecha_mantencion: null,
+                                    cantidad_mantenciones_sistema: Number(act.cantidad_mantenciones_sistema || 0),
+                                    ultima_fecha_mantencion_sistema: act.ultima_fecha_mantencion_sistema || null
+                                };
+                            } else {
+                                const target = acc[key];
+                                const camposDocumento = [
+                                    'instalacion',
                                 'levantamiento',
                                 'traslado',
                                 'cese',
@@ -116,19 +131,75 @@ function RegistrosDocumentos() {
                             });
                         }
 
-                        if (act.mantencion_fecha) {
-                            const registro = acc[key];
-                            registro.cantidad_mantenciones += 1;
-                            if (!registro.ultima_fecha_mantencion || new Date(act.mantencion_fecha) > new Date(registro.ultima_fecha_mantencion)) {
-                                registro.ultima_fecha_mantencion = act.mantencion_fecha;
-                            }
-                        }
+                                if (act.mantencion_fecha) {
+                                    const registro = acc[key];
+                                    registro.cantidad_mantenciones += 1;
+                                    if (!registro.ultima_fecha_mantencion || new Date(act.mantencion_fecha) > new Date(registro.ultima_fecha_mantencion)) {
+                                        registro.ultima_fecha_mantencion = act.mantencion_fecha;
+                                    }
+                                }
+
+                                const cantidadActasSistema = Number(act.cantidad_actas_sistema || 0);
+                                if (cantidadActasSistema > Number(acc[key].cantidad_actas_sistema || 0)) {
+                                    acc[key].cantidad_actas_sistema = cantidadActasSistema;
+                                }
+                                if (
+                                    act.ultima_fecha_acta_sistema &&
+                                    (
+                                        !acc[key].ultima_fecha_acta_sistema ||
+                                        new Date(act.ultima_fecha_acta_sistema) > new Date(acc[key].ultima_fecha_acta_sistema)
+                                    )
+                                ) {
+                                    acc[key].ultima_fecha_acta_sistema = act.ultima_fecha_acta_sistema;
+                                }
+
+                                const cantidadPermisosSistema = Number(act.cantidad_permisos_sistema || 0);
+                                if (cantidadPermisosSistema > Number(acc[key].cantidad_permisos_sistema || 0)) {
+                                    acc[key].cantidad_permisos_sistema = cantidadPermisosSistema;
+                                }
+                                if (
+                                    act.ultima_fecha_permiso_sistema &&
+                                    (
+                                        !acc[key].ultima_fecha_permiso_sistema ||
+                                        new Date(act.ultima_fecha_permiso_sistema) > new Date(acc[key].ultima_fecha_permiso_sistema)
+                                    )
+                                ) {
+                                    acc[key].ultima_fecha_permiso_sistema = act.ultima_fecha_permiso_sistema;
+                                }
+
+                                const cantidadSistema = Number(act.cantidad_mantenciones_sistema || 0);
+                                if (cantidadSistema > Number(acc[key].cantidad_mantenciones_sistema || 0)) {
+                                    acc[key].cantidad_mantenciones_sistema = cantidadSistema;
+                                }
+                                if (
+                                    act.ultima_fecha_mantencion_sistema &&
+                                    (
+                                        !acc[key].ultima_fecha_mantencion_sistema ||
+                                        new Date(act.ultima_fecha_mantencion_sistema) > new Date(acc[key].ultima_fecha_mantencion_sistema)
+                                    )
+                                ) {
+                                    acc[key].ultima_fecha_mantencion_sistema = act.ultima_fecha_mantencion_sistema;
+                                }
 
                         return acc;
                     }, {});
     
                     //  Convertir en array para la tabla
-                    setActividades(Object.values(agrupado));
+                    setActividades(
+                        Object.values(agrupado).map((item) => ({
+                            ...item,
+                            ultima_fecha_instalacion_referencia: obtenerFechaMasReciente(
+                                item.instalacion_fecha,
+                                item.ultima_fecha_acta_sistema,
+                                item.ultima_fecha_permiso_sistema,
+                                item.centro_fecha_instalacion
+                            ),
+                            ultima_fecha_mantencion_referencia: obtenerFechaMasReciente(
+                                item.ultima_fecha_mantencion,
+                                item.ultima_fecha_mantencion_sistema
+                            )
+                        }))
+                    );
                 },
                 (datosServicios) => {
                     console.log("Servicios adicionales cargados:", datosServicios);
@@ -297,7 +368,7 @@ function RegistrosDocumentos() {
         </div>
     );
 
-    const renderMantencionesSection = (cantidad, ultimaFecha, onOpen) => (
+    const renderMantencionesSection = (cantidadManual, ultimaFechaManual, cantidadSistema, ultimaFechaSistema, onOpen) => (
         <div
             className={`registro-doc-section registro-doc-section--mantencion ${onOpen ? 'registro-doc-section--clickable' : ''}`}
             role={onOpen ? 'button' : undefined}
@@ -310,14 +381,78 @@ function RegistrosDocumentos() {
                 </span>
                 <strong>Mantenciones</strong>
             </div>
-            <div className="registro-doc-section__content">
-                <div>
-                    <small>ltima fecha</small>
-                    <p>{getTextoFecha(ultimaFecha)}</p>
+            <div className="registro-mantencion-stack">
+                <div className="registro-mantencion-row">
+                    <div className="registro-mantencion-row__head">
+                        <small>Manual</small>
+                        <span className="registro-doc-badge">{cantidadManual || 0}</span>
+                    </div>
+                    <p>{getTextoFecha(ultimaFechaManual)}</p>
                 </div>
-                <div>
-                    <small>Cantidad</small>
-                    <span className="registro-doc-badge">{cantidad || 0}</span>
+                <div className="registro-mantencion-row registro-mantencion-row--sistema">
+                    <div className="registro-mantencion-row__head">
+                        <small>Informe sistema</small>
+                        <span className={`registro-doc-badge ${cantidadSistema ? 'registro-doc-badge--system' : 'registro-doc-badge--empty'}`}>
+                            {cantidadSistema || 0}
+                        </span>
+                    </div>
+                    <p>{getTextoFecha(ultimaFechaSistema)}</p>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderInstalacionSection = (row, onOpen) => (
+        <div
+            className={`registro-doc-section registro-doc-section--instalacion ${onOpen ? 'registro-doc-section--clickable' : ''}`}
+            role={onOpen ? 'button' : undefined}
+            tabIndex={onOpen ? 0 : undefined}
+            onClick={onOpen}
+        >
+            <div className="registro-doc-section__header">
+                <span className="registro-doc-section__icon">
+                    <i className="fas fa-hard-hat" />
+                </span>
+                <strong>Instalacion</strong>
+            </div>
+            <div className="registro-mantencion-stack">
+                <div className="registro-mantencion-row">
+                    <div className="registro-mantencion-row__head">
+                        <small>Manual</small>
+                        {row.instalacion_documento ? (
+                            <a
+                                href={row.instalacion_documento}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="registro-doc-link registro-doc-link--icon"
+                                title="Abrir documento"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <i className="fas fa-external-link-alt" />
+                            </a>
+                        ) : (
+                            <span className="registro-doc-missing">Sin doc</span>
+                        )}
+                    </div>
+                    <p>{getTextoFecha(row.instalacion_fecha || row.centro_fecha_instalacion)}</p>
+                </div>
+                <div className="registro-mantencion-row registro-mantencion-row--sistema">
+                    <div className="registro-mantencion-row__head">
+                        <small>Actas sistema</small>
+                        <span className={`registro-doc-badge ${row.cantidad_actas_sistema ? 'registro-doc-badge--system' : 'registro-doc-badge--empty'}`}>
+                            {row.cantidad_actas_sistema || 0}
+                        </span>
+                    </div>
+                    <p>{getTextoFecha(row.ultima_fecha_acta_sistema)}</p>
+                </div>
+                <div className="registro-mantencion-row registro-mantencion-row--sistema">
+                    <div className="registro-mantencion-row__head">
+                        <small>Permisos sistema</small>
+                        <span className={`registro-doc-badge ${row.cantidad_permisos_sistema ? 'registro-doc-badge--system' : 'registro-doc-badge--empty'}`}>
+                            {row.cantidad_permisos_sistema || 0}
+                        </span>
+                    </div>
+                    <p>{getTextoFecha(row.ultima_fecha_permiso_sistema)}</p>
                 </div>
             </div>
         </div>
@@ -386,22 +521,28 @@ function RegistrosDocumentos() {
         },
         {
             name: 'Mantenciones',
-            selector: (row) => row.ultima_fecha_mantencion,
-            cell: (row) => renderMantencionesSection(row.cantidad_mantenciones, row.ultima_fecha_mantencion, () => handleDetallesActividad(row, 'mantencion')),
+            selector: (row) => row.ultima_fecha_mantencion_referencia || row.ultima_fecha_mantencion || row.ultima_fecha_mantencion_sistema,
+            cell: (row) => renderMantencionesSection(
+                row.cantidad_mantenciones,
+                row.ultima_fecha_mantencion,
+                row.cantidad_mantenciones_sistema,
+                row.ultima_fecha_mantencion_sistema,
+                () => handleDetallesActividad(row, 'mantencion')
+            ),
             grow: 0.1,
             wrap: true,
             minWidth: '180px',
         },
         crearColumnaDocumento('Levantamiento', 'levantamiento_fecha', 'levantamiento_documento', 'fa-clipboard-list', 'registro-doc-section--levantamiento', 'levantamiento'),
-        crearColumnaDocumento(
-            'Instalacion',
-            'instalacion_fecha',
-            'instalacion_documento',
-            'fa-hard-hat',
-            'registro-doc-section--instalacion',
-            'instalacion',
-            (row) => row.instalacion_fecha || row.centro_fecha_instalacion
-        ),
+        {
+            name: 'Instalacion',
+            selector: (row) => row.ultima_fecha_instalacion_referencia || row.instalacion_fecha || row.centro_fecha_instalacion,
+            cell: (row) => renderInstalacionSection(row, () => handleDetallesActividad(row, 'instalacion')),
+            grow: 1.2,
+            wrap: true,
+            minWidth: '210px',
+            allowOverflow: false,
+        },
         crearColumnaDocumento('Traslado', 'traslado_fecha', 'traslado_documento', 'fa-truck', 'registro-doc-section--traslado', 'traslado'),
         crearColumnaDocumento(
             'Cese',
@@ -504,8 +645,9 @@ function RegistrosDocumentos() {
         const pendientes = actividades.filter((act) => {
             if (clienteSeleccionadoNombre && act.nombre_cliente !== clienteSeleccionadoNombre) return false;
             if ((act.estado || '').toLowerCase() !== 'activo') return false;
-            if (!act.ultima_fecha_mantencion) return true;
-            const fecha = new Date(act.ultima_fecha_mantencion);
+            const fechaReferencia = act.ultima_fecha_mantencion_referencia || act.ultima_fecha_mantencion || act.ultima_fecha_mantencion_sistema;
+            if (!fechaReferencia) return true;
+            const fecha = new Date(fechaReferencia);
             if (Number.isNaN(fecha.getTime())) return true;
             return fecha.getFullYear() < currentYear;
         });
@@ -535,7 +677,7 @@ function RegistrosDocumentos() {
             topClientes: clientes.slice(0, 4),
             centrosPendientes: pendientes
                 .map((act) => {
-                    const ultima = act.ultima_fecha_mantencion || act.instalacion_fecha || act.centro_fecha_instalacion;
+                    const ultima = act.ultima_fecha_mantencion_referencia || act.ultima_fecha_mantencion || act.ultima_fecha_mantencion_sistema || act.instalacion_fecha || act.centro_fecha_instalacion;
                     let mesesSinMantencion = null;
                     if (ultima) {
                         const fechaUltima = new Date(ultima);
@@ -548,7 +690,7 @@ function RegistrosDocumentos() {
                     return {
                         nombre: act.nombre_centro || `Centro ${act.id_centro}`,
                         cliente: act.nombre_cliente || act.cliente || 'Sin cliente',
-                        ultimaMantencion: act.ultima_fecha_mantencion,
+                        ultimaMantencion: act.ultima_fecha_mantencion_referencia || act.ultima_fecha_mantencion || act.ultima_fecha_mantencion_sistema,
                         fechaInstalacion: act.instalacion_fecha || act.centro_fecha_instalacion,
                         mesesSinMantencion
                     };
