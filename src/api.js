@@ -2017,6 +2017,16 @@ export const obtenerRetirosTerreno = async (params = {}) => {
     }
 };
 
+export const updateRetiroTerreno = async (idRetiroTerreno, payload) => {
+    try {
+        const response = await axios.put(`${BASE_URL}/retiros_terreno/${idRetiroTerreno}`, payload);
+        return response.data;
+    } catch (error) {
+        console.error("Error al actualizar retiro en terreno:", error);
+        throw error;
+    }
+};
+
 // ===================== LEVANTAMIENTOS TERRENO =====================
 export const obtenerLevantamientosTerreno = async (params = {}) => {
     try {

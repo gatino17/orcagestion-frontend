@@ -13,7 +13,9 @@ import {
     crearMantencionTerreno,
     actualizarMantencionTerreno,
     obtenerRetirosTerreno,
+    updateRetiroTerreno,
     obtenerLevantamientosTerreno,
+    solicitarEdicionRetiroTerreno,
     resolverEdicionLevantamientoTerreno,
     resolverEdicionRetiroTerreno,
     obtenerCambiosEquipoMantencion,
@@ -282,6 +284,17 @@ const normalizeText = (value = "") =>
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
+const normalizeRetiroModalidad = (value = "") => {
+    const normalized = normalizeText(value);
+    return normalized === "por_mano" ? "por_mano" : "despacho_orca";
+};
+const getRetiroEstadoPayload = (equipos = []) => {
+    const retirados = (Array.isArray(equipos) ? equipos : []).filter((item) => !!item?.retirado);
+    if (!retirados.length) return "retirado_centro";
+    return retirados.some((item) => normalizeRetiroModalidad(item?.modalidad_retorno) === "despacho_orca")
+        ? "en_transito"
+        : "retirado_centro";
+};
 const normalizeCorrelativoSearch = (value = "") =>
     String(value || "")
         .trim()
@@ -523,6 +536,8 @@ function InformesCentros() {
     const [permisoEvidencias, setPermisoEvidencias] = useState([]);
     const [permisoEvidenciaTargetIndex, setPermisoEvidenciaTargetIndex] = useState(null);
     const [permisoCambiosEquipo, setPermisoCambiosEquipo] = useState([]);
+    const [retiroTipo, setRetiroTipo] = useState("parcial");
+    const [retiroEquiposChecklist, setRetiroEquiposChecklist] = useState([]);
     const permisoEvidenciaInputRef = useRef(null);
     const [actaPage, setActaPage] = useState(1);
     const [permisoPage, setPermisoPage] = useState(1);
@@ -953,6 +968,8 @@ function InformesCentros() {
         setPermisoEvidencias([]);
         setPermisoEvidenciaTargetIndex(null);
         setPermisoCambiosEquipo([]);
+        setRetiroTipo("parcial");
+        setRetiroEquiposChecklist([]);
         setMostrarEditorPermiso(false);
     };
     const abrirNuevoPermiso = () => {
@@ -1492,6 +1509,62 @@ function InformesCentros() {
         }
     };
 
+    const handleGuardarRetiro = async () => {
+        if (!permisoEditandoId) {
+            alert("No hay un retiro seleccionado para editar.");
+            return;
+        }
+        if (!permisoCentroIdForm || !permisoFechaIngreso) {
+            alert("Debes indicar centro y fecha del retiro.");
+            return;
+        }
+
+        const equiposPayload = (Array.isArray(retiroEquiposChecklist) ? retiroEquiposChecklist : []).map((item) => {
+            const retirado = !!item?.retirado;
+            const recibidoBodega = !!item?.recibido_bodega;
+            const estadoLogistico = String(item?.estado_logistico || "").trim().toLowerCase();
+            return {
+                id_retiro_equipo: item?.id_retiro_equipo || null,
+                equipo_id: item?.equipo_id || null,
+                equipo_nombre: item?.equipo_nombre || null,
+                numero_serie: item?.numero_serie || null,
+                codigo: item?.codigo || null,
+                retirado,
+                modalidad_retorno: normalizeRetiroModalidad(item?.modalidad_retorno),
+                recibido_bodega: recibidoBodega,
+                estado_logistico: estadoLogistico || (recibidoBodega ? "recepcionado_bodega" : (retirado ? "en_transito_bodega" : "sin_movimiento"))
+            };
+        });
+
+        const payload = {
+            centro_id: Number(permisoCentroIdForm),
+            fecha_retiro: permisoFechaIngreso,
+            tipo_retiro: retiroTipo === "completo" ? "completo" : "parcial",
+            estado_logistico: getRetiroEstadoPayload(equiposPayload),
+            observacion: permisoDescripcionTrabajo || null,
+            tecnico_1: permisoTecnico1 || null,
+            firma_tecnico_1: permisoFirmaTecnico1 || null,
+            tecnico_2: permisoTecnico2 || null,
+            firma_tecnico_2: permisoFirmaTecnico2 || null,
+            recepciona_nombre: permisoRecepcionaNombre || null,
+            recepciona_rut: permisoRecepcionaRut || null,
+            firma_recepciona: permisoFirmaRecepciona || null,
+            equipos: equiposPayload
+        };
+
+        setSavingPermiso(true);
+        try {
+            await updateRetiroTerreno(permisoEditandoId, payload);
+            await cargarPermisos();
+            resetFormularioPermiso();
+        } catch (error) {
+            console.error("Error al guardar retiro en terreno:", error);
+            alert("No se pudo guardar el retiro en terreno.");
+        } finally {
+            setSavingPermiso(false);
+        }
+    };
+
     const handleEditarPermiso = (permiso) => {
         setPermisoEditandoId(permiso.id_permiso_trabajo);
         setPermisoActaEntregaId(permiso.acta_entrega_id || null);
@@ -1576,6 +1649,75 @@ function InformesCentros() {
         } catch (error) {
             console.error("Error al cargar cambios de equipo para edicion:", error);
         }
+    };
+
+    const handleEditarRetiro = async (retiro) => {
+        const retiroId = retiro?.id_retiro_terreno;
+        if (!retiroId) return;
+
+        const estadoEdicion = normalizeText(retiro?.estado_edicion || "finalizado");
+        try {
+            if (estadoEdicion === "finalizado" || estadoEdicion === "edicion_rechazada") {
+                await solicitarEdicionRetiroTerreno(retiroId);
+                await resolverEdicionRetiroTerreno(retiroId, { aprobar: true });
+            } else if (estadoEdicion === "edicion_solicitada") {
+                await resolverEdicionRetiroTerreno(retiroId, { aprobar: true });
+            }
+        } catch (error) {
+            console.error("Error al habilitar edicion del retiro:", error);
+            alert("No se pudo habilitar la edicion del retiro.");
+            return;
+        }
+
+        const centro = centros.find((c) => String(c.id || c.id_centro) === String(retiro.centro_id || ""));
+        setPermisoEditandoId(retiroId);
+        setPermisoActaEntregaId(null);
+        setPermisoCentroIdForm(String(retiro.centro_id || ""));
+        setPermisoFechaIngreso(toInputDate(retiro.fecha_retiro));
+        setPermisoFechaSalida("");
+        setPermisoCorreoCentro(retiro.correo_centro || centro?.correo_centro || centro?.correo || "");
+        setPermisoTelefonoCentro(retiro.telefono_centro || centro?.telefono || "");
+        setPermisoRegion(retiro.region || centro?.area || centro?.region || "");
+        setPermisoLocalidad(retiro.localidad || centro?.ubicacion || centro?.localidad || centro?.direccion || "");
+        setPermisoResponsabilidad("");
+        setPermisoBaseTierra(normalizeBoolSelectValue(centro?.base_tierra));
+        setPermisoCantidadRadares(centro?.cantidad_radares == null ? "" : String(centro.cantidad_radares));
+        setPermisoTecnico1(retiro.tecnico_1 || "");
+        setPermisoFirmaTecnico1(retiro.firma_tecnico_1 || "");
+        setPermisoTecnico2(retiro.tecnico_2 || "");
+        setPermisoFirmaTecnico2(retiro.firma_tecnico_2 || "");
+        setPermisoTecnicosAdicionales([]);
+        setPermisoRecepcionaNombre(retiro.recepciona_nombre || "");
+        setPermisoRecepcionaRut(retiro.recepciona_rut || "");
+        setPermisoFirmaRecepciona(retiro.firma_recepciona || "");
+        setPermisoPuntosGps([{ lat: "", lng: "" }]);
+        setPermisoSellos([{ ubicacion: "", numeroAnterior: "", numeroNuevo: "" }]);
+        setPermisoArmadoEquipos([]);
+        setPermisoMedicionFaseNeutro("");
+        setPermisoMedicionNeutroTierra("");
+        setPermisoHertz("");
+        setPermisoDescripcionTrabajo(retiro.observacion || "");
+        setPermisoChecklistEquiposRaw("");
+        setPermisoEvidencias([]);
+        setPermisoEvidenciaTargetIndex(null);
+        setPermisoCambiosEquipo([]);
+        setRetiroTipo(String(retiro.tipo_retiro || "").trim().toLowerCase() === "completo" ? "completo" : "parcial");
+        setRetiroEquiposChecklist(
+            (Array.isArray(retiro.equipos) ? retiro.equipos : []).map((item) => ({
+                id_retiro_equipo: item?.id_retiro_equipo || null,
+                equipo_id: item?.equipo_id || null,
+                equipo_nombre: item?.equipo_nombre || "",
+                numero_serie: item?.numero_serie || "",
+                codigo: item?.codigo || "",
+                retirado: !!item?.retirado,
+                modalidad_retorno: normalizeRetiroModalidad(item?.modalidad_retorno),
+                recibido_bodega: !!item?.recibido_bodega,
+                estado_logistico: item?.estado_logistico || (item?.recibido_bodega ? "recepcionado_bodega" : (item?.retirado ? "en_transito_bodega" : "sin_movimiento"))
+            }))
+        );
+        if (centro) setPermisoClienteIdForm(getCentroClienteKey(centro));
+        setMostrarEditorPermiso(true);
+        await cargarPermisos({ silent: true });
     };
 
     const handleEliminarPermiso = async (id) => {
@@ -2299,6 +2441,196 @@ function InformesCentros() {
                         <button className="btn btn-primary" onClick={handleGuardarPermiso} disabled={savingPermiso}>
                             <i className={`mr-2 fas ${savingPermiso ? "fa-spinner fa-spin" : permisoEditandoId ? "fa-save" : "fa-check-circle"}`} />
                             {savingPermiso ? "Guardando..." : permisoEditandoId ? "Actualizar permiso" : "Guardar permiso"}
+                        </button>
+                        <button className="btn btn-outline-secondary" onClick={resetFormularioPermiso}>
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderRetiroEditor = () => (
+        <div className="informes-editor-overlay">
+            <div className="card informes-editor-card">
+                <div className="card-header d-flex justify-content-between align-items-center informes-editor-header">
+                    <div>
+                        <h5 className="mb-0">Editar retiro en terreno</h5>
+                        <small className="informes-editor-subtitle">
+                            Ajusta fecha, tecnicos, observacion y equipos retirados con su modalidad de retorno.
+                        </small>
+                    </div>
+                    <button className="btn btn-sm btn-outline-secondary informes-editor-close-btn" onClick={resetFormularioPermiso}>
+                        <i className="fas fa-times" />
+                    </button>
+                </div>
+                <div className="card-body">
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Datos del centro</h6>
+                        <div className="informes-info-grid">
+                            <div className="informes-info-card">
+                                <small>Empresa</small>
+                                <strong>{permisoCentroSeleccionadoForm?.cliente || "-"}</strong>
+                            </div>
+                            <div className="informes-info-card">
+                                <small>Centro</small>
+                                <strong>{permisoCentroSeleccionadoForm?.nombre || "-"}</strong>
+                            </div>
+                            <div className="informes-info-card">
+                                <small>Codigo ponton</small>
+                                <strong>{permisoCentroSeleccionadoForm?.nombre_ponton || "-"}</strong>
+                            </div>
+                            <div className="informes-info-card">
+                                <small>Region</small>
+                                <strong>{permisoRegion || "-"}</strong>
+                            </div>
+                            <div className="informes-info-card">
+                                <small>Localidad</small>
+                                <strong>{permisoLocalidad || "-"}</strong>
+                            </div>
+                            <div className="informes-info-card">
+                                <small>Telefono centro</small>
+                                <strong>{permisoTelefonoCentro || "-"}</strong>
+                            </div>
+                        </div>
+                        <div className="informes-filtros-grid mt-3">
+                            <div>
+                                <label>Fecha retiro</label>
+                                <input className="form-control" type="date" value={permisoFechaIngreso} onChange={(e) => setPermisoFechaIngreso(e.target.value)} />
+                            </div>
+                            <div>
+                                <label>Tipo retiro</label>
+                                <select className="form-control" value={retiroTipo} onChange={(e) => setRetiroTipo(e.target.value === "completo" ? "completo" : "parcial")}>
+                                    <option value="parcial">Parcial</option>
+                                    <option value="completo">Completo</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Tecnicos y recepcion</h6>
+                        <div className="informes-tecnicos-grid">
+                            <div className="informes-tecnico-card">
+                                <div className="informes-tecnico-card-head">
+                                    <span className="informes-tecnico-badge">Tecnico 1</span>
+                                </div>
+                                <div>
+                                    <label>Nombre</label>
+                                    <input className="form-control" value={permisoTecnico1} onChange={(e) => setPermisoTecnico1(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="informes-tecnico-card">
+                                <div className="informes-tecnico-card-head">
+                                    <span className="informes-tecnico-badge">Tecnico 2</span>
+                                </div>
+                                <div>
+                                    <label>Nombre</label>
+                                    <input className="form-control" value={permisoTecnico2} onChange={(e) => setPermisoTecnico2(e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="informes-tecnico-card">
+                                <div className="informes-tecnico-card-head">
+                                    <span className="informes-tecnico-badge">Recepcion</span>
+                                </div>
+                                <div>
+                                    <label>Nombre</label>
+                                    <input className="form-control" value={permisoRecepcionaNombre} onChange={(e) => setPermisoRecepcionaNombre(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label>RUT</label>
+                                    <input className="form-control" value={permisoRecepcionaRut} onChange={(e) => setPermisoRecepcionaRut(e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Equipos del retiro</h6>
+                        {retiroEquiposChecklist.length ? (
+                            <div className="informes-permiso-devueltos-list">
+                                {retiroEquiposChecklist.map((item, index) => {
+                                    const bloqueado = ["recepcionado_bodega", "revision_bodega", "baja_bodega"].includes(
+                                        normalizeText(item?.estado_logistico || "")
+                                    );
+                                    return (
+                                        <div key={`retiro-equipo-${index}`} className="informes-info-card">
+                                            <small>{item?.codigo || `Equipo ${index + 1}`}</small>
+                                            <strong>{item?.equipo_nombre || "-"}</strong>
+                                            <span className="informes-permiso-devuelto-serie">{`N Serie: ${item?.numero_serie || "-"}`}</span>
+                                            {bloqueado ? <span className="badge badge-success mb-2">Recepcionado en bodega</span> : null}
+                                            <div className="d-flex align-items-center mb-2">
+                                                <input
+                                                    id={`retiro-check-${index}`}
+                                                    type="checkbox"
+                                                    className="mr-2"
+                                                    checked={!!item?.retirado}
+                                                    disabled={bloqueado}
+                                                    onChange={(e) =>
+                                                        setRetiroEquiposChecklist((prev) =>
+                                                            prev.map((row, rowIndex) =>
+                                                                rowIndex === index ? { ...row, retirado: e.target.checked } : row
+                                                            )
+                                                        )
+                                                    }
+                                                />
+                                                <label htmlFor={`retiro-check-${index}`} className="mb-0">
+                                                    Marcar como retirado
+                                                </label>
+                                            </div>
+                                            <div className="btn-group btn-group-sm d-flex" role="group">
+                                                <button
+                                                    type="button"
+                                                    className={`btn ${normalizeRetiroModalidad(item?.modalidad_retorno) === "por_mano" ? "btn-success" : "btn-outline-secondary"}`}
+                                                    disabled={bloqueado || !item?.retirado}
+                                                    onClick={() =>
+                                                        setRetiroEquiposChecklist((prev) =>
+                                                            prev.map((row, rowIndex) =>
+                                                                rowIndex === index ? { ...row, modalidad_retorno: "por_mano" } : row
+                                                            )
+                                                        )
+                                                    }>
+                                                    Por mano
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn ${normalizeRetiroModalidad(item?.modalidad_retorno) === "despacho_orca" ? "btn-success" : "btn-outline-secondary"}`}
+                                                    disabled={bloqueado || !item?.retirado}
+                                                    onClick={() =>
+                                                        setRetiroEquiposChecklist((prev) =>
+                                                            prev.map((row, rowIndex) =>
+                                                                rowIndex === index ? { ...row, modalidad_retorno: "despacho_orca" } : row
+                                                            )
+                                                        )
+                                                    }>
+                                                    Despacho a orca
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="informes-empty py-2 mb-0">No hay equipos cargados en este retiro.</div>
+                        )}
+                    </div>
+
+                    <div className="informes-editor-section">
+                        <h6 className="informes-editor-section-title">Observacion</h6>
+                        <textarea
+                            className="form-control"
+                            rows={4}
+                            value={permisoDescripcionTrabajo}
+                            onChange={(e) => setPermisoDescripcionTrabajo(e.target.value)}
+                            placeholder="Detalle del retiro"
+                        />
+                    </div>
+
+                    <div className="informes-col-span-2 d-flex gap-2 align-items-end informes-permiso-actions">
+                        <button className="btn btn-primary" onClick={handleGuardarRetiro} disabled={savingPermiso}>
+                            <i className={`mr-2 fas ${savingPermiso ? "fa-spinner fa-spin" : "fa-save"}`} />
+                            {savingPermiso ? "Guardando..." : "Actualizar retiro"}
                         </button>
                         <button className="btn btn-outline-secondary" onClick={resetFormularioPermiso}>
                             Cerrar
@@ -3795,6 +4127,12 @@ function InformesCentros() {
                                                                                         </>
                                                                                     ) : null}
                                                                                     <button
+                                                                                        className="btn btn-sm btn-outline-primary mr-2"
+                                                                                        onClick={() => handleEditarRetiro(permiso)}>
+                                                                                        <i className="fas fa-edit mr-1" />
+                                                                                        Editar
+                                                                                    </button>
+                                                                                    <button
                                                                                         className="btn btn-sm btn-outline-secondary mr-2"
                                                                                         onClick={() => verRetiroPdf(permiso)}>
                                                                                         <i className="fas fa-file-pdf mr-1" />
@@ -3887,7 +4225,7 @@ function InformesCentros() {
                         </div>
                     </div>
 
-                    {mostrarEditorPermiso ? renderPermisoEditor() : null}
+                    {mostrarEditorPermiso ? (subcategoria === "retiro" ? renderRetiroEditor() : renderPermisoEditor()) : null}
                 </>
             ) : (
                 <div className="card informes-centros-tabla">
@@ -3898,8 +4236,6 @@ function InformesCentros() {
                     </div>
                 </div>
             )}
-
-            {subcategoria !== "intervencion" && mostrarEditorPermiso ? renderPermisoEditor() : null}
 
         </div>
     );

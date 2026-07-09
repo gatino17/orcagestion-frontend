@@ -1656,6 +1656,7 @@ export default function BodegaRetiros() {
       equipo_nombre: eq?.nombre || "-",
       numero_serie: eq?.numero_serie || "",
       codigo: eq?.codigo || "",
+      clave_equipo: obtenerClaveEquipoActa(eq),
       area: "",
       bloqueado: false,
     }));
@@ -1678,6 +1679,7 @@ export default function BodegaRetiros() {
         equipo_nombre: cambio?.equipo || "-",
         numero_serie: cambio?.serie_anterior || "",
         codigo: cambio?.codigo_anterior || "",
+        clave_equipo: `mant-${cambio?.id_cambio_equipo_mantencion || 0}`,
         area: "",
         bloqueado: false,
       },
@@ -4308,21 +4310,13 @@ export default function BodegaRetiros() {
 		                    const activos = esBodegaDirecta ? null : revisionActivaPorRetiro.get(retiroId);
 		                    if (!esBodegaDirecta && !retiroId) return;
 	                    const areasActivas = activos?.porArea || new Set();
-	                    const pendientesSinArea = revisionEquiposArea.filter(
-	                      (eq) => !eq.bloqueado && !["camaras", "pc", "energia"].includes(String(eq.area || "").toLowerCase())
-	                    );
-                    if (pendientesSinArea.length) {
-                      const nombres = pendientesSinArea
-                        .slice(0, 4)
-                        .map((eq) => eq.equipo_nombre || "Equipo")
-                        .join(", ");
-                      const extra = pendientesSinArea.length > 4 ? ` y ${pendientesSinArea.length - 4} más` : "";
-                      alert(`Debes asignar área a todos los equipos retirados. Pendientes: ${nombres}${extra}.`);
-                      return;
-                    }
                     const seleccionados = revisionEquiposArea.filter(
                       (eq) => !eq.bloqueado && ["camaras", "pc", "energia"].includes(String(eq.area || "").toLowerCase())
                     );
+                    if (!seleccionados.length) {
+                      alert("Selecciona al menos un equipo con area para enviarlo a revision.");
+                      return;
+                    }
                     const grupos = seleccionados.reduce((acc, eq) => {
                       const area = String(eq.area || "").toLowerCase();
                       if (!acc[area]) acc[area] = [];
@@ -4358,15 +4352,26 @@ export default function BodegaRetiros() {
 		                        });
 		                      }
 			                      if (esInstalacionBodega && retiroRevision?.row) {
-			                        await actualizarEstadoDevolucionInstalacion(retiroRevision.row, (item) => ({
-			                          ...item,
-			                          estado_logistico: "revision_bodega",
-			                        }));
-			                      } else if (esMantencionBodega && retiroRevision?.row?.cambio?.id_cambio_equipo_mantencion) {
-			                        await actualizarEstadoCambioEquipoMantencion(
-			                          Number(retiroRevision.row.cambio.id_cambio_equipo_mantencion),
-			                          { estado_logistico: "revision_bodega" }
-			                        );
+                                  const clavesSeleccionadas = new Set(seleccionados.map((eq) => String(eq?.clave_equipo || "")));
+                                  await actualizarEstadoDevolucionInstalacion(retiroRevision.row, (item) =>
+                                    clavesSeleccionadas.has(String(obtenerClaveEquipoActa(item)))
+                                      ? {
+                                          ...item,
+                                          estado_logistico: "revision_bodega",
+                                        }
+                                      : item
+                                  );
+                                } else if (esMantencionBodega && retiroRevision?.row?.cambio?.id_cambio_equipo_mantencion) {
+                                  const claveMantencion = `mant-${retiroRevision.row.cambio.id_cambio_equipo_mantencion}`;
+                                  if (!seleccionados.some((eq) => String(eq?.clave_equipo || "") === claveMantencion)) {
+                                    alert("Selecciona el equipo que quieres enviar a revision.");
+                                    setAsignandoRevision(false);
+                                    return;
+                                  }
+                                  await actualizarEstadoCambioEquipoMantencion(
+                                    Number(retiroRevision.row.cambio.id_cambio_equipo_mantencion),
+                                    { estado_logistico: "revision_bodega" }
+                                  );
 			                      } else if (esRetiroBodega && retiroRevision?.row?.retiro?.id_retiro_terreno) {
                               await actualizarLogisticaBodegaRetiro(Number(retiroRevision.row.retiro.id_retiro_terreno), {
                                 recepcion_bodega_por: usuario.nombre,
@@ -5831,6 +5836,7 @@ export default function BodegaRetiros() {
     </div>
   );
 }
+
 
 
 
