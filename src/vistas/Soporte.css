@@ -22,6 +22,40 @@
     color: #fff;
 }
 
+.soporte-page .metric-split-values {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 0.15rem;
+}
+
+.soporte-page .metric-split-block {
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.soporte-page .metric-split-block small {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 1;
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+}
+
+.soporte-page .metric-split-block h2 {
+    font-size: 1.15rem;
+    line-height: 1.05;
+}
+
+.soporte-page .metric-split-divider {
+    width: 1px;
+    background: rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+}
+
 .soporte-page .metric-card.gradient-blue .card-body {
     background: linear-gradient(135deg, rgba(14, 165, 233, 0.9), rgba(59, 130, 246, 0.85));
 }
@@ -36,6 +70,16 @@
 
 .soporte-page .metric-card.gradient-pink .card-body {
     background: linear-gradient(135deg, rgba(244, 114, 182, 0.85), rgba(236, 72, 153, 0.85));
+}
+
+@media (max-width: 1399.98px) {
+    .soporte-page .metric-split-values {
+        gap: 10px;
+    }
+
+    .soporte-page .metric-split-block h2 {
+        font-size: 1.05rem;
+    }
 }
 
 
@@ -341,6 +385,29 @@
     border-radius: 8px;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+}
+
+.urgent-type-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.urgent-type-chip-remote {
+    background: rgba(14, 165, 233, 0.12);
+    color: #0369a1;
+    border: 1px solid rgba(14, 165, 233, 0.25);
+}
+
+.urgent-type-chip-terrain {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
 .urgent-days {

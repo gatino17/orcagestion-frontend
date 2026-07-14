@@ -405,6 +405,9 @@ const Soporte = () => {
                     soporte.centro?.nombre,
                     soporte.centro?.cliente,
                     soporte.problema,
+                    soporte.case_code,
+                    soporte.categoria_falla,
+                    soporte.subcategoria_falla,
                     soporte.tipo,
                     soporte.solucion
                 ]
@@ -808,6 +811,20 @@ const Soporte = () => {
     }, [soportesFiltrados]);
 
     const totalPendientesAbiertos = pendientesAbiertos.length;
+    const totalPendientesRemotos = useMemo(
+        () =>
+            pendientesAbiertos.filter(
+                (soporte) => String(soporte.tipo || "").toLowerCase() === "remoto"
+            ).length,
+        [pendientesAbiertos]
+    );
+    const totalPendientesTerreno = useMemo(
+        () =>
+            pendientesAbiertos.filter(
+                (soporte) => String(soporte.tipo || "").toLowerCase() === "terreno"
+            ).length,
+        [pendientesAbiertos]
+    );
     const totalResueltosPeriodo = useMemo(
         () =>
             soportesFiltrados.filter((soporte) => {
@@ -815,6 +832,42 @@ const Soporte = () => {
                 return estado === "resuelto" || estado === "finalizado";
             }).length,
         [soportesFiltrados]
+    );
+    const totalResueltasRemotasPeriodo = useMemo(
+        () =>
+            soportesFiltrados.filter((soporte) => {
+                const estado = String(soporte.estado || "").toLowerCase();
+                const tipoSoporte = String(soporte.tipo || "").toLowerCase();
+                return (estado === "resuelto" || estado === "finalizado") && tipoSoporte === "remoto";
+            }).length,
+        [soportesFiltrados]
+    );
+    const totalResueltasRemotasGeneral = useMemo(
+        () =>
+            soportes.filter((soporte) => {
+                const estado = String(soporte.estado || "").toLowerCase();
+                const tipoSoporte = String(soporte.tipo || "").toLowerCase();
+                return (estado === "resuelto" || estado === "finalizado") && tipoSoporte === "remoto";
+            }).length,
+        [soportes]
+    );
+    const totalResueltasTerrenoPeriodo = useMemo(
+        () =>
+            soportesFiltrados.filter((soporte) => {
+                const estado = String(soporte.estado || "").toLowerCase();
+                const tipoSoporte = String(soporte.tipo || "").toLowerCase();
+                return (estado === "resuelto" || estado === "finalizado") && tipoSoporte === "terreno";
+            }).length,
+        [soportesFiltrados]
+    );
+    const totalResueltasTerrenoGeneral = useMemo(
+        () =>
+            soportes.filter((soporte) => {
+                const estado = String(soporte.estado || "").toLowerCase();
+                const tipoSoporte = String(soporte.tipo || "").toLowerCase();
+                return (estado === "resuelto" || estado === "finalizado") && tipoSoporte === "terreno";
+            }).length,
+        [soportes]
     );
     const totalPendientesPrioritarios = useMemo(
         () =>
@@ -1062,6 +1115,17 @@ const Soporte = () => {
             subtitle: `Historico: ${totalCentrosGeneral}`,
             icon: "fas fa-network-wired",
             variant: "gradient-blue"
+        },
+        {
+            title: "",
+            value: totalResueltasRemotasPeriodo,
+            secondaryValue: totalResueltasTerrenoPeriodo,
+            valueLabel: "Remotas",
+            valueIcon: "fas fa-check-circle",
+            secondaryLabel: "Terreno",
+            subtitle: `Historico ${totalResueltasRemotasGeneral} / ${totalResueltasTerrenoGeneral}`,
+            icon: "fas fa-headset",
+            variant: "gradient-green"
         }
     ];
 
@@ -1132,11 +1196,31 @@ const Soporte = () => {
 
             <div className="row mb-4">
                 {metricCards.map((card) => (
-                    <div className="col-md-3 mb-3" key={card.title}>
+                    <div className="col-md-6 col-xl mb-3" key={card.title}>
                         <div className={`card metric-card text-white ${card.variant}`}>
                             <div className="card-body">
-                                <h5 className="mb-1">{card.title}</h5>
-                                <h2 className="mb-0">{card.value}</h2>
+                                {card.title ? <h5 className="mb-1">{card.title}</h5> : null}
+                                {typeof card.secondaryValue !== "undefined" ? (
+                                    <div className="metric-split-values">
+                                        <div className="metric-split-block">
+                                            <small>
+                                                {card.valueIcon ? <i className={`${card.valueIcon} mr-1`} /> : null}
+                                                {card.valueLabel}
+                                            </small>
+                                            <h2 className="mb-0">{card.value}</h2>
+                                        </div>
+                                        <div className="metric-split-divider" />
+                                        <div className="metric-split-block">
+                                            <small>
+                                                {card.secondaryIcon ? <i className={`${card.secondaryIcon} mr-1`} /> : null}
+                                                {card.secondaryLabel}
+                                            </small>
+                                            <h2 className="mb-0">{card.secondaryValue}</h2>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <h2 className="mb-0">{card.value}</h2>
+                                )}
                                 <div className="metric-icon">
                                     <i className={card.icon}></i>
                                 </div>
@@ -1243,14 +1327,21 @@ const Soporte = () => {
                                     <small className="text-secondary">Casos mas antiguos sin cierre</small>
                                 </div>
                                 <div className="d-flex align-items-center">
+                                    <span className="badge badge-pill badge-dark mr-2" title="Total de fallas abiertas">
+                                        <i className="fas fa-layer-group mr-1"></i>
+                                        Total fallas abiertas: {totalPendientesAbiertos}
+                                    </span>
                                     <span className="badge badge-pill badge-danger mr-2" title="Pendientes">
                                         Pendientes: {totalPendientesPrioritarios}
                                     </span>
                                     <span className="badge badge-pill badge-warning text-dark mr-2" title="Alertas">
                                         Alertas: {totalAlertasPrioritarias}
                                     </span>
-                                    <span className="badge badge-pill badge-secondary" title="Total abiertos">
-                                        Total: {totalPendientesAbiertos}
+                                    <span className="badge badge-pill badge-info mr-2" title="Pendientes remotos">
+                                        Remotas: {totalPendientesRemotos}
+                                    </span>
+                                    <span className="badge badge-pill badge-primary mr-2" title="Pendientes terreno">
+                                        Terreno: {totalPendientesTerreno}
                                     </span>
                                 </div>
                             </div>
@@ -1263,7 +1354,18 @@ const Soporte = () => {
                                             onClick={() => handleEditarSoporte(soporte)}
                                         >
                                             <div>
-                                                <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
+                                                <div className="d-flex align-items-center flex-wrap">
+                                                    <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
+                                                    <span
+                                                        className={`urgent-type-chip ml-2 ${
+                                                            String(soporte.tipo || "").toLowerCase() === "remoto"
+                                                                ? "urgent-type-chip-remote"
+                                                                : "urgent-type-chip-terrain"
+                                                        }`}
+                                                    >
+                                                        {String(soporte.tipo || "").toLowerCase() === "remoto" ? "Remoto" : "Terreno"}
+                                                    </span>
+                                                </div>
                                                 {soporte.problema && (
                                                     <small className="text-danger ml-2 font-italic">
                                                         {soporte.problema}
@@ -1322,11 +1424,11 @@ const Soporte = () => {
                     </div>
                     <div className="row mb-3">
                         <div className="col-lg-6">
-                            <small className="text-muted text-uppercase d-block mb-1">Buscar por nombre</small>
+                            <small className="text-muted text-uppercase d-block mb-1">Buscar soporte</small>
                             <input
                                 type="text"
                                 className="form-control"
-                                placeholder="Centro, cliente o problema"
+                                placeholder="Centro, cliente, problema, case code o categoria"
                                 value={filtroNombre}
                                 onChange={(e) => setFiltroNombre(e.target.value)}
                             />

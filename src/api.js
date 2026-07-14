@@ -1741,6 +1741,21 @@ export const crearGuiaSalidaArmado = async (data) => {
     }
 };
 
+export const eliminarAbonoRendicion = async (idAbono) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/rendiciones/abonos/${idAbono}`);
+        return response.data;
+    } catch (error) {
+        try {
+            const fallback = await axios.post(`${BASE_URL}/rendiciones/abonos/${idAbono}/eliminar`);
+            return fallback.data;
+        } catch (fallbackError) {
+            console.error("Error al eliminar abono de rendicion:", fallbackError);
+            throw fallbackError;
+        }
+    }
+};
+
 export const actualizarGuiaSalidaArmadoPorId = async (idGuiaSalida, data) => {
     try {
         const response = await axios.put(`${BASE_URL}/armados/guias-salida/${idGuiaSalida}`, data);

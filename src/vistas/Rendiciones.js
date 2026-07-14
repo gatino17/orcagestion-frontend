@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   crearAbonoRendicion,
+  eliminarAbonoRendicion,
   eliminarRendicion,
   obtenerActasEntrega,
   obtenerAbonosRendicion,
@@ -15,6 +16,7 @@ import {
   obtenerRendiciones,
   obtenerRetirosTerreno,
 } from "../api";
+import { jwtDecode } from "jwt-decode";
 import "./Rendiciones.css";
 
 const CATEGORIAS = ["movilizacion", "alimentacion", "peaje", "materiales", "hospedaje", "otro"];
@@ -334,6 +336,18 @@ export default function Rendiciones() {
   const [abonoMonto, setAbonoMonto] = useState("");
   const [abonoTransferidoPor, setAbonoTransferidoPor] = useState("");
   const [solicitudesEdicionPendientes, setSolicitudesEdicionPendientes] = useState(0);
+
+  const esAdmin = useMemo(() => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return false;
+      const decoded = jwtDecode(token);
+      return normalizeText(decoded?.rol || decoded?.role || "") === "admin";
+    } catch (error) {
+      console.error(error);
+      return false;
+    }
+  }, []);
 
   const saldosTecnicoAgrupados = useMemo(() => {
     const map = new Map();
@@ -1078,6 +1092,25 @@ export default function Rendiciones() {
     }
   };
 
+  const eliminarAbono = async (abono) => {
+    if (!esAdmin) {
+      alert("Solo un administrador puede eliminar abonos.");
+      return;
+    }
+    const id = Number(abono?.id_abono || 0);
+    if (!(id > 0)) return;
+    const ok = window.confirm(`Se eliminara el abono #${id}. Deseas continuar?`);
+    if (!ok) return;
+    try {
+      await eliminarAbonoRendicion(id);
+      await cargarAbonosYSaldos();
+      alert("Abono eliminado correctamente.");
+    } catch (error) {
+      console.error(error);
+      alert(error?.response?.data?.error || error?.response?.data?.message || "No se pudo eliminar el abono.");
+    }
+  };
+
   const resolverSolicitudEdicion = async (rendicion, accion) => {
     const id = Number(rendicion?.id_rendicion || 0);
     if (!(id > 0)) return;
@@ -1341,12 +1374,13 @@ export default function Rendiciones() {
                       <th>Tecnico</th>
                       <th>Transferido por</th>
                       <th>Monto</th>
+                      {esAdmin && <th className="text-right">Accion</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {!abonosPreview.length && (
                       <tr>
-                        <td colSpan={4} className="text-center text-muted py-3">Sin abonos registrados para el periodo.</td>
+                        <td colSpan={esAdmin ? 5 : 4} className="text-center text-muted py-3">Sin abonos registrados para el periodo.</td>
                       </tr>
                     )}
                     {abonosPreview.map((a) => (
@@ -1355,6 +1389,18 @@ export default function Rendiciones() {
                         <td>{a.tecnico_nombre || "-"}</td>
                         <td>{a.transferido_por || "-"}</td>
                         <td>{formatMoney(a.monto)}</td>
+                        {esAdmin && (
+                          <td className="text-right">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => eliminarAbono(a)}
+                              title="Eliminar abono"
+                            >
+                              <i className="fas fa-trash-alt" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -1373,7 +1419,7 @@ export default function Rendiciones() {
                 <h6 className="mb-0">Rendiciones faltantes</h6>
                 <div className="d-flex" style={{ gap: 8 }}>
                   <span className="badge badge-warning">Pendientes: {trabajosPendientes.length}</span>
-                  <span className="badge badge-danger">Clientes con faltantes: {clientesSinRendicion}</span>
+                  <span className="badge badge-danger">Clientes con rendiciones pendientes: {clientesSinRendicion}</span>
                 </div>
               </div>
               <div className="table-responsive">
@@ -1692,12 +1738,13 @@ export default function Rendiciones() {
                     <th>Tecnico</th>
                     <th>Transferido por</th>
                     <th>Monto</th>
+                    {esAdmin && <th className="text-right">Accion</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {!abonosPaginados.length && (
                     <tr>
-                      <td colSpan={4} className="text-center text-muted py-3">Sin abonos para los filtros actuales.</td>
+                      <td colSpan={esAdmin ? 5 : 4} className="text-center text-muted py-3">Sin abonos para los filtros actuales.</td>
                     </tr>
                   )}
                   {abonosPaginados.map((a) => (
@@ -1706,6 +1753,18 @@ export default function Rendiciones() {
                       <td>{a.tecnico_nombre || "-"}</td>
                       <td>{a.transferido_por || "-"}</td>
                       <td>{formatMoney(a.monto)}</td>
+                      {esAdmin && (
+                        <td className="text-right">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => eliminarAbono(a)}
+                            title="Eliminar abono"
+                          >
+                            <i className="fas fa-trash-alt" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
