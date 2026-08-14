@@ -9,12 +9,15 @@ import './Home.css';
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
+import { obtenerSoportes } from "../api";
 
 const Home = () => {
     const [actividades, setActividades] = useState([]);
-    const [totalCentrosOperativos, setTotalCentrosOperativos] = useState(0);
     const [encargados, setEncargados] = useState([]);
     const [centros, setCentros] = useState([]);  // Estado para los centros
+    const [soportes, setSoportes] = useState([]);
+    const [paginaSoportes, setPaginaSoportes] = useState(1);
+    const [clienteSoporte, setClienteSoporte] = useState("todos");
     const [loading, setLoading] = useState(true);
 
     // Estado para actividad en edición y mostrar modal
@@ -43,18 +46,28 @@ const Home = () => {
   
           const centrosData = await cargarCentrosClientes(); // Carga centros
           setCentros(centrosData); // Asigna los datos de los centros
-          setTotalCentrosOperativos(centrosData.length); // Calcula el total de centros operativos
-  
           const actividadesData = await cargarActividades(); // Carga actividades
           setActividades(actividadesData);
   
           const encargadosData = await cargarEncargados(); // Carga encargados
           setEncargados(encargadosData);
+
+          try {
+            const soportesData = await obtenerSoportes();
+            setSoportes(Array.isArray(soportesData) ? soportesData : []);
+          } catch (error) {
+            console.error("No se pudieron cargar pendientes de soporte:", error);
+            setSoportes([]);
+          }
                               
           setLoading(false);
       };
       fetchData();
     }, []);
+
+    useEffect(() => {
+      setPaginaSoportes(1);
+    }, [clienteSoporte]);
  
     const handleGuardarActividad = async () => {
         const datosActividad = {
@@ -140,27 +153,33 @@ const Home = () => {
       return `${dia}/${mes}/${año}`; // Retornar en formato DD/MM/YYYY
     };
   
-const actividadesDelMesActual = actividades.filter((actividad) => {
-  const fechaInicio = new Date(actividad.fecha_inicio);
-  const mesActual = new Date().getMonth(); // Mes actual (0 = Enero, 11 = Diciembre)
-  const anioActual = new Date().getFullYear(); // Año actual
+    const parseFechaLocal = (valor, finDeDia = false) => {
+      if (!valor) return null;
+      const texto = String(valor).slice(0, 10);
+      const partes = texto.split("-");
+      if (partes.length !== 3) {
+        const fecha = new Date(valor);
+        if (Number.isNaN(fecha.getTime())) return null;
+        fecha.setHours(finDeDia ? 23 : 0, finDeDia ? 59 : 0, finDeDia ? 59 : 0, finDeDia ? 999 : 0);
+        return fecha;
+      }
+      const [anio, mes, dia] = partes.map((p) => parseInt(p, 10));
+      if (!anio || !mes || !dia) return null;
+      const fecha = new Date(anio, mes - 1, dia);
+      fecha.setHours(finDeDia ? 23 : 0, finDeDia ? 59 : 0, finDeDia ? 59 : 0, finDeDia ? 999 : 0);
+      return fecha;
+    };
 
-  return fechaInicio.getMonth() === mesActual && fechaInicio.getFullYear() === anioActual;
-});
-
-const hoy = new Date();
-hoy.setHours(0, 0, 0, 0);
+    const calcularDiasAbiertosSoporte = (soporte) => {
+      const inicio = parseFechaLocal(soporte?.fecha_soporte);
+      if (!inicio) return 0;
+      const fin = soporte?.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre) : new Date();
+      if (!fin || Number.isNaN(fin.getTime())) return 0;
+      fin.setHours(0, 0, 0, 0);
+      return Math.max(0, Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+    };
 
 const totalActividades = actividades.length;
-const actividadesFinalizadas = actividades.filter((act) => act.estado === 'Finalizado').length;
-const actividadesActivas = totalActividades - actividadesFinalizadas;
-const actividadesAtrasadas = actividades.filter((act) => {
-  if (!act.fecha_termino || act.estado === 'Finalizado') return false;
-  const limite = new Date(act.fecha_termino);
-  return limite < hoy;
-}).length;
-const actividadesUrgentes = actividades.filter((act) => act.prioridad === 'Urgente').length;
-const cumplimiento = totalActividades ? Math.round((actividadesFinalizadas / totalActividades) * 100) : 0;
 
 const proximasActividades = [...actividades]
   .filter((act) => act.fecha_inicio)
@@ -177,23 +196,52 @@ const backlogPorArea = Object.entries(
   .sort((a, b) => b[1] - a[1])
   .slice(0, 4);
 
-const cargaTecnicos = Object.entries(
-  actividades.reduce((acc, act) => {
-    if (act.estado === 'Finalizado') return acc;
-    const tecnico = act.encargado_principal?.nombre_encargado || 'Sin asignar';
-    acc[tecnico] = (acc[tecnico] || 0) + 1;
+const soportesPendientesAbiertos = (Array.isArray(soportes) ? soportes : [])
+  .filter((soporte) => {
+    const estado = String(soporte?.estado || "pendiente").toLowerCase();
+    return estado === "pendiente" || estado === "en_proceso";
+  })
+  .map((soporte) => ({
+    ...soporte,
+    diasAbiertos: calcularDiasAbiertosSoporte(soporte)
+  }))
+  .sort((a, b) => b.diasAbiertos - a.diasAbiertos);
+
+const totalSoportesAbiertos = soportesPendientesAbiertos.length;
+const totalSoportesPendientes = soportesPendientesAbiertos.filter(
+  (soporte) => String(soporte.estado || "pendiente").toLowerCase() === "pendiente"
+).length;
+const totalSoportesAlertas = soportesPendientesAbiertos.filter(
+  (soporte) => String(soporte.estado || "").toLowerCase() === "en_proceso"
+).length;
+const totalSoportesRemotos = soportesPendientesAbiertos.filter(
+  (soporte) => String(soporte.tipo || "").toLowerCase() === "remoto"
+).length;
+const totalSoportesTerreno = soportesPendientesAbiertos.filter(
+  (soporte) => String(soporte.tipo || "").toLowerCase() === "terreno"
+).length;
+const obtenerClienteSoporte = (soporte) => soporte?.centro?.cliente || soporte?.cliente || "Cliente sin nombre";
+const obtenerUbicacionAreaCentro = (soporte) => {
+  const ubicacion = String(soporte?.centro?.ubicacion || "").trim();
+  const areaCentro = String(soporte?.centro?.area || "").trim();
+  return [ubicacion, areaCentro].filter(Boolean).join(" / ");
+};
+const clientesSoporte = Object.entries(
+  soportesPendientesAbiertos.reduce((acc, soporte) => {
+    const cliente = obtenerClienteSoporte(soporte);
+    acc[cliente] = (acc[cliente] || 0) + 1;
     return acc;
   }, {})
-)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 5);
-
-const actividadesSemana = actividades.filter((act) => {
-  if (!act.fecha_inicio) return false;
-  const inicio = new Date(act.fecha_inicio);
-  const diferencia = (inicio - hoy) / (1000 * 60 * 60 * 24);
-  return diferencia >= 0 && diferencia <= 7;
-}).length;
+).sort((a, b) => a[0].localeCompare(b[0]));
+const soportesFiltradosPorCliente = clienteSoporte === "todos"
+  ? soportesPendientesAbiertos
+  : soportesPendientesAbiertos.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+const soportesPorPagina = 5;
+const totalSoportesFiltrados = soportesFiltradosPorCliente.length;
+const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / soportesPorPagina));
+const paginaSoportesActual = Math.min(paginaSoportes, totalPaginasSoportes);
+const inicioSoportes = (paginaSoportesActual - 1) * soportesPorPagina;
+const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoportes, inicioSoportes + soportesPorPagina);
   
     
     const getEstadoColor = (estado) => {
@@ -267,43 +315,134 @@ const actividadesSemana = actividades.filter((act) => {
                     <h2>Panel operativo</h2>
                     <p>Monitorea los centros, actividades y cargas de trabajo del equipo en un solo vistazo.</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                    <i className="fas fa-plus me-2" />
-                    Nueva actividad
-                </button>
             </div>
 
             <div className="home-metrics-grid">
-                <div className="metric-card accent">
-                    <span>Centros operativos</span>
-                    <h3>{totalCentrosOperativos}</h3>
-                    <small>Registrados en OrcaGest</small>
+                <div className="metric-card support-kpi-card support-kpi-open">
+                    <span>Total fallas abiertas</span>
+                    <h3>{totalSoportesAbiertos}</h3>
+                    <small>Soportes pendientes de cierre</small>
                 </div>
-                <div className="metric-card">
-                    <span>Actividades activas</span>
-                    <h3>{actividadesActivas}</h3>
-                    <small>Total registradas: {totalActividades}</small>
+                <div className="metric-card critical support-kpi-card">
+                    <span>Pendientes</span>
+                    <h3>{totalSoportesPendientes}</h3>
+                    <small>Sin gestion completa</small>
                 </div>
-                <div className="metric-card">
-                    <span>Cumplimiento</span>
-                    <h3>{cumplimiento}%</h3>
-                    <small>{actividadesFinalizadas} finalizadas</small>
-                </div>
-                <div className="metric-card critical">
+                <div className="metric-card support-kpi-card support-kpi-warning">
                     <span>Alertas</span>
-                    <h3>{actividadesAtrasadas + actividadesUrgentes}</h3>
-                    <small>Atrasadas: {actividadesAtrasadas} - Urgentes: {actividadesUrgentes}</small>
+                    <h3>{totalSoportesAlertas}</h3>
+                    <small>Casos en seguimiento</small>
                 </div>
-                <div className="metric-card">
-                    <span>Agenda semanal</span>
-                    <h3>{actividadesSemana}</h3>
-                    <small>Eventos proximos 7 dias</small>
+                <div className="metric-card support-kpi-card support-kpi-info">
+                    <span>Remotas</span>
+                    <h3>{totalSoportesRemotos}</h3>
+                    <small>Atencion sin terreno</small>
                 </div>
-                <div className="metric-card">
-                    <span>Mes en curso</span>
-                    <h3>{actividadesDelMesActual.length}</h3>
-                    <small>Actividades programadas</small>
+                <div className="metric-card support-kpi-card support-kpi-primary">
+                    <span>Terreno</span>
+                    <h3>{totalSoportesTerreno}</h3>
+                    <small>Requieren visita o gestion local</small>
                 </div>
+            </div>
+
+            <div className="home-support-priority-card">
+                <div className="support-priority-header">
+                    <div>
+                        <span className="support-priority-kicker">Soporte operativo</span>
+                        <h5>Pendientes prioritarios</h5>
+                        <p>Trabajos abiertos mas antiguos que requieren seguimiento.</p>
+                    </div>
+                    <div className="support-priority-tools">
+                        <div className="support-client-cards" aria-label="Filtrar pendientes por cliente">
+                            <button
+                                type="button"
+                                className={`support-client-card ${clienteSoporte === "todos" ? "active" : ""}`}
+                                onClick={() => setClienteSoporte("todos")}
+                            >
+                                <span>Todos</span>
+                                <strong>{totalSoportesAbiertos}</strong>
+                            </button>
+                            {clientesSoporte.map(([cliente, cantidad]) => (
+                                <button
+                                    type="button"
+                                    className={`support-client-card ${clienteSoporte === cliente ? "active" : ""}`}
+                                    onClick={() => setClienteSoporte(cliente)}
+                                    key={cliente}
+                                >
+                                    <span>{cliente}</span>
+                                    <strong>{cantidad}</strong>
+                                </button>
+                            ))}
+                        </div>
+                        <span className="support-priority-icon" aria-label="Soporte">
+                            <i className="fas fa-headset" />
+                        </span>
+                    </div>
+                </div>
+
+                {soportesPrioritariosHome.length ? (
+                    <ul className="support-priority-list">
+                        {soportesPrioritariosHome.map((soporte) => {
+                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
+                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
+                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
+                            return (
+                                <li className={`support-priority-item ${esAlerta ? "is-alert" : ""}`} key={soporte.id_soporte}>
+                                    <div className="support-priority-main">
+                                        <div className="support-priority-title-row">
+                                            <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
+                                            {ubicacionArea && (
+                                                <span className="support-area-chip">{ubicacionArea}</span>
+                                            )}
+                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
+                                                {esRemoto ? "Remoto" : "Terreno"}
+                                            </span>
+                                        </div>
+                                        {soporte.problema && (
+                                            <div className="support-priority-problem">{soporte.problema}</div>
+                                        )}
+                                        <small>
+                                            {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
+                                        </small>
+                                    </div>
+                                    <span className={`support-priority-days ${esAlerta ? "is-alert" : ""}`}>
+                                        <i className="fas fa-clock mr-1" />
+                                        {soporte.diasAbiertos} dia{soporte.diasAbiertos === 1 ? "" : "s"}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                ) : (
+                    <div className="support-priority-empty">
+                        <i className="fas fa-check-circle mr-2" />
+                        No hay pendientes prioritarios de soporte.
+                    </div>
+                )}
+
+                {totalSoportesFiltrados > soportesPorPagina && (
+                    <div className="support-priority-pagination">
+                        <button
+                            type="button"
+                            className="support-page-button"
+                            disabled={paginaSoportesActual <= 1}
+                            onClick={() => setPaginaSoportes((pagina) => Math.max(1, pagina - 1))}
+                        >
+                            <i className="fas fa-chevron-left mr-1" />
+                            Anterior
+                        </button>
+                        <span>Pagina {paginaSoportesActual} de {totalPaginasSoportes}</span>
+                        <button
+                            type="button"
+                            className="support-page-button"
+                            disabled={paginaSoportesActual >= totalPaginasSoportes}
+                            onClick={() => setPaginaSoportes((pagina) => Math.min(totalPaginasSoportes, pagina + 1))}
+                        >
+                            Siguiente
+                            <i className="fas fa-chevron-right ml-1" />
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="home-insights-grid">
@@ -344,25 +483,6 @@ const actividadesSemana = actividades.filter((act) => {
                         </ul>
                     ) : (
                         <p className="text-muted mb-0">No hay actividades clasificadas por area.</p>
-                    )}
-                </div>
-
-                <div className="insight-card">
-                    <h5>Carga de tecnicos</h5>
-                    {cargaTecnicos.length ? (
-                        <ul className="insight-list">
-                            {cargaTecnicos.map(([tecnico, carga]) => (
-                                <li className="insight-item" key={tecnico}>
-                                    <div>
-                                        <strong>{tecnico}</strong>
-                                        <div className="insight-meta">Asignaciones activas</div>
-                                    </div>
-                                    <span className="insight-pill">{carga}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-muted mb-0">No hay tecnicos con actividades activas.</p>
                     )}
                 </div>
             </div>
@@ -587,3 +707,4 @@ const actividadesSemana = actividades.filter((act) => {
 };
 
 export default Home;
+
