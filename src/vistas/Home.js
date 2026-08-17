@@ -266,14 +266,35 @@ const Home = () => {
 	      return Math.max(0, Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
 	    };
 
-	    const obtenerTimestampSoporte = (soporte) => {
-	      const valor = soporte?.updated_at || soporte?.created_at || soporte?.fecha_soporte;
-	      if (!valor) return 0;
-	      const fecha = new Date(valor);
-	      return Number.isNaN(fecha.getTime()) ? 0 : fecha.getTime();
-	    };
+		    const obtenerTimestampSoporte = (soporte) => {
+		      const valor = soporte?.updated_at || soporte?.created_at || soporte?.fecha_soporte;
+		      if (!valor) return 0;
+		      const fecha = new Date(valor);
+		      return Number.isNaN(fecha.getTime()) ? 0 : fecha.getTime();
+		    };
+
+		    const actividadTieneTecnicoAsignado = (actividad) => {
+		      const principal = actividad?.encargado_principal?.nombre_encargado || actividad?.encargado_id;
+		      const ayudante = actividad?.encargado_ayudante?.nombre_encargado || actividad?.ayudante_id;
+		      const adicionales = Array.isArray(actividad?.tecnicos_asignados) ? actividad.tecnicos_asignados : [];
+		      return Boolean(principal || ayudante || adicionales.length);
+		    };
+
+		    const obtenerTimestampActividad = (actividad) => {
+		      const valor = actividad?.fecha_inicio || actividad?.updated_at || actividad?.created_at || actividad?.fecha_reclamo;
+		      if (!valor) return Number(actividad?.id_actividad || 0);
+		      const fecha = new Date(valor);
+		      return Number.isNaN(fecha.getTime()) ? Number(actividad?.id_actividad || 0) : fecha.getTime();
+		    };
 
 const totalActividades = actividades.length;
+
+const actividadesOrdenadasHome = [...actividades].sort((a, b) => {
+  const asignadaA = actividadTieneTecnicoAsignado(a) ? 1 : 0;
+  const asignadaB = actividadTieneTecnicoAsignado(b) ? 1 : 0;
+  if (asignadaA !== asignadaB) return asignadaB - asignadaA;
+  return obtenerTimestampActividad(b) - obtenerTimestampActividad(a);
+});
 
 const soportesPendientesAbiertos = (Array.isArray(soportes) ? soportes : [])
   .filter((soporte) => {
@@ -359,6 +380,42 @@ const obtenerTecnicosActividad = (actividad) => {
   }
   return tecnicos;
 };
+
+const hoyKey = (() => {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+})();
+
+const fechaActividadKey = (actividad) => {
+  const fecha = parseFechaLocal(actividad?.fecha_inicio);
+  if (!fecha) return "";
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+};
+
+const estadoActividadKey = (actividad) => normalizarTexto(actividad?.estado || "");
+
+const trabajosCursoHoy = (Array.isArray(actividades) ? actividades : [])
+  .filter((actividad) => {
+    const estado = estadoActividadKey(actividad);
+    if (estado === "finalizado" || estado === "cancelado") return false;
+    const esHoy = fechaActividadKey(actividad) === hoyKey;
+    const enProceso = estado === "en progreso" || estado === "en_proceso";
+    const vieneDeSoporte = Number(actividad?.soporte_id || 0) > 0;
+    return esHoy || enProceso || vieneDeSoporte;
+  })
+  .sort((a, b) => {
+    const soporteA = Number(a?.soporte_id || 0) > 0 ? 0 : 1;
+    const soporteB = Number(b?.soporte_id || 0) > 0 ? 0 : 1;
+    if (soporteA !== soporteB) return soporteA - soporteB;
+    const hoyA = fechaActividadKey(a) === hoyKey ? 0 : 1;
+    const hoyB = fechaActividadKey(b) === hoyKey ? 0 : 1;
+    if (hoyA !== hoyB) return hoyA - hoyB;
+    const fechaA = new Date(a?.fecha_inicio || 0).getTime();
+    const fechaB = new Date(b?.fecha_inicio || 0).getTime();
+    return fechaA - fechaB;
+  })
+  .slice(0, 6);
+
 const soportesPorPagina = 5;
 const totalSoportesFiltrados = soportesFiltradosPorCliente.length;
 const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / soportesPorPagina));
@@ -398,25 +455,34 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
       : { label: "Finalizado completo", pillClass: "home-calendar-status-success", order: 2 }
     : { label: "En preparacion", pillClass: "home-calendar-status-info", order: 0 };
 
-  const despachoOperativo =
-    bultosEnviados <= 0
-      ? { label: "Sin despacho", pillClass: "home-calendar-status-muted", order: 0 }
-      : bultosPendientes > 0
-        ? { label: "Despacho parcial", pillClass: "home-calendar-status-warning", order: 1 }
-        : { label: "Despacho completo", pillClass: "home-calendar-status-success", order: 2 };
+	  const despachoOperativo =
+	    bultosEnviados <= 0
+	      ? { label: "Sin despacho", pillClass: "home-calendar-status-muted", order: 0 }
+	      : bultosPendientes > 0
+	        ? { label: "Despacho parcial", pillClass: "home-calendar-status-warning", order: 1 }
+	        : { label: "Despacho completo", pillClass: "home-calendar-status-success", order: 2 };
+	  const operativoCompleto = finalizado && pendientesArmado <= 0 && bultosPendientes <= 0;
 
-  return {
-    ...armado,
-    armado_pendientes_operativos: pendientesArmado,
+	  return {
+	    ...armado,
+	    armado_pendientes_operativos: pendientesArmado,
     armado_operativo_label: armadoOperativo.label,
     armado_operativo_pill_class: armadoOperativo.pillClass,
     armado_operativo_orden: armadoOperativo.order,
-    despacho_operativo_label: despachoOperativo.label,
-    despacho_operativo_pill_class: despachoOperativo.pillClass,
-    despacho_operativo_orden: despachoOperativo.order,
-    bultos_enviados_operativos: bultosEnviados,
-    bultos_pendientes_operativos: bultosPendientes
-  };
+	    despacho_operativo_label: despachoOperativo.label,
+	    despacho_operativo_pill_class: despachoOperativo.pillClass,
+	    despacho_operativo_orden: despachoOperativo.order,
+	    operativo_completo_orden: operativoCompleto ? 1 : 0,
+	    bultos_enviados_operativos: bultosEnviados,
+	    bultos_pendientes_operativos: bultosPendientes
+	  };
+}).sort((a, b) => {
+  if (a.operativo_completo_orden !== b.operativo_completo_orden) {
+    return a.operativo_completo_orden - b.operativo_completo_orden;
+  }
+  const fechaA = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
+  const fechaB = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
+  return fechaB - fechaA;
 });
   
     
@@ -669,6 +735,7 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
                 </div>
             </div>
 
+            <div className="home-operational-grid">
             <div className="home-support-priority-card">
                 <div className="support-priority-header">
                     <div>
@@ -786,9 +853,53 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
                         </button>
                     </div>
                 )}
+	            </div>
+
+		            <div className="home-work-card">
+		                <div className="home-section-heading">
+		                    <div>
+		                        <span className="home-section-kicker">Operacion diaria</span>
+		                        <h5>Trabajo en curso de hoy</h5>
+		                    </div>
+		                    <span className="home-work-count">{trabajosCursoHoy.length}</span>
+		                </div>
+		                {trabajosCursoHoy.length ? (
+		                    <div className="home-work-list">
+		                        {trabajosCursoHoy.map((actividad) => {
+		                            const tecnicos = obtenerTecnicosActividad(actividad);
+		                            const estado = String(actividad.estado || "Sin estado");
+		                            const estadoClass = normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado";
+		                            const vieneDeSoporte = Number(actividad?.soporte_id || 0) > 0;
+		                            const centroTrabajo = actividad.centro?.nombre || "Sin centro";
+		                            const clienteTrabajo = actividad.centro?.cliente || "Sin cliente";
+		                            return (
+		                                <div className={`home-work-item ${vieneDeSoporte ? "from-support" : ""}`} key={actividad.id_actividad}>
+		                                    <div className="home-work-main">
+		                                        <div className="home-work-title-row">
+		                                            <strong>{centroTrabajo}</strong>
+		                                            <span className="home-pill home-state-en-progreso">{actividad.area || actividad.nombre_actividad || "Sin tipo"}</span>
+		                                        </div>
+		                                        <small>{clienteTrabajo}</small>
+		                                        <div className="home-work-meta">
+		                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(actividad.fecha_inicio)}</span>
+		                                            <span><i className="fas fa-user-check mr-1" />{tecnicos.length ? tecnicos.join(" / ") : "Tecnico pendiente"}</span>
+		                                        </div>
+		                                    </div>
+	                                    <span className={`home-pill home-state-${estadoClass}`}>{estado}</span>
+	                                </div>
+	                            );
+	                        })}
+	                    </div>
+	                ) : (
+		                    <div className="support-priority-empty">
+		                        <i className="fas fa-check-circle mr-2" />
+		                        Sin actividad por el momento.
+		                    </div>
+		                )}
+		            </div>
             </div>
 
-	            <div className="row home-content-grid">
+			            <div className="row home-content-grid">
                 <div className="col-xl-7">
                     <div className="card w-100 home-activities-card">
                         <div className="card-body">
@@ -801,7 +912,7 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
                             </div>
                             <DataTable
                                 columns={columns}
-                                data={actividades}
+	                                data={actividadesOrdenadasHome}
                                 progressPending={loading}
                                 pagination
                                 paginationPerPage={10}
