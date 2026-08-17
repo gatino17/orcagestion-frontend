@@ -447,6 +447,12 @@
     margin-top: 0.22rem;
 }
 
+.support-priority-client-date {
+    margin-top: 0.12rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
 .support-type-chip {
     border-radius: 999px;
     padding: 0.14rem 0.5rem;
@@ -615,6 +621,192 @@
     margin: 0;
     font-weight: 600;
     color: #0f172a;
+}
+
+.home-section-kicker {
+    display: block;
+    margin-bottom: 0.15rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #2563eb;
+}
+
+.home-activities-card {
+    overflow: hidden;
+    background:
+        radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 28%),
+        #ffffff;
+}
+
+.home-activities-card .rdt_TableHeadRow {
+    min-height: 44px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: #f8fafc;
+    color: #334155;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.home-activities-card .rdt_TableRow {
+    min-height: 58px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.home-activities-card .rdt_TableRow:hover {
+    background: #f8fbff;
+}
+
+.home-table-index {
+    display: inline-flex;
+    width: 26px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.home-activity-cell strong,
+.home-tech-cell strong {
+    color: #0f172a;
+    font-size: 0.86rem;
+}
+
+.home-table-meta,
+.home-tech-cell small {
+    display: block;
+    margin-top: 0.18rem;
+    color: #64748b;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.home-tech-cell {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.home-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.1;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.home-calendar-pill-compact {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-pill-baja { background: #dcfce7; color: #166534; }
+.home-pill-media { background: #fef9c3; color: #a16207; }
+.home-pill-alta { background: #fee2e2; color: #b91c1c; }
+.home-pill-urgente { background: #fecaca; color: #7f1d1d; }
+.home-pill-ninguna { background: #e2e8f0; color: #1e293b; }
+
+.home-state-en-progreso { background: #fde68a; color: #92400e; }
+.home-state-pendiente { background: #dbeafe; color: #2563eb; }
+.home-state-finalizado { background: #dcfce7; color: #15803d; }
+.home-state-cancelado { background: #fee2e2; color: #b91c1c; }
+.home-state-sin-estado { background: #e2e8f0; color: #475569; }
+
+.home-armados-card {
+    overflow: hidden;
+}
+
+.home-armados-card .home-section-heading h5 {
+    font-size: 0.95rem;
+}
+
+.home-armados-table .rdt_TableHeadRow {
+    min-height: 42px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.home-armados-table .rdt_TableCol {
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.home-armados-table .rdt_TableRow {
+    min-height: 50px;
+    font-size: 0.78rem;
+}
+
+.home-truncate {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-truncate small {
+    color: #64748b;
+    display: block;
+    font-size: 0.68rem;
+}
+
+.home-armado-estado-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    line-height: 1.15;
+}
+
+.home-armado-meta {
+    color: #64748b;
+    font-size: 0.68rem;
+}
+
+.home-armado-pendiente {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.home-armado-ok {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.home-calendar-status-info {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.home-calendar-status-warning {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.home-calendar-status-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.home-calendar-status-muted {
+    background: #e2e8f0;
+    color: #475569;
 }
 
 .status-dot {

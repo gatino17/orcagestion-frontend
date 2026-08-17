@@ -4,24 +4,66 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import esLocale from "@fullcalendar/core/locales/es";
 import { io } from "socket.io-client";
 import './Home.css';
 
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
-import { obtenerSoportes } from "../api";
+import { obtenerArmados, obtenerGuiasSalidaArmado, obtenerSoportes } from "../api";
+
+const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
+
+const normalizarTexto = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const obtenerClaveCaja = (valor) => {
+  const raw = String(valor || "").trim();
+  const norm = normalizarTexto(raw);
+  if (!raw || !norm || norm === "sin caja") return "";
+  const match = norm.match(/^caja\s*(\d+)/i);
+  return match ? `caja_${Number(match[1])}` : norm;
+};
+
+const calcularPctChecklistArmado = (armadoId) => {
+  const id = Number(armadoId || 0);
+  if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+  try {
+    const raw = localStorage.getItem(`orcagest_armado_checklist_v1_${id}`);
+    if (!raw) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+    const parsed = JSON.parse(raw);
+    const checks = parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {};
+    let done = 0;
+    Object.values(checks).forEach((row) => {
+      const estado = String(row?.estado || "").trim().toLowerCase();
+      if (estado) done += 1;
+    });
+    const total = CHECKLIST_ARMADO_TOTAL_ITEMS;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return { done, total, pct };
+  } catch (e) {
+    return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
+  }
+};
 
 const Home = () => {
     const [actividades, setActividades] = useState([]);
     const [encargados, setEncargados] = useState([]);
     const [centros, setCentros] = useState([]);  // Estado para los centros
     const [soportes, setSoportes] = useState([]);
+    const [armadosHome, setArmadosHome] = useState([]);
+    const [guiasSalidaHome, setGuiasSalidaHome] = useState([]);
+    const [loadingArmadosHome, setLoadingArmadosHome] = useState(false);
     const [paginaSoportes, setPaginaSoportes] = useState(1);
     const [clienteSoporte, setClienteSoporte] = useState("todos");
     const [loading, setLoading] = useState(true);
 
-    // Estado para actividad en edición y mostrar modal
+    // Estado para actividad en edicion y mostrar modal
     const [editarActividad, setEditarActividad] = useState(null);
     const [showModal, setShowModal] = useState(false);
   
@@ -56,19 +98,42 @@ const Home = () => {
       setActividades(actividadesData);
     }, []);
 
+    const cargarArmadosHome = useCallback(async ({ silent = false } = {}) => {
+      if (!silent) setLoadingArmadosHome(true);
+      try {
+        const [armados, guias] = await Promise.all([obtenerArmados(), obtenerGuiasSalidaArmado()]);
+        const lista = (Array.isArray(armados) ? armados : []).sort((a, b) => {
+          const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
+          const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
+          return fb - fa;
+        });
+        setArmadosHome(lista);
+        setGuiasSalidaHome(Array.isArray(guias) ? guias : []);
+      } catch (error) {
+        console.error("No se pudieron cargar armados operativos:", error);
+        if (!silent) {
+          setArmadosHome([]);
+          setGuiasSalidaHome([]);
+        }
+      } finally {
+        if (!silent) setLoadingArmadosHome(false);
+      }
+    }, []);
+
     const cargarDatosHome = useCallback(async () => {
           setLoading(true);
   
           const centrosData = await cargarCentrosClientes(); // Carga centros
           setCentros(centrosData); // Asigna los datos de los centros
-          await cargarActividadesHome();
+	          await cargarActividadesHome();
   
           const encargadosData = await cargarEncargados(); // Carga encargados
           setEncargados(encargadosData);
-          await cargarSoportesHome();
-                              
-          setLoading(false);
-    }, [cargarActividadesHome, cargarSoportesHome]);
+	          await cargarSoportesHome();
+	          await cargarArmadosHome();
+	                              
+	          setLoading(false);
+	    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
 
     useEffect(() => {
       cargarDatosHome();
@@ -87,22 +152,26 @@ const Home = () => {
       });
       const refrescarSoportes = () => cargarSoportesHome();
       const refrescarActividades = () => cargarActividadesHome();
+      const refrescarArmados = () => cargarArmadosHome({ silent: true });
       socket.on("soporte_updated", refrescarSoportes);
       socket.on("actividad_updated", refrescarActividades);
+      socket.on("armado_updated", refrescarArmados);
       return () => {
         socket.off("soporte_updated", refrescarSoportes);
         socket.off("actividad_updated", refrescarActividades);
+        socket.off("armado_updated", refrescarArmados);
         socket.disconnect();
       };
-    }, [cargarActividadesHome, cargarSoportesHome]);
+    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
 
     useEffect(() => {
       const interval = setInterval(() => {
         cargarSoportesHome();
         cargarActividadesHome();
+        cargarArmadosHome({ silent: true });
       }, 8000);
       return () => clearInterval(interval);
-    }, [cargarActividadesHome, cargarSoportesHome]);
+    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
 
     useEffect(() => {
       setPaginaSoportes(1);
@@ -155,41 +224,20 @@ const Home = () => {
         setEditarActividad(null);
     };
 
-    const calcularTiempoSolucion = (fechaInicio, fechaTermino) => {
-        if (!fechaTermino) return ''; // Si no hay fecha de término, devolver en blanco
     
-        const inicio = new Date(fechaInicio);
-        const termino = new Date(fechaTermino);
-    
-        // Normalizar horas para comparar días completos
-        inicio.setHours(0, 0, 0, 0);
-        termino.setHours(23, 59, 59, 999);
-    
-        // Calcular diferencia en días
-        const diffTime = termino - inicio;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Convertir milisegundos a días
-    
-        return diffDays;
-    };
-    
-    const calcularNoches = (fechaInicio, fechaTermino) => {
-      const dias = calcularTiempoSolucion(fechaInicio, fechaTermino);
-      return dias > 1 ? dias - 1 : 0; // Si hay más de un día, resta 1; si no, devuelve 0
-    };
- 
     const formatearFecha = (fecha) => {
-      if (!fecha) return ''; // Si no hay fecha, retorna vacío
+      if (!fecha) return '';
   
       const fechaObj = new Date(fecha);
   
       // Ajustar fecha para eliminar el desfase de la zona horaria
       fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
   
-      const dia = String(fechaObj.getDate()).padStart(2, '0'); // Día con dos dígitos
-      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0'); // Mes con dos dígitos
-      const año = fechaObj.getFullYear(); // Año completo
+      const dia = String(fechaObj.getDate()).padStart(2, '0');
+      const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+      const anio = fechaObj.getFullYear();
   
-      return `${dia}/${mes}/${año}`; // Retornar en formato DD/MM/YYYY
+      return `${dia}/${mes}/${anio}`;
     };
   
     const parseFechaLocal = (valor, finDeDia = false) => {
@@ -209,42 +257,34 @@ const Home = () => {
       return fecha;
     };
 
-    const calcularDiasAbiertosSoporte = (soporte) => {
-      const inicio = parseFechaLocal(soporte?.fecha_soporte);
-      if (!inicio) return 0;
-      const fin = soporte?.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre) : new Date();
-      if (!fin || Number.isNaN(fin.getTime())) return 0;
-      fin.setHours(0, 0, 0, 0);
-      return Math.max(0, Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
-    };
+	    const calcularDiasAbiertosSoporte = (soporte) => {
+	      const inicio = parseFechaLocal(soporte?.fecha_soporte);
+	      if (!inicio) return 0;
+	      const fin = soporte?.fecha_cierre ? parseFechaLocal(soporte.fecha_cierre) : new Date();
+	      if (!fin || Number.isNaN(fin.getTime())) return 0;
+	      fin.setHours(0, 0, 0, 0);
+	      return Math.max(0, Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)));
+	    };
+
+	    const obtenerTimestampSoporte = (soporte) => {
+	      const valor = soporte?.updated_at || soporte?.created_at || soporte?.fecha_soporte;
+	      if (!valor) return 0;
+	      const fecha = new Date(valor);
+	      return Number.isNaN(fecha.getTime()) ? 0 : fecha.getTime();
+	    };
 
 const totalActividades = actividades.length;
-
-const proximasActividades = [...actividades]
-  .filter((act) => act.fecha_inicio)
-  .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio))
-  .slice(0, 5);
-
-const backlogPorArea = Object.entries(
-  actividades.reduce((acc, act) => {
-    const areaClave = act.area || 'Sin área';
-    acc[areaClave] = (acc[areaClave] || 0) + 1;
-    return acc;
-  }, {})
-)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 4);
 
 const soportesPendientesAbiertos = (Array.isArray(soportes) ? soportes : [])
   .filter((soporte) => {
     const estado = String(soporte?.estado || "pendiente").toLowerCase();
     return estado === "pendiente" || estado === "en_proceso";
   })
-  .map((soporte) => ({
-    ...soporte,
-    diasAbiertos: calcularDiasAbiertosSoporte(soporte)
-  }))
-  .sort((a, b) => b.diasAbiertos - a.diasAbiertos);
+	  .map((soporte) => ({
+	    ...soporte,
+	    diasAbiertos: calcularDiasAbiertosSoporte(soporte)
+	  }))
+	  .sort((a, b) => obtenerTimestampSoporte(b) - obtenerTimestampSoporte(a));
 
 const totalSoportesAbiertos = soportesPendientesAbiertos.length;
 const totalSoportesPendientes = soportesPendientesAbiertos.filter(
@@ -291,12 +331,15 @@ const obtenerOrdenSoporteHome = (soporte) => {
   if (estado === "pendiente") return 1;
   return 2;
 };
-const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCliente].sort((a, b) => {
-  const ordenA = obtenerOrdenSoporteHome(a);
-  const ordenB = obtenerOrdenSoporteHome(b);
-  if (ordenA !== ordenB) return ordenA - ordenB;
-  return (b.diasAbiertos || 0) - (a.diasAbiertos || 0);
-});
+	const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCliente].sort((a, b) => {
+	  const ordenA = obtenerOrdenSoporteHome(a);
+	  const ordenB = obtenerOrdenSoporteHome(b);
+	  if (ordenA !== ordenB) return ordenA - ordenB;
+	  const recienteA = obtenerTimestampSoporte(a);
+	  const recienteB = obtenerTimestampSoporte(b);
+	  if (recienteA !== recienteB) return recienteB - recienteA;
+	  return Number(b.id_soporte || 0) - Number(a.id_soporte || 0);
+	});
 const obtenerTecnicosActividad = (actividad) => {
   if (!actividad) return [];
   const tecnicos = [];
@@ -322,22 +365,60 @@ const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / sopo
 const paginaSoportesActual = Math.min(paginaSoportes, totalPaginasSoportes);
 const inicioSoportes = (paginaSoportesActual - 1) * soportesPorPagina;
 const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoportes, inicioSoportes + soportesPorPagina);
+
+const guiasPorArmadoHome = (Array.isArray(guiasSalidaHome) ? guiasSalidaHome : []).reduce((map, guia) => {
+  const armadoId = Number(guia?.armado_id || 0);
+  if (!armadoId) return map;
+  const lista = map.get(armadoId) || [];
+  lista.push(guia);
+  map.set(armadoId, lista);
+  return map;
+}, new Map());
+
+const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).map((armado) => {
+  const armadoId = Number(armado?.id_armado || armado?.id || 0);
+  const finalizado = normalizarTexto(armado?.estado || "") === "finalizado";
+  const pendientesArmado = Math.max(0, Number(armado?.armado_equipos_pendientes || 0));
+  const totalBultos = Math.max(0, Number(armado?.total_cajas || armado?.total_bultos || 0));
+  const guiasArmado = Array.isArray(guiasPorArmadoHome.get(armadoId)) ? guiasPorArmadoHome.get(armadoId) : [];
+  const bultosDespachados = new Set();
+  guiasArmado.forEach((guia) => {
+    (Array.isArray(guia?.cajas) ? guia.cajas : []).forEach((caja) => {
+      const clave = obtenerClaveCaja(caja);
+      if (clave) bultosDespachados.add(clave);
+    });
+  });
+
+  const totalBultosOperativos = Math.max(totalBultos, bultosDespachados.size);
+  const bultosEnviados = Math.min(bultosDespachados.size, totalBultosOperativos);
+  const bultosPendientes = Math.max(totalBultosOperativos - bultosEnviados, 0);
+  const armadoOperativo = finalizado
+    ? pendientesArmado > 0
+      ? { label: "Finalizado incompleto", pillClass: "home-calendar-status-warning", order: 1 }
+      : { label: "Finalizado completo", pillClass: "home-calendar-status-success", order: 2 }
+    : { label: "En preparacion", pillClass: "home-calendar-status-info", order: 0 };
+
+  const despachoOperativo =
+    bultosEnviados <= 0
+      ? { label: "Sin despacho", pillClass: "home-calendar-status-muted", order: 0 }
+      : bultosPendientes > 0
+        ? { label: "Despacho parcial", pillClass: "home-calendar-status-warning", order: 1 }
+        : { label: "Despacho completo", pillClass: "home-calendar-status-success", order: 2 };
+
+  return {
+    ...armado,
+    armado_pendientes_operativos: pendientesArmado,
+    armado_operativo_label: armadoOperativo.label,
+    armado_operativo_pill_class: armadoOperativo.pillClass,
+    armado_operativo_orden: armadoOperativo.order,
+    despacho_operativo_label: despachoOperativo.label,
+    despacho_operativo_pill_class: despachoOperativo.pillClass,
+    despacho_operativo_orden: despachoOperativo.order,
+    bultos_enviados_operativos: bultosEnviados,
+    bultos_pendientes_operativos: bultosPendientes
+  };
+});
   
-    
-    const getEstadoColor = (estado) => {
-        switch (estado) {
-            case 'Finalizado':
-                return 'green';
-            case 'En progreso':
-                return 'orange';
-            case 'Pendiente':
-                return 'blue';
-            case 'Cancelado':
-                return 'red';
-            default:
-                return 'gray'; // Color por defecto para cualquier otro estado
-        }
-    };
     
 
     // Filtra los encargados para evitar seleccionar el mismo encargado como ayudante
@@ -345,36 +426,199 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
 
 
     const columns = [
-        { name: 'ID', selector: row => row.id_actividad, sortable: true, width: '50px' },
-        { name: 'Nombre', selector: row => row.nombre_actividad, sortable: true, wrap: true },
-        { name: 'Encargado Principal', selector: row => row.encargado_principal?.nombre_encargado || 'No asignado', sortable: true },
-        { name: 'Ayudante', selector: row => row.encargado_ayudante?.nombre_encargado || 'No asignado', sortable: true },
-        { name: 'Fecha Término', selector: row => formatearFecha(row.fecha_termino), sortable: true },
-        { 
-            name: 'Estado', 
-            selector: row => row.estado, 
-            sortable: true, 
+        {
+            name: "N",
+            sortable: false,
+            width: "52px",
+            cell: (_row, index) => <span className="home-table-index">{Number(index || 0) + 1}</span>
+        },
+        {
+            name: "Actividad",
+            selector: row => row.nombre_actividad,
+            sortable: true,
+            grow: 1.9,
             cell: row => (
-                <span style={{ color: getEstadoColor(row.estado), fontWeight: 'bold' }}>
-                    {row.estado}
+                <div className="home-activity-cell">
+	                    <strong>{row.nombre_actividad || "Sin nombre"}</strong>
+	                    <div className="home-table-meta">
+	                        {row.centro?.cliente || "Sin cliente"} - {row.centro?.nombre || "Sin centro"}
+	                    </div>
+	                </div>
+	            )
+	        },
+        { name: "Inicio", selector: row => formatearFecha(row.fecha_inicio), sortable: true, width: "96px" },
+        { name: "Fin", selector: row => formatearFecha(row.fecha_termino), sortable: true, width: "96px" },
+        {
+            name: "Tipo",
+            selector: row => row.area || "-",
+            sortable: true,
+            width: "124px",
+            cell: row => (
+                <span className="home-pill home-state-en-progreso home-calendar-pill-compact" title={row.area || "-"}>
+                    {row.area || "-"}
                 </span>
             )
         },
-        { name: 'Cliente', selector: row => row.centro?.cliente || 'No asignado', sortable: true },
-        
-        { 
-            name: 'Dias', 
-            selector: row => calcularTiempoSolucion(row.fecha_inicio, row.fecha_termino), 
-            sortable: true, 
-            width: '80px' 
+        {
+            name: "Prioridad",
+            selector: row => row.prioridad,
+            sortable: true,
+            width: "110px",
+            cell: row => <span className={`home-pill home-pill-${(row.prioridad || "ninguna").toLowerCase()}`}>{row.prioridad || "-"}</span>
         },
-        { 
-          name: 'Noches',
-          selector: row => calcularNoches(row.fecha_inicio, row.fecha_termino),
-          sortable: true,
-          width: '80px' 
+        {
+            name: "Estado",
+            selector: row => row.estado,
+            sortable: true,
+            width: "112px",
+            cell: row => {
+                const estadoRaw = String(row.estado || "Sin estado");
+                const estadoKey = estadoRaw.toLowerCase().replace(/\s+/g, "-");
+                const esFinalizado = estadoKey === "finalizado";
+                const esEnProgreso = estadoKey === "en-progreso";
+                if (esFinalizado) {
+                    return (
+                        <span className={`home-pill home-state-${estadoKey}`} title="Finalizado">
+                            <i className="fas fa-check-circle" />
+                        </span>
+                    );
+                }
+                if (esEnProgreso) {
+                    return (
+                        <span className={`home-pill home-state-${estadoKey}`} title="En progreso">
+                            <i className="fas fa-cog" />
+                        </span>
+                    );
+                }
+                return <span className={`home-pill home-state-${estadoKey}`}>{estadoRaw}</span>;
+            }
         },
-        
+        {
+            name: "Tecnico",
+            selector: row => row.encargado_principal?.nombre_encargado || "No asignado",
+            sortable: true,
+            grow: 1.35,
+            cell: row => {
+                const principal = String(row.encargado_principal?.nombre_encargado || "").trim();
+                const ayudante = String(row.encargado_ayudante?.nombre_encargado || "").trim();
+                const adicionales = Array.isArray(row.tecnicos_asignados)
+                    ? row.tecnicos_asignados
+                        .map((t) => String(t?.nombre_encargado || "").trim())
+                        .filter(Boolean)
+                        .filter((n) => n !== principal && n !== ayudante)
+                    : [];
+                const acompanantes = [ayudante, ...adicionales].filter(Boolean);
+
+                return (
+                    <div className="home-tech-cell">
+                        <strong>{principal || "No asignado"}</strong>
+                        {acompanantes.length ? (
+                            <small title={acompanantes.join(", ")}>
+                                Acompanantes: {acompanantes.join(", ")}
+                            </small>
+                        ) : (
+                            <small>Sin acompanantes</small>
+                        )}
+                    </div>
+                );
+            }
+        }
+    ];
+
+    const columnasArmadosHome = [
+        {
+            name: "Fecha",
+            selector: (row) => row.fecha_asignacion || row.created_at || "",
+            sortable: true,
+            width: "92px",
+            cell: (row) => formatearFecha(row.fecha_asignacion || row.created_at)
+        },
+        {
+            name: "Cliente",
+            selector: (row) => row.centro?.cliente || row.cliente_nombre || "",
+            sortable: true,
+            grow: 0.9,
+            cell: (row) => (
+                <div className="home-truncate" title={row.centro?.cliente || row.cliente_nombre || ""}>
+                    {row.centro?.cliente || row.cliente_nombre || "-"}
+                </div>
+            )
+        },
+        {
+            name: "Centro",
+            selector: (row) => row.centro?.nombre || row.centro_nombre || "",
+            sortable: true,
+            grow: 0.9,
+            cell: (row) => (
+                <div className="home-truncate" title={row.centro?.nombre || row.centro_nombre || ""}>
+                    {row.centro?.nombre || row.centro_nombre || "-"}
+                </div>
+            )
+        },
+        {
+            name: "Tecnico",
+            selector: (row) => row.tecnico?.nombre || row.tecnico_nombre || "",
+            sortable: true,
+            width: "130px",
+            cell: (row) => {
+                const activos = Array.isArray(row.tecnicos_asignados) ? row.tecnicos_asignados : [];
+                const principal = row.tecnico?.nombre || row.tecnico_nombre || "Sin asignar";
+                const apoyo = activos
+                    .filter((tec) => !tec?.principal)
+                    .map((tec) => tec?.nombre)
+                    .filter(Boolean);
+                return (
+                    <div className="home-truncate" title={[principal, ...apoyo].join(", ")}>
+                        <div>{principal}</div>
+                        {apoyo.length ? <small>Apoyo: {apoyo.join(", ")}</small> : null}
+                    </div>
+                );
+            }
+        },
+        {
+            name: "Armado",
+            selector: (row) => row.armado_operativo_orden,
+            sortable: true,
+            width: "190px",
+            cell: (row) => {
+                const pendientes = Math.max(0, Number(row.armado_pendientes_operativos || 0));
+                return (
+                    <div className="home-armado-estado-cell">
+                        <span className={`home-pill ${row.armado_operativo_pill_class}`}>{row.armado_operativo_label}</span>
+                        {pendientes > 0 ? (
+                            <small className="home-armado-meta home-armado-pendiente">Pendientes: {pendientes}</small>
+                        ) : (
+                            <small className="home-armado-meta home-armado-ok">Sin pendientes</small>
+                        )}
+                    </div>
+                );
+            }
+        },
+        {
+            name: "Despacho",
+            selector: (row) => row.despacho_operativo_orden,
+            sortable: true,
+            width: "178px",
+            cell: (row) => (
+                <div className="home-armado-estado-cell">
+                    <span className={`home-pill ${row.despacho_operativo_pill_class}`}>{row.despacho_operativo_label}</span>
+                    <small className="home-armado-meta">
+                        Enviados: {row.bultos_enviados_operativos} | Pendientes: {row.bultos_pendientes_operativos}
+                    </small>
+                </div>
+            )
+        },
+        {
+            name: "Checklist",
+            selector: (row) => calcularPctChecklistArmado(row.id_armado || row.id).pct,
+            sortable: true,
+            width: "92px",
+            cell: (row) => {
+                const progreso = calcularPctChecklistArmado(row.id_armado || row.id);
+                const color = progreso.pct >= 100 ? "#16a34a" : progreso.pct >= 60 ? "#f59e0b" : "#dc2626";
+                return <strong style={{ color }}>{progreso.pct}%</strong>;
+            }
+        }
     ];
 
     const getColorByActividad = (prioridad) => {
@@ -479,14 +723,14 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
 		                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
 		                                                {esRemoto ? "Remoto" : "Terreno"}
 		                                            </span>
-	                                        </div>
-                                        {soporte.problema && (
-                                            <div className="support-priority-problem">{soporte.problema}</div>
-                                        )}
-	                                        <small>
-	                                            {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
-	                                        </small>
-	                                        {actividadAsignada && (
+		                                        </div>
+	                                            <small className="support-priority-client-date">
+	                                                {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
+	                                            </small>
+	                                        {soporte.problema && (
+	                                            <div className="support-priority-problem">{soporte.problema}</div>
+	                                        )}
+		                                        {actividadAsignada && (
 	                                            <div className="support-assigned-row">
 	                                                <span>
 	                                                    <i className="fas fa-user-check mr-1" />
@@ -544,90 +788,82 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
                 )}
             </div>
 
-            <div className="home-insights-grid">
-                <div className="insight-card">
-                    <h5>Proximos hitos</h5>
-                    {proximasActividades.length ? (
-                        <ul className="insight-list">
-                            {proximasActividades.map((actividad) => (
-                                <li className="insight-item" key={actividad.id_actividad}>
-                                    <div>
-                                        <strong>{actividad.nombre_actividad}</strong>
-                                        <div className="insight-meta">
-                                            {formatearFecha(actividad.fecha_inicio)} - {actividad.centro?.cliente || 'Sin cliente'}
-                                        </div>
-                                    </div>
-                                    <span className="insight-pill">{actividad.estado || 'Sin estado'}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-muted mb-0">Sin actividades programadas proximamente.</p>
-                    )}
-                </div>
-
-                <div className="insight-card">
-                    <h5>Backlog por area</h5>
-                    {backlogPorArea.length ? (
-                        <ul className="insight-list">
-                            {backlogPorArea.map(([area, cantidad]) => (
-                                <li className="insight-item" key={area}>
-                                    <div>
-                                        <strong>{area}</strong>
-                                        <div className="insight-meta">Actividades registradas</div>
-                                    </div>
-                                    <span className="insight-pill">{cantidad}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-muted mb-0">No hay actividades clasificadas por area.</p>
-                    )}
-                </div>
-            </div>
-
-            <div className="row home-content-grid">
+	            <div className="row home-content-grid">
                 <div className="col-xl-7">
-                    <div className="card w-100">
+                    <div className="card w-100 home-activities-card">
                         <div className="card-body">
                             <div className="home-section-heading">
-                                <h5>Actividades registradas</h5>
-                                <span className="insight-meta">{totalActividades} totales</span>
+                                <div>
+                                    <span className="home-section-kicker">Planificacion</span>
+                                    <h5>Actividades registradas</h5>
+                                </div>
+                                <span className="home-pill home-state-en-progreso">{totalActividades} registros</span>
                             </div>
                             <DataTable
                                 columns={columns}
                                 data={actividades}
                                 progressPending={loading}
                                 pagination
+                                paginationPerPage={10}
+                                paginationRowsPerPageOptions={[10, 15, 20, 30, 50]}
                                 highlightOnHover
                                 pointerOnHover
                                 responsive
                                 noDataComponent="No hay actividades disponibles"
-                                className="w-100"
+                                className="w-100 home-activities-table"
                             />
-                        </div>
-                    </div>
-                </div>
+	                        </div>
+	                    </div>
+	                    <div className="card w-100 home-armados-card mt-3">
+	                        <div className="card-body">
+	                            <div className="home-section-heading mb-2">
+	                                <h5>Armados (estado operativo)</h5>
+	                                <span className="home-pill home-state-en-progreso">{armadosHome.length} registros</span>
+	                            </div>
+	                            <DataTable
+	                                columns={columnasArmadosHome}
+	                                data={armadosHomeOperativos}
+	                                progressPending={loadingArmadosHome && !armadosHome.length}
+	                                pagination
+	                                paginationPerPage={5}
+	                                paginationRowsPerPageOptions={[5, 10, 15]}
+	                                dense
+	                                highlightOnHover
+	                                striped
+	                                responsive
+	                                noDataComponent="No hay armados operativos."
+	                                className="home-armados-table"
+	                            />
+	                        </div>
+	                    </div>
+	                </div>
 
-                <div className="col-xl-5">
+	                <div className="col-xl-5">
                     <div className="card w-100">
                         <div className="card-body">
                             <div className="home-section-heading">
                                 <h5>Calendario operacional</h5>
                                 <span className="insight-meta">Prioridad por color</span>
                             </div>
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
-                                initialView="dayGridMonth"
-                                headerToolbar={{
-                                    left: 'prev,next today',
-                                    center: 'title',
-                                    right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                                }}
-                                views={{
-                                    dayGridMonth: { buttonText: 'Mes' },
-                                    timeGridWeek: { buttonText: 'Semana' },
-                                    timeGridDay: { buttonText: 'Día' },
+	                            <FullCalendar
+	                                plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+	                                locale={esLocale}
+	                                initialView="dayGridMonth"
+	                                headerToolbar={{
+	                                    left: 'prev,next today',
+	                                    center: 'title',
+	                                    right: 'dayGridMonth,timeGridWeek,timeGridDay',
+	                                }}
+	                                buttonText={{
+	                                    today: 'Hoy',
+	                                    month: 'Mes',
+	                                    week: 'Semana',
+	                                    day: 'Dia',
+	                                }}
+	                                views={{
+	                                    dayGridMonth: { buttonText: 'Mes' },
+	                                    timeGridWeek: { buttonText: 'Semana' },
+                                    timeGridDay: { buttonText: 'Dia' },
                                 }}
                                 events={actividades
                                     .filter((actividad) => actividad.fecha_inicio && actividad.fecha_termino)
@@ -649,7 +885,9 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
                         </div>
                     </div>
                 </div>
-            </div>            {/* Modal para crear/editar actividad */}
+	            </div>
+
+	            {/* Modal para crear/editar actividad */}
             {showModal && (
                 <div className="modal fade show" tabIndex="-1" style={{ display: 'block' }}>
                     <div className="modal-dialog modal-dialog-scrollable">
@@ -742,7 +980,7 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label>Fecha Término</label>
+                                        <label>Fecha termino</label>
                                         <input
                                             type="date"
                                             className="form-control"
@@ -751,7 +989,7 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label>Área</label>
+                                        <label>Area</label>
                                         <input
                                             type="text"
                                             className="form-control"
@@ -806,4 +1044,3 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
 };
 
 export default Home;
-
