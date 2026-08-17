@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { io } from 'socket.io-client';
+import { API_BASE_URL, refrescarTokenSesion } from './api';
 
 import './App.css';
 import Header from "./components/Header";
@@ -105,8 +107,15 @@ const tokenHasPage = (pageKey) => {
     }
 };
 
+const getSocketBaseUrl = () => {
+    if (!API_BASE_URL) return window.location.origin;
+    return String(API_BASE_URL).replace(/\/api\/?$/, '') || window.location.origin;
+};
+
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
+    const [authReady, setAuthReady] = useState(!localStorage.getItem('token'));
+    const [authVersion, setAuthVersion] = useState(0);
     //const [userRole, setUserRole] = useState(null);
 
     useEffect(() => {
@@ -128,22 +137,85 @@ function App() {
           jwtDecode(token);
           
       }
+      setAuthReady(true);
+      setAuthVersion((version) => version + 1);
       setIsAuthenticated(true);
     };
   
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        setAuthReady(true);
         setIsAuthenticated(false);
     };
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            setAuthReady(true);
+            return;
+        }
+
+        let activo = true;
+        setAuthReady(false);
+        refrescarTokenSesion()
+            .then((data) => {
+                if (activo && data?.token) {
+                    setAuthVersion((version) => version + 1);
+                }
+            })
+            .catch((error) => {
+                console.error("Error al refrescar permisos:", error);
+                if (error?.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    if (activo) setIsAuthenticated(false);
+                }
+            })
+            .finally(() => {
+                if (activo) setAuthReady(true);
+            });
+
+        return () => {
+            activo = false;
+        };
+    }, [isAuthenticated]);
+
+    useEffect(() => {
+        if (!isAuthenticated || !authReady) return undefined;
+
+        const socket = io(getSocketBaseUrl(), {
+            transports: ["websocket", "polling"],
+            reconnection: true,
+        });
+
+        const refrescarPermisos = async () => {
+            try {
+                const data = await refrescarTokenSesion();
+                if (data?.token) {
+                    setAuthVersion((version) => version + 1);
+                }
+            } catch (error) {
+                console.error("Error al sincronizar permisos de rol:", error);
+            }
+        };
+
+        socket.on("roles_updated", refrescarPermisos);
+
+        return () => {
+            socket.off("roles_updated", refrescarPermisos);
+            socket.disconnect();
+        };
+    }, [isAuthenticated, authReady]);
 
     return (
         <Router>
             <div className={`wrapper ${!isAuthenticated ? 'wrapper-login' : ''}`}>
-                {isAuthenticated && <Header onLogout={handleLogout} />}
-                {isAuthenticated && <SideNav />}
+                {isAuthenticated && <Header key={`header-${authVersion}`} onLogout={handleLogout} />}
+                {isAuthenticated && <SideNav key={`sidenav-${authVersion}`} />}
 
                 <div className="content-wrapper">
+                    {isAuthenticated && !authReady ? (
+                        <div className="p-4 text-muted">Cargando permisos...</div>
+                    ) : (
                     <Routes>
                         <Route path="/login" element={!isAuthenticated ? <Login onLoginSuccess={handleLoginSuccess} /> : <Navigate to={getDefaultAuthenticatedPath()} />} />
 
@@ -312,6 +384,7 @@ function App() {
 
                         <Route path="*" element={<Navigate to={isAuthenticated ? getDefaultAuthenticatedPath() : "/login"} replace />} />
                     </Routes>
+                    )}
                 </div>
 
                 {isAuthenticated && <Footer />}

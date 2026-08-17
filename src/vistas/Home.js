@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import DataTable from 'react-data-table-component';
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import { io } from "socket.io-client";
 import './Home.css';
 
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
@@ -40,30 +41,68 @@ const Home = () => {
     const [ayudanteId, setAyudanteId] = useState('');  // Ayudante
 
     
-    useEffect(() => {
-      const fetchData = async () => {
+    const cargarSoportesHome = useCallback(async () => {
+      try {
+        const soportesData = await obtenerSoportes();
+        setSoportes(Array.isArray(soportesData) ? soportesData : []);
+      } catch (error) {
+        console.error("No se pudieron cargar pendientes de soporte:", error);
+        setSoportes([]);
+      }
+    }, []);
+
+    const cargarActividadesHome = useCallback(async () => {
+      const actividadesData = await cargarActividades();
+      setActividades(actividadesData);
+    }, []);
+
+    const cargarDatosHome = useCallback(async () => {
           setLoading(true);
   
           const centrosData = await cargarCentrosClientes(); // Carga centros
           setCentros(centrosData); // Asigna los datos de los centros
-          const actividadesData = await cargarActividades(); // Carga actividades
-          setActividades(actividadesData);
+          await cargarActividadesHome();
   
           const encargadosData = await cargarEncargados(); // Carga encargados
           setEncargados(encargadosData);
-
-          try {
-            const soportesData = await obtenerSoportes();
-            setSoportes(Array.isArray(soportesData) ? soportesData : []);
-          } catch (error) {
-            console.error("No se pudieron cargar pendientes de soporte:", error);
-            setSoportes([]);
-          }
+          await cargarSoportesHome();
                               
           setLoading(false);
+    }, [cargarActividadesHome, cargarSoportesHome]);
+
+    useEffect(() => {
+      cargarDatosHome();
+    }, [cargarDatosHome]);
+
+    useEffect(() => {
+      const env = process.env.REACT_APP_API_BASE_URL;
+      const socketBaseUrl = env && /^https?:\/\//i.test(env)
+        ? env.replace(/\/api\/?$/i, "")
+        : window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : `${window.location.protocol}//${window.location.host}`;
+      const socket = io(socketBaseUrl, {
+        transports: process.env.REACT_APP_SOCKET_POLLING_ONLY === "1" ? ["polling"] : ["websocket", "polling"],
+        reconnection: true
+      });
+      const refrescarSoportes = () => cargarSoportesHome();
+      const refrescarActividades = () => cargarActividadesHome();
+      socket.on("soporte_updated", refrescarSoportes);
+      socket.on("actividad_updated", refrescarActividades);
+      return () => {
+        socket.off("soporte_updated", refrescarSoportes);
+        socket.off("actividad_updated", refrescarActividades);
+        socket.disconnect();
       };
-      fetchData();
-    }, []);
+    }, [cargarActividadesHome, cargarSoportesHome]);
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        cargarSoportesHome();
+        cargarActividadesHome();
+      }, 8000);
+      return () => clearInterval(interval);
+    }, [cargarActividadesHome, cargarSoportesHome]);
 
     useEffect(() => {
       setPaginaSoportes(1);
@@ -226,6 +265,16 @@ const obtenerUbicacionAreaCentro = (soporte) => {
   const areaCentro = String(soporte?.centro?.area || "").trim();
   return [ubicacion, areaCentro].filter(Boolean).join(" / ");
 };
+const actividadAsignadaPorSoporte = (Array.isArray(actividades) ? actividades : []).reduce((acc, actividad) => {
+  const soporteId = Number(actividad?.soporte_id || 0);
+  if (!soporteId) return acc;
+  const estado = String(actividad?.estado || "").toLowerCase();
+  if (estado === "finalizado" || estado === "cancelado") return acc;
+  if (!acc.has(soporteId)) {
+    acc.set(soporteId, actividad);
+  }
+  return acc;
+}, new Map());
 const clientesSoporte = Object.entries(
   soportesPendientesAbiertos.reduce((acc, soporte) => {
     const cliente = obtenerClienteSoporte(soporte);
@@ -233,9 +282,40 @@ const clientesSoporte = Object.entries(
     return acc;
   }, {})
 ).sort((a, b) => a[0].localeCompare(b[0]));
-const soportesFiltradosPorCliente = clienteSoporte === "todos"
+const soportesBaseFiltradosPorCliente = clienteSoporte === "todos"
   ? soportesPendientesAbiertos
   : soportesPendientesAbiertos.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+const obtenerOrdenSoporteHome = (soporte) => {
+  if (actividadAsignadaPorSoporte.has(Number(soporte?.id_soporte || 0))) return 0;
+  const estado = String(soporte?.estado || "pendiente").toLowerCase();
+  if (estado === "pendiente") return 1;
+  return 2;
+};
+const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCliente].sort((a, b) => {
+  const ordenA = obtenerOrdenSoporteHome(a);
+  const ordenB = obtenerOrdenSoporteHome(b);
+  if (ordenA !== ordenB) return ordenA - ordenB;
+  return (b.diasAbiertos || 0) - (a.diasAbiertos || 0);
+});
+const obtenerTecnicosActividad = (actividad) => {
+  if (!actividad) return [];
+  const tecnicos = [];
+  const vistos = new Set();
+  const agregar = (tecnico) => {
+    const nombre = String(tecnico?.nombre_encargado || "").trim();
+    const id = Number(tecnico?.id_encargado || 0);
+    const key = id || nombre;
+    if (!nombre || vistos.has(key)) return;
+    vistos.add(key);
+    tecnicos.push(nombre);
+  };
+  agregar(actividad.encargado_principal);
+  agregar(actividad.encargado_ayudante);
+  if (Array.isArray(actividad.tecnicos_asignados)) {
+    actividad.tecnicos_asignados.forEach(agregar);
+  }
+  return tecnicos;
+};
 const soportesPorPagina = 5;
 const totalSoportesFiltrados = soportesFiltradosPorCliente.length;
 const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / soportesPorPagina));
@@ -382,34 +462,53 @@ const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoporte
 
                 {soportesPrioritariosHome.length ? (
                     <ul className="support-priority-list">
-                        {soportesPrioritariosHome.map((soporte) => {
-                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
-                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
-                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
-                            return (
-                                <li className={`support-priority-item ${esAlerta ? "is-alert" : ""}`} key={soporte.id_soporte}>
-                                    <div className="support-priority-main">
-                                        <div className="support-priority-title-row">
-                                            <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
-                                            {ubicacionArea && (
-                                                <span className="support-area-chip">{ubicacionArea}</span>
-                                            )}
-                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
-                                                {esRemoto ? "Remoto" : "Terreno"}
-                                            </span>
-                                        </div>
+	                        {soportesPrioritariosHome.map((soporte) => {
+	                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
+	                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
+	                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
+	                            const actividadAsignada = actividadAsignadaPorSoporte.get(Number(soporte.id_soporte || 0));
+	                            const tecnicosActividad = obtenerTecnicosActividad(actividadAsignada);
+	                            return (
+	                                <li className={`support-priority-item ${esAlerta ? "is-alert" : ""} ${actividadAsignada ? "is-scheduled" : ""}`} key={soporte.id_soporte}>
+	                                    <div className="support-priority-main">
+	                                        <div className="support-priority-title-row">
+	                                            <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
+		                                            {ubicacionArea && (
+		                                                <span className="support-area-chip">{ubicacionArea}</span>
+		                                            )}
+		                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
+		                                                {esRemoto ? "Remoto" : "Terreno"}
+		                                            </span>
+	                                        </div>
                                         {soporte.problema && (
                                             <div className="support-priority-problem">{soporte.problema}</div>
                                         )}
-                                        <small>
-                                            {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
-                                        </small>
-                                    </div>
-                                    <span className={`support-priority-days ${esAlerta ? "is-alert" : ""}`}>
-                                        <i className="fas fa-clock mr-1" />
-                                        {soporte.diasAbiertos} dia{soporte.diasAbiertos === 1 ? "" : "s"}
-                                    </span>
-                                </li>
+	                                        <small>
+	                                            {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
+	                                        </small>
+	                                        {actividadAsignada && (
+	                                            <div className="support-assigned-row">
+	                                                <span>
+	                                                    <i className="fas fa-user-check mr-1" />
+	                                                    {tecnicosActividad.length ? tecnicosActividad.join(" / ") : "Tecnico pendiente"}
+	                                                </span>
+	                                                <span>
+	                                                    <i className="fas fa-calendar-check mr-1" />
+	                                                    {formatearFecha(actividadAsignada.fecha_inicio)}
+	                                                </span>
+	                                            </div>
+	                                        )}
+	                                    </div>
+	                                    <div className="support-priority-status">
+	                                        <span className={`support-priority-days ${esAlerta ? "is-alert" : ""}`}>
+	                                            <i className="fas fa-clock mr-1" />
+	                                            {soporte.diasAbiertos} dia{soporte.diasAbiertos === 1 ? "" : "s"}
+	                                        </span>
+	                                        {actividadAsignada && (
+	                                            <span className="support-scheduled-chip">Asignado</span>
+	                                        )}
+	                                    </div>
+	                                </li>
                             );
                         })}
                     </ul>

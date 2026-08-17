@@ -28,6 +28,8 @@ if (isBrowser) {
     }
 }
 
+export const API_BASE_URL = BASE_URL;
+
 export const loginUsuario = async (credenciales) => {
     try {
         const response = await axios.post(`${BASE_URL}/auth/login`, credenciales);
@@ -287,6 +289,18 @@ export const actualizarEquipo = async (id_equipo, equipoData) => {
     } catch (error) {
         throw error;
     }
+};
+
+export const refrescarTokenSesion = async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return null;
+    const response = await axios.get(`${BASE_URL}/auth/refresh-token`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data?.token) {
+        localStorage.setItem("token", response.data.token);
+    }
+    return response.data;
 };
 
 export const obtenerRoles = async () => {

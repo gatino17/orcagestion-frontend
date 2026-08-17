@@ -169,6 +169,7 @@ function Calendario() {
   const [encargadoId, setEncargadoId] = useState("");
   const [ayudanteId, setAyudanteId] = useState("");
   const [tecnicosAdicionalesIds, setTecnicosAdicionalesIds] = useState([]);
+  const [soporteActividadId, setSoporteActividadId] = useState("");
   const [bloqueoTecnicoId, setBloqueoTecnicoId] = useState("");
   const [bloqueoTipo, setBloqueoTipo] = useState("vacaciones");
   const [bloqueoDesde, setBloqueoDesde] = useState("");
@@ -386,6 +387,7 @@ function Calendario() {
     setTecnicosAdicionalesIds(adicionales);
     setCentroId(actividad.centro?.id_centro || "");
     setEstadoActividad(actividad.estado || "En progreso");
+    setSoporteActividadId(actividad.soporte_id ? String(actividad.soporte_id) : "");
     setShowModal(true);
   };
 
@@ -474,7 +476,8 @@ function Calendario() {
       tecnico_ayudante: ayudanteId ? parseInt(ayudanteId, 10) : null,
       tecnicos_adicionales: tecnicosAdicionales,
       estado: estadoActividad || null,
-      centro_id: centroId ? parseInt(centroId, 10) : null
+      centro_id: centroId ? parseInt(centroId, 10) : null,
+      soporte_id: soporteActividadId ? parseInt(soporteActividadId, 10) : null
     };
 
     try {
@@ -505,6 +508,7 @@ function Calendario() {
     setTecnicosAdicionalesIds([]);
     setCentroId("");
     setClienteId("");
+    setSoporteActividadId("");
     setEstadoActividad("En progreso");
     setEditarActividad(null);
   };
@@ -687,6 +691,7 @@ function Calendario() {
     setEncargadoId("");
     setAyudanteId("");
     setTecnicosAdicionalesIds([]);
+    setSoporteActividadId(soporte?.id_soporte ? String(soporte.id_soporte) : "");
     setShowModal(true);
   };
 
@@ -707,6 +712,7 @@ function Calendario() {
     setEncargadoId("");
     setAyudanteId("");
     setTecnicosAdicionalesIds([]);
+    setSoporteActividadId(payload?.id_soporte ? String(payload.id_soporte) : "");
     setShowModal(true);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, location.pathname, navigate]);
