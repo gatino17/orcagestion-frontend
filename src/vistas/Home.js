@@ -61,6 +61,7 @@ const Home = () => {
     const [loadingArmadosHome, setLoadingArmadosHome] = useState(false);
     const [paginaSoportes, setPaginaSoportes] = useState(1);
     const [clienteSoporte, setClienteSoporte] = useState("todos");
+    const [filtroSoporteHome, setFiltroSoporteHome] = useState("todos");
     const [loading, setLoading] = useState(true);
 
     // Estado para actividad en edicion y mostrar modal
@@ -175,7 +176,7 @@ const Home = () => {
 
     useEffect(() => {
       setPaginaSoportes(1);
-    }, [clienteSoporte]);
+    }, [clienteSoporte, filtroSoporteHome]);
  
     const handleGuardarActividad = async () => {
         const datosActividad = {
@@ -333,19 +334,29 @@ const actividadAsignadaPorSoporte = (Array.isArray(actividades) ? actividades : 
   if (estado === "finalizado" || estado === "cancelado") return acc;
   if (!acc.has(soporteId)) {
     acc.set(soporteId, actividad);
-  }
-  return acc;
-}, new Map());
+	  }
+	  return acc;
+	}, new Map());
+const filtrarSoportePorKpi = (soporte) => {
+  const estado = String(soporte?.estado || "pendiente").toLowerCase();
+  const tipoSoporte = String(soporte?.tipo || "").toLowerCase();
+  if (filtroSoporteHome === "pendientes") return estado === "pendiente";
+  if (filtroSoporteHome === "alertas") return estado === "en_proceso";
+  if (filtroSoporteHome === "remotas") return tipoSoporte === "remoto";
+  if (filtroSoporteHome === "terreno") return tipoSoporte === "terreno";
+  return true;
+};
+const soportesFiltradosPorKpi = soportesPendientesAbiertos.filter(filtrarSoportePorKpi);
 const clientesSoporte = Object.entries(
-  soportesPendientesAbiertos.reduce((acc, soporte) => {
-    const cliente = obtenerClienteSoporte(soporte);
-    acc[cliente] = (acc[cliente] || 0) + 1;
-    return acc;
-  }, {})
-).sort((a, b) => a[0].localeCompare(b[0]));
+	  soportesFiltradosPorKpi.reduce((acc, soporte) => {
+	    const cliente = obtenerClienteSoporte(soporte);
+	    acc[cliente] = (acc[cliente] || 0) + 1;
+	    return acc;
+	  }, {})
+	).sort((a, b) => a[0].localeCompare(b[0]));
 const soportesBaseFiltradosPorCliente = clienteSoporte === "todos"
-  ? soportesPendientesAbiertos
-  : soportesPendientesAbiertos.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+	  ? soportesFiltradosPorKpi
+	  : soportesFiltradosPorKpi.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
 const obtenerOrdenSoporteHome = (soporte) => {
   if (actividadAsignadaPorSoporte.has(Number(soporte?.id_soporte || 0))) return 0;
   const estado = String(soporte?.estado || "pendiente").toLowerCase();
@@ -700,39 +711,58 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
         
     return (
         <div className="container-fluid home-dashboard">
-            <div className="home-header">
-                <div>
-                    <h2>Panel operativo</h2>
-                    <p>Monitorea los centros, actividades y cargas de trabajo del equipo en un solo vistazo.</p>
-                </div>
-            </div>
+	            <div className="home-header">
+	                <div>
+	                    <h2>Panel operativo</h2>
+	                </div>
+	            </div>
 
             <div className="home-metrics-grid">
-                <div className="metric-card support-kpi-card support-kpi-open">
-                    <span>Total fallas abiertas</span>
-                    <h3>{totalSoportesAbiertos}</h3>
-                    <small>Soportes pendientes de cierre</small>
-                </div>
-                <div className="metric-card critical support-kpi-card">
-                    <span>Pendientes</span>
-                    <h3>{totalSoportesPendientes}</h3>
-                    <small>Sin gestion completa</small>
-                </div>
-                <div className="metric-card support-kpi-card support-kpi-warning">
-                    <span>Alertas</span>
-                    <h3>{totalSoportesAlertas}</h3>
-                    <small>Casos en seguimiento</small>
-                </div>
-                <div className="metric-card support-kpi-card support-kpi-info">
-                    <span>Remotas</span>
-                    <h3>{totalSoportesRemotos}</h3>
-                    <small>Atencion sin terreno</small>
-                </div>
-                <div className="metric-card support-kpi-card support-kpi-primary">
-                    <span>Terreno</span>
-                    <h3>{totalSoportesTerreno}</h3>
-                    <small>Requieren visita o gestion local</small>
-                </div>
+	                <button
+	                    type="button"
+	                    className={`metric-card support-kpi-card support-kpi-open ${filtroSoporteHome === "todos" ? "active" : ""}`}
+	                    onClick={() => setFiltroSoporteHome("todos")}
+	                >
+	                    <span>Total fallas abiertas</span>
+	                    <h3>{totalSoportesAbiertos}</h3>
+	                    <small>Soportes pendientes de cierre</small>
+	                </button>
+	                <button
+	                    type="button"
+	                    className={`metric-card critical support-kpi-card ${filtroSoporteHome === "pendientes" ? "active" : ""}`}
+	                    onClick={() => setFiltroSoporteHome("pendientes")}
+	                >
+	                    <span>Pendientes</span>
+	                    <h3>{totalSoportesPendientes}</h3>
+	                    <small>Sin gestion completa</small>
+	                </button>
+	                <button
+	                    type="button"
+	                    className={`metric-card support-kpi-card support-kpi-warning ${filtroSoporteHome === "alertas" ? "active" : ""}`}
+	                    onClick={() => setFiltroSoporteHome("alertas")}
+	                >
+	                    <span>Alertas</span>
+	                    <h3>{totalSoportesAlertas}</h3>
+	                    <small>Casos en seguimiento</small>
+	                </button>
+	                <button
+	                    type="button"
+	                    className={`metric-card support-kpi-card support-kpi-info ${filtroSoporteHome === "remotas" ? "active" : ""}`}
+	                    onClick={() => setFiltroSoporteHome("remotas")}
+	                >
+	                    <span>Remotas</span>
+	                    <h3>{totalSoportesRemotos}</h3>
+	                    <small>Atencion sin terreno</small>
+	                </button>
+	                <button
+	                    type="button"
+	                    className={`metric-card support-kpi-card support-kpi-primary ${filtroSoporteHome === "terreno" ? "active" : ""}`}
+	                    onClick={() => setFiltroSoporteHome("terreno")}
+	                >
+	                    <span>Terreno</span>
+	                    <h3>{totalSoportesTerreno}</h3>
+	                    <small>Requieren visita o gestion local</small>
+	                </button>
             </div>
 
             <div className="home-operational-grid">
@@ -751,7 +781,7 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
                                 onClick={() => setClienteSoporte("todos")}
                             >
                                 <span>Todos</span>
-                                <strong>{totalSoportesAbiertos}</strong>
+	                                <strong>{soportesFiltradosPorKpi.length}</strong>
                             </button>
                             {clientesSoporte.map(([cliente, cantidad]) => (
                                 <button

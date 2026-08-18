@@ -222,6 +222,7 @@ const Soporte = () => {
     const [errorFechaCierre, setErrorFechaCierre] = useState("");
     const [editarSoporte, setEditarSoporte] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [guardandoSoporte, setGuardandoSoporte] = useState(false);
 
     // Estado para filtrar por periodo
     const [filtroPeriodo, setFiltroPeriodo] = useState("anio-actual");
@@ -525,6 +526,8 @@ const Soporte = () => {
     };
 
     const handleGuardarSoporte = async () => {
+        if (guardandoSoporte) return;
+
         if (!origen) {
             alert("Selecciona el origen del soporte.");
             return;
@@ -564,18 +567,21 @@ const Soporte = () => {
             fecha_cierre: fechaCierre || null
         };
 
-        if (editarSoporte) {
-            await modificarSoporte(editarSoporte.id_soporte, soporteData, async () => {
-                await refrescarSoportes();
+        setGuardandoSoporte(true);
+        try {
+            const onSuccess = async () => {
                 resetForm();
                 setShowModal(false);
-            });
-        } else {
-            await agregarSoporte(soporteData, async () => {
                 await refrescarSoportes();
-                resetForm();
-                setShowModal(false);
-            });
+            };
+
+            if (editarSoporte) {
+                await modificarSoporte(editarSoporte.id_soporte, soporteData, onSuccess);
+            } else {
+                await agregarSoporte(soporteData, onSuccess);
+            }
+        } finally {
+            setGuardandoSoporte(false);
         }
     };
 
@@ -1771,12 +1777,19 @@ const Soporte = () => {
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                                    Cerrar
-                                </button>
-                                <button className="btn btn-primary" onClick={handleGuardarSoporte}>
-                                    Guardar
-                                </button>
+	                                <button className="btn btn-secondary" onClick={() => setShowModal(false)} disabled={guardandoSoporte}>
+	                                    Cerrar
+	                                </button>
+	                                <button className="btn btn-primary" onClick={handleGuardarSoporte} disabled={guardandoSoporte}>
+	                                    {guardandoSoporte ? (
+	                                        <>
+	                                            <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+	                                            Guardando...
+	                                        </>
+	                                    ) : (
+	                                        "Guardar"
+	                                    )}
+	                                </button>
                             </div>
                         </div>
                     </div>
