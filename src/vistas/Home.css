@@ -626,6 +626,11 @@ button.metric-card.active {
     background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
 }
 
+.home-work-item.from-armado {
+    border-color: rgba(37, 99, 235, 0.34);
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+
 .home-work-main {
     min-width: 0;
 }

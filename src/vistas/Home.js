@@ -495,10 +495,63 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
   const fechaB = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
   return fechaB - fechaA;
 });
-  
-    
 
-    // Filtra los encargados para evitar seleccionar el mismo encargado como ayudante
+const obtenerTecnicosArmadoHome = (armado) => {
+  const activos = Array.isArray(armado?.tecnicos_asignados) ? armado.tecnicos_asignados : [];
+  const principal = armado?.tecnico?.nombre || armado?.tecnico_nombre || "";
+  const apoyo = activos.map((tec) => tec?.nombre).filter(Boolean);
+  return [...new Set([principal, ...apoyo].filter(Boolean))];
+};
+
+const trabajosCursoHoyOperativos = [
+  ...trabajosCursoHoy.map((actividad) => {
+    const estado = String(actividad.estado || "Sin estado");
+    return {
+      key: `actividad-${actividad.id_actividad}`,
+      centro: actividad.centro?.nombre || "Sin centro",
+      cliente: actividad.centro?.cliente || "Sin cliente",
+      tipo: actividad.area || actividad.nombre_actividad || "Actividad",
+      fecha: actividad.fecha_inicio,
+      tecnicos: obtenerTecnicosActividad(actividad),
+      estado,
+      estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
+      destacado: Number(actividad?.soporte_id || 0) > 0,
+      extraClass: Number(actividad?.soporte_id || 0) > 0 ? "from-support" : "",
+      orden: Number(actividad?.soporte_id || 0) > 0 ? 0 : 2,
+      timestamp: new Date(actividad?.fecha_inicio || 0).getTime() || 0
+    };
+  }),
+  ...armadosHomeOperativos
+	    .filter((armado) => {
+	      const estado = normalizarTexto(armado?.estado || "");
+	      if (!estado || estado === "finalizado" || estado === "cancelado" || estado === "anulado") return false;
+	      return true;
+	    })
+    .map((armado) => {
+      const estado = String(armado.estado || "Sin estado");
+      return {
+        key: `armado-${armado.id_armado}`,
+        centro: armado.centro?.nombre || armado.centro_nombre || "Sin centro",
+        cliente: armado.centro?.cliente || armado.cliente_nombre || "Sin cliente",
+        tipo: "Armado",
+        fecha: armado.fecha_inicio || armado.fecha_asignacion,
+        tecnicos: obtenerTecnicosArmadoHome(armado),
+        estado,
+        estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
+        destacado: false,
+        extraClass: "from-armado",
+        orden: 1,
+        timestamp: new Date(armado.fecha_inicio || armado.fecha_asignacion || 0).getTime() || 0
+      };
+    })
+].sort((a, b) => {
+  if (a.orden !== b.orden) return a.orden - b.orden;
+  return b.timestamp - a.timestamp;
+}).slice(0, 6);
+	  
+	    
+
+	    // Filtra los encargados para evitar seleccionar el mismo encargado como ayudante
     const filteredAyudantes = encargados.filter(encargado => encargado.id_encargado !== parseInt(encargadoId));
 
 
@@ -891,34 +944,28 @@ const armadosHomeOperativos = (Array.isArray(armadosHome) ? armadosHome : []).ma
 		                        <span className="home-section-kicker">Operacion diaria</span>
 		                        <h5>Trabajo en curso de hoy</h5>
 		                    </div>
-		                    <span className="home-work-count">{trabajosCursoHoy.length}</span>
-		                </div>
-		                {trabajosCursoHoy.length ? (
-		                    <div className="home-work-list">
-		                        {trabajosCursoHoy.map((actividad) => {
-		                            const tecnicos = obtenerTecnicosActividad(actividad);
-		                            const estado = String(actividad.estado || "Sin estado");
-		                            const estadoClass = normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado";
-		                            const vieneDeSoporte = Number(actividad?.soporte_id || 0) > 0;
-		                            const centroTrabajo = actividad.centro?.nombre || "Sin centro";
-		                            const clienteTrabajo = actividad.centro?.cliente || "Sin cliente";
-		                            return (
-		                                <div className={`home-work-item ${vieneDeSoporte ? "from-support" : ""}`} key={actividad.id_actividad}>
-		                                    <div className="home-work-main">
-		                                        <div className="home-work-title-row">
-		                                            <strong>{centroTrabajo}</strong>
-		                                            <span className="home-pill home-state-en-progreso">{actividad.area || actividad.nombre_actividad || "Sin tipo"}</span>
-		                                        </div>
-		                                        <small>{clienteTrabajo}</small>
-		                                        <div className="home-work-meta">
-		                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(actividad.fecha_inicio)}</span>
-		                                            <span><i className="fas fa-user-check mr-1" />{tecnicos.length ? tecnicos.join(" / ") : "Tecnico pendiente"}</span>
-		                                        </div>
-		                                    </div>
-	                                    <span className={`home-pill home-state-${estadoClass}`}>{estado}</span>
-	                                </div>
-	                            );
-	                        })}
+			                    <span className="home-work-count">{trabajosCursoHoyOperativos.length}</span>
+			                </div>
+			                {trabajosCursoHoyOperativos.length ? (
+			                    <div className="home-work-list">
+			                        {trabajosCursoHoyOperativos.map((trabajo) => {
+			                            return (
+			                                <div className={`home-work-item ${trabajo.extraClass}`} key={trabajo.key}>
+			                                    <div className="home-work-main">
+			                                        <div className="home-work-title-row">
+			                                            <strong>{trabajo.centro}</strong>
+			                                            <span className="home-pill home-state-en-progreso">{trabajo.tipo}</span>
+			                                        </div>
+			                                        <small>{trabajo.cliente}</small>
+			                                        <div className="home-work-meta">
+			                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(trabajo.fecha)}</span>
+			                                            <span><i className="fas fa-user-check mr-1" />{trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente"}</span>
+			                                        </div>
+			                                    </div>
+		                                    <span className={`home-pill home-state-${trabajo.estadoClass}`}>{trabajo.estado}</span>
+		                                </div>
+		                            );
+		                        })}
 	                    </div>
 	                ) : (
 		                    <div className="support-priority-empty">
