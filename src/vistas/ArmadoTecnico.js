@@ -2218,12 +2218,30 @@ const ArmadoTecnico = () => {
         if (!puedeGestionarArmados) return;
         const id = row.id_armado || row.id;
         if (!id) return;
+        const estadoAnterior = row.estado || "pendiente";
+        const fechaCierreAnterior = row.fecha_cierre || null;
+        const hoy = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+        const payload = { estado: nuevoEstado };
+        if (nuevoEstado === "finalizado") {
+            payload.fecha_cierre = hoy;
+        }
+        const patchLocal = {
+            estado: nuevoEstado,
+            ...(nuevoEstado === "finalizado" ? { fecha_cierre: hoy } : {})
+        };
+        setArmados((prev) =>
+            prev.map((item) =>
+                Number(item?.id_armado || item?.id || 0) === Number(id)
+                    ? { ...item, ...patchLocal }
+                    : item
+            )
+        );
+        setArmadoActivo((prev) =>
+            Number(prev?.id_armado || prev?.id || 0) === Number(id)
+                ? { ...prev, ...patchLocal }
+                : prev
+        );
         try {
-            const hoy = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
-            const payload = { estado: nuevoEstado };
-            if (nuevoEstado === "finalizado") {
-                payload.fecha_cierre = hoy;
-            }
             await modificarArmado(id, payload);
             if (nuevoEstado === "finalizado") {
                 window.dispatchEvent(
@@ -2238,8 +2256,20 @@ const ArmadoTecnico = () => {
                     })
                 );
             }
-            await fetchArmados();
+            await fetchArmados({ silent: true });
         } catch (err) {
+            setArmados((prev) =>
+                prev.map((item) =>
+                    Number(item?.id_armado || item?.id || 0) === Number(id)
+                        ? { ...item, estado: estadoAnterior, fecha_cierre: fechaCierreAnterior }
+                        : item
+                )
+            );
+            setArmadoActivo((prev) =>
+                Number(prev?.id_armado || prev?.id || 0) === Number(id)
+                    ? { ...prev, estado: estadoAnterior, fecha_cierre: fechaCierreAnterior }
+                    : prev
+            );
             console.error("No se pudo actualizar estado:", err);
             alert("No se pudo actualizar el estado.");
         }
