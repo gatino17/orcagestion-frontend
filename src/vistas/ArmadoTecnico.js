@@ -1262,9 +1262,15 @@ const ArmadoTecnico = () => {
 
     const construirResumenCajas = useCallback((listaMovimientos = []) => {
         const porCaja = new Map();
+        const cajasActivasDesdeEstado = Object.keys(cajasEstadoHistorial);
+        const limitarACajasActivas = cajasActivasDesdeEstado.length > 0;
+        const cajasActivasKeys = new Set(
+            cajasActivasDesdeEstado.map((nombreCaja) => nombreCajaSeguro(nombreCaja).trim().toLowerCase())
+        );
         const asegurarCaja = (nombreCaja) => {
             const limpio = nombreCajaSeguro(nombreCaja);
             if (esCajaVirtualOEspecial(limpio)) return null;
+            if (limitarACajasActivas && !cajasActivasKeys.has(limpio.trim().toLowerCase())) return null;
             if (!porCaja.has(limpio)) {
                 porCaja.set(limpio, {
                     nombre: limpio,
@@ -1278,7 +1284,7 @@ const ArmadoTecnico = () => {
             return porCaja.get(limpio);
         };
 
-        Object.keys(cajasEstadoHistorial).forEach((nombreCaja) => asegurarCaja(nombreCaja));
+        cajasActivasDesdeEstado.forEach((nombreCaja) => asegurarCaja(nombreCaja));
 
         const ultimosItems = new Map();
         [...(Array.isArray(listaMovimientos) ? listaMovimientos : [])]
@@ -1302,6 +1308,7 @@ const ArmadoTecnico = () => {
 
         ultimosItems.forEach((mov) => {
             const caja = asegurarCaja(mov.caja);
+            if (!caja) return;
             const fechaMov = mov?.fecha || null;
             if (fechaMov && (!caja.ultimaFecha || new Date(fechaMov).getTime() > new Date(caja.ultimaFecha).getTime())) {
                 caja.ultimaFecha = fechaMov;
