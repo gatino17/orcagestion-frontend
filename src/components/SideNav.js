@@ -17,6 +17,7 @@ const navItems = [
   { section: "PLANIFICACION", label: "Calendario", to: "/calendario", pageKey: "calendario", icon: "far fa-calendar-alt", roles: ["admin", "operaciones", "soporte"] },
   { section: "PLANIFICACION", label: "Historial de trabajos", to: "/historial-trabajos", pageKey: "historial_trabajos", icon: "fas fa-history", roles: ["admin", "operaciones", "soporte"] },
   { section: "ANALITICA", label: "Historial por centro", to: "/historial-centro", pageKey: "historial_centro", icon: "far fa-list-alt", roles: ["admin", "finanzas", "operaciones"] },
+  { section: "ANALITICA", label: "Asistente operativo", to: "/asistente-operativo", pageKey: "asistente_operativo", icon: "fas fa-comments", roles: ["admin"] },
   { section: "REGISTROS", label: "Datos IP", to: "/datos-ip", pageKey: "datos_ip", icon: "fas fa-network-wired", roles: ["admin", "operaciones", "soporte"] },
   { section: "REGISTROS", label: "Clientes", to: "/clientes", pageKey: "clientes", icon: "fas fa-user-plus", roles: ["admin", "operaciones"] },
   { section: "REGISTROS", label: "Centros", to: "/centros", pageKey: "centros", icon: "fas fa-folder-plus", roles: ["admin", "operaciones"] },
