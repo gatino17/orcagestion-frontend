@@ -230,22 +230,24 @@
 }
 
 .asistente-message {
-  width: min(760px, 92%);
+  width: fit-content;
+  max-width: min(760px, 92%);
   margin-bottom: 0.85rem;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
+  padding: 0.78rem 0.95rem;
+  border-radius: 16px 18px 18px 6px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.065);
 }
 
 .asistente-message.user {
   margin-left: auto;
+  border-radius: 18px 16px 6px 18px;
   background: linear-gradient(135deg, #0b3b8c, #0ea5e9);
   color: #fff;
 }
 
 .asistente-message.assistant {
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.07);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(14, 165, 233, 0.18);
 }
 
 .asistente-message h6 {
@@ -396,5 +398,6 @@
 
   .asistente-message {
     width: 100%;
+    max-width: 100%;
   }
 }
