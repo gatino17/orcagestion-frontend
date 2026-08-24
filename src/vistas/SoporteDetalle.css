@@ -21,8 +21,22 @@
     background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
 }
 
+.indicadores-row {
+    margin-left: -6px;
+    margin-right: -6px;
+}
+
+.indicadores-row .indicador-col {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.indicadores-row .indicador-card {
+    height: 100%;
+}
+
 .indicador-card .card-body {
-    padding: 1rem 1.25rem;
+    padding: 1rem 1.15rem;
 }
 
 .indicador-header h5 {
@@ -35,6 +49,40 @@
 
 .indicador-selectores .form-control {
     min-width: 120px;
+}
+
+.indicador-header {
+    gap: 0.75rem;
+}
+
+.indicador-header > div:first-child {
+    min-width: 260px;
+}
+
+.indicador-header small {
+    line-height: 1.25;
+}
+
+.indicador-metricas {
+    align-items: center;
+}
+
+.indicador-metricas > [class*="col-"] {
+    margin-bottom: 0.35rem;
+}
+
+.reinicio-actions {
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+.reinicio-actions .form-control {
+    margin-bottom: 0;
+    max-width: 150px;
+}
+
+.reinicio-actions .btn {
+    white-space: nowrap;
 }
 
 .indicador-label {
@@ -74,6 +122,100 @@
 .indicador-critico {
     background: #fee2e2;
     color: #991b1b;
+}
+
+.indicador-reinicios-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 48%, #eff6ff 100%);
+}
+
+.reinicio-progress-wrap {
+    width: 100%;
+    height: 9px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+    margin: 0.2rem 0 0.35rem;
+}
+
+.reinicio-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    transition: width 0.25s ease;
+}
+
+.reinicio-progress-ok {
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.reinicio-progress-alerta {
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.reinicio-progress-critico {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.reinicios-modal {
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.reinicios-modal .modal-header {
+    background: linear-gradient(135deg, #f8fafc, #eff6ff);
+    border-bottom: 1px solid #dbeafe;
+}
+
+.reinicios-modal-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.reinicio-summary-pill,
+.reinicio-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.35rem 0.7rem;
+}
+
+.reinicio-pill-total {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.reinicio-pill-ok,
+.reinicio-status-al-dia {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.reinicio-pill-warning,
+.reinicio-status-pendiente,
+.reinicio-status-por-vencer {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.reinicio-pill-danger,
+.reinicio-status-vencido {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.reinicios-table th {
+    color: #334155;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-top: none;
+}
+
+.reinicios-table td {
+    vertical-align: middle;
 }
 
 .metric-card .card-body {

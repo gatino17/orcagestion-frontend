@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import DataTable from "react-data-table-component";
 import { useNavigate } from "react-router-dom";
 import { cargarSoportes } from "../controllers/soporteControllers";
+import { cargarCentrosClientes } from "../controllers/centrosControllers";
+import { obtenerMantencionPreventiva } from "../api";
 import "./SoporteDetalle.css";
 
 const parseFechaLocal = (valor) => {
@@ -73,9 +75,67 @@ const obtenerSubcategoriaSoporte = (soporte) => {
     return valor || "Sin subcategoria";
 };
 
+const esCentroRetirado = (centro) => {
+    const estado = String(centro?.estado || centro?.status || "").toLowerCase().trim();
+    if (estado.includes("retir")) return true;
+    if (estado.includes("baja")) return true;
+    if (centro?.retirado === true) return true;
+    return false;
+};
+
+const esCentroEnCese = (centro) => {
+    const estado = String(centro?.estado || centro?.status || "").toLowerCase().trim();
+    if (estado.includes("cese")) return true;
+    if (estado.includes("inactivo")) return true;
+    if (centro?.activo === false) return true;
+    if (centro?.en_cese === true) return true;
+    if (centro?.fecha_cese) return true;
+    return false;
+};
+
+const esCentroCentral = (centro) => {
+    if (centro?.es_central === true) return true;
+    const raw = String(centro?.es_central ?? "").toLowerCase().trim();
+    if (raw === "true" || raw === "1" || raw === "si" || raw === "sí") return true;
+    const campos = [
+        centro?.nombre,
+        centro?.tipo,
+        centro?.tipo_centro,
+        centro?.categoria,
+        centro?.categoria_centro,
+        centro?.clasificacion
+    ];
+    return campos.some((valor) => String(valor || "").toLowerCase().includes("central"));
+};
+
+const esCentroActivoOperativo = (centro) => {
+    if (esCentroRetirado(centro) || esCentroEnCese(centro) || esCentroCentral(centro)) return false;
+    const estado = String(centro?.estado || centro?.status || "").toLowerCase().trim();
+    if (!estado) return true;
+    return estado === "activo" || estado.includes("activo") || estado.includes("operativo");
+};
+
+const calcularEstadoReinicio = (fechaStr) => {
+    if (!fechaStr) return { diasFaltantes: null, estado: "Pendiente" };
+    const fecha = parseFechaLocal(fechaStr);
+    if (!fecha) return { diasFaltantes: null, estado: "Pendiente" };
+    const hoyLocal = new Date();
+    const hoy = new Date(hoyLocal.getFullYear(), hoyLocal.getMonth(), hoyLocal.getDate());
+    const base = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    const diasTranscurridos = Math.max(0, Math.floor((hoy.getTime() - base.getTime()) / 86400000));
+    const diasFaltantes = Math.max(0, 7 - diasTranscurridos);
+    return {
+        diasFaltantes,
+        estado: diasFaltantes === 0 ? "Reiniciar" : "Normal"
+    };
+};
+
 const SoporteDetalle = () => {
     const [soportes, setSoportes] = useState([]);
+    const [centros, setCentros] = useState([]);
+    const [reiniciosPreventivos, setReiniciosPreventivos] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingReinicios, setLoadingReinicios] = useState(false);
     const [clienteSeleccionado, setClienteSeleccionado] = useState("");
     const [busquedaCentro, setBusquedaCentro] = useState("");
     const [filtroFecha, setFiltroFecha] = useState("mes-actual");
@@ -85,6 +145,7 @@ const SoporteDetalle = () => {
     const [verCategoriasCliente, setVerCategoriasCliente] = useState(false);
     const [categoriasPorCliente, setCategoriasPorCliente] = useState(false);
     const [showCategoriasModal, setShowCategoriasModal] = useState(false);
+    const [showReiniciosModal, setShowReiniciosModal] = useState(false);
     const [detalleCategoriaModal, setDetalleCategoriaModal] = useState(null);
     const [categoriasModalVista, setCategoriasModalVista] = useState("total");
     const [categoriasModalOrigen, setCategoriasModalOrigen] = useState("todos");
@@ -115,6 +176,35 @@ const SoporteDetalle = () => {
 
         fetchSoportes();
     }, []);
+
+    useEffect(() => {
+        const fetchCentros = async () => {
+            const data = await cargarCentrosClientes();
+            setCentros(Array.isArray(data) ? data : []);
+        };
+
+        fetchCentros();
+    }, []);
+
+    useEffect(() => {
+        const fetchReinicios = async () => {
+            setLoadingReinicios(true);
+            try {
+                const data = await obtenerMantencionPreventiva({
+                    anio: Number(indicadorAnio),
+                    mes: Number(indicadorMes) + 1
+                });
+                setReiniciosPreventivos(Array.isArray(data) ? data : []);
+            } catch (error) {
+                console.error("Error al cargar indicador de reinicios:", error);
+                setReiniciosPreventivos([]);
+            } finally {
+                setLoadingReinicios(false);
+            }
+        };
+
+        fetchReinicios();
+    }, [indicadorAnio, indicadorMes]);
 
     useEffect(() => {
         if (!clienteSeleccionado) {
@@ -273,6 +363,87 @@ const SoporteDetalle = () => {
             nivel
         };
     }, [soportesBaseIndicador, indicadorAnio, indicadorMes]);
+
+    const indicadorReinicios = useMemo(() => {
+        const registrosPorCentro = new Map();
+        reiniciosPreventivos.forEach((registro) => {
+            registrosPorCentro.set(String(registro.centro_id), registro);
+        });
+
+        const obtenerIdCentro = (centro) => centro?.id ?? centro?.id_centro ?? centro?.centro_id;
+        const obtenerClienteCentro = (centro) => {
+            if (typeof centro?.cliente === "string") return centro.cliente;
+            return centro?.cliente?.nombre || centro?.cliente_nombre || centro?.nombre_cliente || "";
+        };
+
+        const centrosBase = centros.filter((centro) => {
+            if (!esCentroActivoOperativo(centro)) return false;
+            const clienteCentro = obtenerClienteCentro(centro);
+            const nombreCentro = String(centro?.nombre || "").toLowerCase();
+            const coincideCliente = clienteSeleccionado ? clienteCentro === clienteSeleccionado : true;
+            const coincideCentro = busquedaCentro ? nombreCentro.includes(busquedaCentro.toLowerCase()) : true;
+            return coincideCliente && coincideCentro;
+        });
+
+        const detalle = centrosBase.map((centro) => {
+            const idCentro = String(obtenerIdCentro(centro));
+            const registro = registrosPorCentro.get(idCentro);
+            const fechaReinicio = registro?.datos_base?.fechaReinicio || "";
+            const fecha = parseFechaLocal(fechaReinicio);
+            const reiniciadoMes =
+                Boolean(fecha) &&
+                fecha.getFullYear() === Number(indicadorAnio) &&
+                fecha.getMonth() === Number(indicadorMes);
+            const calc = calcularEstadoReinicio(fechaReinicio);
+            let estado = "Pendiente";
+            if (reiniciadoMes && calc.estado === "Reiniciar") estado = "Vencido";
+            else if (reiniciadoMes && Number(calc.diasFaltantes) > 0 && Number(calc.diasFaltantes) <= 2) estado = "Por vencer";
+            else if (reiniciadoMes) estado = "Al dia";
+
+            return {
+                idCentro,
+                cliente: obtenerClienteCentro(centro) || "Cliente sin nombre",
+                centro: centro?.nombre || "Centro sin nombre",
+                fechaReinicio,
+                diasFaltantes: calc.diasFaltantes,
+                estado,
+                reiniciadoMes
+            };
+        });
+
+        const reiniciados = detalle.filter((item) => item.reiniciadoMes).length;
+        const pendientes = detalle.filter((item) => item.estado === "Pendiente").length;
+        const porVencer = detalle.filter((item) => item.estado === "Por vencer").length;
+        const vencidos = detalle.filter((item) => item.estado === "Vencido").length;
+        const total = detalle.length;
+        const porcentaje = total ? (reiniciados / total) * 100 : 0;
+        let nivel = "critico";
+        if (porcentaje >= 90 && vencidos === 0) nivel = "ok";
+        else if (porcentaje >= 70 || porVencer > 0) nivel = "alerta";
+
+        const ordenEstado = {
+            Vencido: 1,
+            Pendiente: 2,
+            "Por vencer": 3,
+            "Al dia": 4
+        };
+
+        return {
+            total,
+            reiniciados,
+            pendientes,
+            porVencer,
+            vencidos,
+            porcentaje,
+            nivel,
+            detalle: detalle.sort(
+                (a, b) =>
+                    (ordenEstado[a.estado] || 99) - (ordenEstado[b.estado] || 99) ||
+                    a.cliente.localeCompare(b.cliente) ||
+                    a.centro.localeCompare(b.centro)
+            )
+        };
+    }, [centros, reiniciosPreventivos, clienteSeleccionado, busquedaCentro, indicadorAnio, indicadorMes]);
 
     const totalFallas = soportesAnalisis.length;
     const resumenEstadoFiltro = useMemo(() => {
@@ -1006,8 +1177,8 @@ const SoporteDetalle = () => {
                 </div>
             </div>
 
-            <div className="row mb-3 metrics-top-row">
-                <div className="col-12 mb-3">
+            <div className="row mb-3 metrics-top-row indicadores-row">
+                <div className="col-12 col-xl-6 mb-3 indicador-col">
                     <div className="card indicador-card">
                         <div className="card-body">
                             <div className="d-flex flex-wrap justify-content-between align-items-center indicador-header mb-3">
@@ -1067,6 +1238,89 @@ const SoporteDetalle = () => {
                                             : indicadorTickets15.nivel === "alerta"
                                                 ? "En seguimiento"
                                                 : "Bajo meta"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-12 col-xl-6 mb-3 indicador-col">
+                    <div className="card indicador-card indicador-reinicios-card h-100">
+                        <div className="card-body">
+                            <div className="d-flex flex-wrap justify-content-between align-items-center indicador-header mb-3">
+                                <div>
+                                    <h5 className="mb-1">Indicador: reinicios de sistemas</h5>
+                                    <small className="text-muted">
+                                        Cumplimiento mensual por centros activos del periodo seleccionado.
+                                    </small>
+                                </div>
+                                <div className="d-flex flex-wrap align-items-center indicador-selectores reinicio-actions">
+                                    <select
+                                        className="form-control form-control-sm"
+                                        value={indicadorMes}
+                                        onChange={(e) => setIndicadorMes(Number(e.target.value))}
+                                    >
+                                        {MESES.map((mes, index) => (
+                                            <option key={`reinicio-${mes}`} value={index}>
+                                                {mes}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        className="form-control form-control-sm"
+                                        value={indicadorAnio}
+                                        onChange={(e) => setIndicadorAnio(Number(e.target.value))}
+                                    >
+                                        {aniosIndicador.map((anio) => (
+                                            <option key={`reinicio-${anio}`} value={anio}>
+                                                {anio}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm"
+                                        onClick={() => setShowReiniciosModal(true)}
+                                    >
+                                        <i className="fas fa-list-ul mr-1"></i>
+                                        Ver detalle
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="row indicador-metricas">
+                                <div className="col-6 col-lg-3">
+                                    <span className="indicador-label">Centros</span>
+                                    <strong className="d-block indicador-valor">{indicadorReinicios.total}</strong>
+                                </div>
+                                <div className="col-6 col-lg-3">
+                                    <span className="indicador-label">Reiniciados</span>
+                                    <strong className="d-block indicador-valor text-success">{indicadorReinicios.reiniciados}</strong>
+                                </div>
+                                <div className="col-6 col-lg-3">
+                                    <span className="indicador-label">Pendientes</span>
+                                    <strong className="d-block indicador-valor text-warning">{indicadorReinicios.pendientes}</strong>
+                                </div>
+                                <div className="col-6 col-lg-3">
+                                    <span className="indicador-label">Vencidos</span>
+                                    <strong className="d-block indicador-valor text-danger">{indicadorReinicios.vencidos}</strong>
+                                </div>
+                                <div className="col-md-8 mt-1">
+                                    <span className="indicador-label">Cumplimiento</span>
+                                    <div className="reinicio-progress-wrap">
+                                        <div
+                                            className={`reinicio-progress-bar reinicio-progress-${indicadorReinicios.nivel}`}
+                                            style={{ width: `${Math.min(100, indicadorReinicios.porcentaje)}%` }}
+                                        ></div>
+                                    </div>
+                                    <small className="text-muted">
+                                        Por vencer: {indicadorReinicios.porVencer}
+                                    </small>
+                                </div>
+                                <div className="col-md-4 d-flex align-items-end justify-content-md-end mt-1">
+                                    <span className={`indicador-estado indicador-${indicadorReinicios.nivel}`}>
+                                        {loadingReinicios
+                                            ? "Cargando"
+                                            : `${indicadorReinicios.porcentaje.toFixed(1)}%`}
                                     </span>
                                 </div>
                             </div>
@@ -1511,6 +1765,88 @@ const SoporteDetalle = () => {
                 </div>
             </div>
 
+            {showReiniciosModal && (
+                <div className="modal show" style={{ display: "block" }}>
+                    <div className="modal-dialog modal-xl modal-dialog-scrollable">
+                        <div className="modal-content reinicios-modal">
+                            <div className="modal-header">
+                                <div>
+                                    <h5 className="mb-1">Detalle de reinicios de sistemas</h5>
+                                    <small className="text-muted">
+                                        {MESES[indicadorMes]} {indicadorAnio}
+                                        {clienteSeleccionado ? ` - ${clienteSeleccionado}` : ""}
+                                    </small>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="close"
+                                    onClick={() => setShowReiniciosModal(false)}
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="reinicios-modal-summary mb-3">
+                                    <span className="reinicio-summary-pill reinicio-pill-total">
+                                        Centros: {indicadorReinicios.total}
+                                    </span>
+                                    <span className="reinicio-summary-pill reinicio-pill-ok">
+                                        Reiniciados: {indicadorReinicios.reiniciados}
+                                    </span>
+                                    <span className="reinicio-summary-pill reinicio-pill-warning">
+                                        Pendientes: {indicadorReinicios.pendientes}
+                                    </span>
+                                    <span className="reinicio-summary-pill reinicio-pill-danger">
+                                        Vencidos: {indicadorReinicios.vencidos}
+                                    </span>
+                                </div>
+                                {indicadorReinicios.detalle.length ? (
+                                    <div className="table-responsive">
+                                        <table className="table table-sm reinicios-table mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cliente</th>
+                                                    <th>Centro</th>
+                                                    <th>Fecha reinicio</th>
+                                                    <th>Dias faltantes</th>
+                                                    <th>Estado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {indicadorReinicios.detalle.map((item) => (
+                                                    <tr key={`reinicio-${item.idCentro}`}>
+                                                        <td>{item.cliente}</td>
+                                                        <td>
+                                                            <strong>{item.centro}</strong>
+                                                        </td>
+                                                        <td>{item.fechaReinicio ? formatearFecha(item.fechaReinicio) : "-"}</td>
+                                                        <td>
+                                                            {item.diasFaltantes === null || item.estado === "Pendiente"
+                                                                ? "-"
+                                                                : item.diasFaltantes}
+                                                        </td>
+                                                        <td>
+                                                            <span
+                                                                className={`reinicio-status reinicio-status-${item.estado
+                                                                    .toLowerCase()
+                                                                    .replace(/\s+/g, "-")}`}
+                                                            >
+                                                                {item.estado}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-muted mb-0">Sin centros para los filtros actuales.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {showCategoriasModal && (
                 <div className="modal show" style={{ display: "block" }}>
                     <div className="modal-dialog modal-lg modal-dialog-scrollable">
