@@ -222,6 +222,14 @@ const ORDEN_EQUIPOS = [
     "camara popa"
 ];
 
+const normalizarTextoBase = (value = "") =>
+    String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ");
+
 const SINONIMOS_EQUIPOS = {
     "ip pc": "pc",
     "ip pc nvr": "pc",
@@ -437,6 +445,7 @@ const EQUIPOS_PREDEF = [
     "Switch 4",
 ];
 const EQUIPOS_MIGRADOS_A_MATERIALES = new Set(["bandeja rack - tornillos"]);
+const EQUIPOS_POR_CANTIDAD = new Set(["mouse", "teclado"]);
 const MATERIALES_PREDEF = [
     "Cable Eléctrico 3 x 1,5mm",
     "Cable Eléctrico 3 x 0,75mm",
@@ -529,18 +538,15 @@ const MATERIALES_PREDEF = [
     "Mesa respaldo",
     "utp planza",
     "conector planza a corrugado",
-    "copla planza"
+    "copla planza",
+    "Mouse",
+    "Teclado"
 ];
 
 const MATERIAL_CATEGORY_OPTIONS = ["Todas", "Electricidad", "Redes", "Montaje", "Canalizacion", "Otros"];
 
 const normalizarNombreMaterialCategoria = (value = "") =>
-    String(value || "")
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/\s+/g, " ")
+    normalizarTextoBase(value)
         .replace(/\bmesa rack\b/g, "mesa respaldo");
 
 const canonizarNombreMaterial = (value = "") => {
@@ -618,6 +624,9 @@ const obtenerCategoriaMaterial = (nombre = "") => {
     }
     return "Otros";
 };
+
+const esEquipoPorCantidadNombre = (nombre = "") =>
+    EQUIPOS_POR_CANTIDAD.has(normalizarNombreMaterialCategoria(nombre));
 
 const normalizarEstadoRegistroEquipo = (value = "") => {
     const estado = String(value || "").trim().toLowerCase();
@@ -874,14 +883,38 @@ const ArmadoTecnico = () => {
     );
     const totalCajasRealesPlanilla = useMemo(() => contarCajasReales(cajas), [cajas]);
     const resumenArmadoPlanilla = useMemo(() => {
+        const materialPorNombre = new Map(
+            (materiales || []).map((mat) => [normalizarNombreMaterialCategoria(mat?.nombre), mat])
+        );
         const total = Array.isArray(equipos) ? equipos.length : 0;
-        const conSerie = (equipos || []).filter((eq) => String(eq?.numero_serie || "").trim()).length;
-        const noAplica = (equipos || []).filter((eq) => normalizarEstadoRegistroEquipo(eq?.estado_registro) === "no_aplica").length;
-        const pendientes = (equipos || []).filter((eq) => normalizarEstadoRegistroEquipo(eq?.estado_registro) === "pendiente").length;
-        const resueltos = conSerie + noAplica;
+        let conSerie = 0;
+        let conCantidad = 0;
+        let noAplica = 0;
+        let pendientes = 0;
+        (equipos || []).forEach((eq) => {
+            const esCantidad = esEquipoPorCantidadNombre(eq?.nombre);
+            const mat = esCantidad ? materialPorNombre.get(normalizarNombreMaterialCategoria(eq?.nombre)) : null;
+            const estadoRegistro = esCantidad
+                ? normalizarEstadoRegistroMaterial(mat?.estado_registro)
+                : normalizarEstadoRegistroEquipo(eq?.estado_registro);
+            if (estadoRegistro === "no_aplica") {
+                noAplica += 1;
+                return;
+            }
+            if (estadoRegistro === "pendiente") {
+                pendientes += 1;
+                return;
+            }
+            if (esCantidad) {
+                if (Number(mat?.cantidad || 0) > 0) conCantidad += 1;
+                return;
+            }
+            if (String(eq?.numero_serie || "").trim()) conSerie += 1;
+        });
+        const resueltos = conSerie + conCantidad + noAplica;
         const porcentaje = total ? Math.round((resueltos / total) * 100) : 0;
-        return { total, conSerie, noAplica, pendientes, resueltos, porcentaje };
-    }, [equipos]);
+        return { total, conSerie, conCantidad, noAplica, pendientes, resueltos, porcentaje };
+    }, [equipos, materiales]);
     const tecnicosApoyoPlanilla = useMemo(
         () => tecnicosActivosPlanilla.filter((tec) => !tec?.principal),
         [tecnicosActivosPlanilla]
@@ -952,6 +985,7 @@ const ArmadoTecnico = () => {
     const materialesFiltradosPlanilla = useMemo(
         () =>
             (materiales || []).filter((mat) => {
+                if (esEquipoPorCantidadNombre(mat?.nombre)) return false;
                 const estadoRegistro = normalizarEstadoRegistroMaterial(mat?.estado_registro);
                 const cumpleEstado =
                     filtroVistaMaterialesPlanilla === "todo" ||
@@ -978,6 +1012,31 @@ const ArmadoTecnico = () => {
         return ["websocket", "polling"];
     }, []);
 
+    const obtenerMaterialPorNombre = useCallback(
+        (nombre = "") =>
+            (materiales || []).find(
+                (m) => normalizarNombreMaterialCategoria(m?.nombre) === normalizarNombreMaterialCategoria(nombre)
+            ) || null,
+        [materiales]
+    );
+
+    const actualizarMaterialPorNombre = useCallback((nombre = "", cambios = {}) => {
+        const key = normalizarNombreMaterialCategoria(nombre);
+        if (!key) return;
+        setMateriales((prev) =>
+            (prev || []).map((m) =>
+                normalizarNombreMaterialCategoria(m?.nombre) === key
+                    ? {
+                          ...m,
+                          ...cambios,
+                          nombre: canonizarNombreMaterial(m?.nombre || nombre),
+                          caja_tecnico_id: userId,
+                          caja_tecnico_nombre: userNombre || m.caja_tecnico_nombre || `ID ${userId || ""}`
+                      }
+                    : m
+            )
+        );
+    }, [userId, userNombre]);
     const materialKey = useCallback((m = {}) => String(m.nombre || "").trim().toLowerCase(), []);
     const materialHash = useCallback((m = {}) => {
         const cantidad = Number(m.cantidad) || 0;
@@ -1009,7 +1068,7 @@ const ArmadoTecnico = () => {
     );
 
     const mergeEquiposPredef = useCallback((lista = []) => {
-        const listaFiltrada = (lista || []).filter((e) => !esEquipoMigradoAMaterial(e?.nombre || ""));
+        const listaFiltrada = (lista || []).filter((e) => !esEquipoMigradoAMaterial(e?.nombre || "") && !esEquipoPorCantidadNombre(e?.nombre || ""));
         const mapa = new Map(
             listaFiltrada.map((e) => [normalizarNombreEquipo(e.nombre || ""), e])
         );
@@ -2490,6 +2549,35 @@ const ArmadoTecnico = () => {
             return;
         }
         try {
+            if (esEquipoPorCantidadNombre(equipo?.nombre)) {
+                const materialActual = obtenerMaterialPorNombre(equipo.nombre) || {};
+                const cantidad = Number(materialActual.cantidad ?? equipo.cantidad ?? 0) || 0;
+                const caja = nombreCajaSeguro(materialActual.caja || equipo.caja);
+                const payload = [{
+                    nombre: equipo.nombre,
+                    cantidad,
+                    caja,
+                    caja_tecnico_id: userId,
+                    estado_registro: normalizarEstadoRegistroMaterial(materialActual.estado_registro),
+                    observacion_registro: String(materialActual.observacion_registro || "").trim() || null
+                }];
+                await guardarMateriales(armadoActivo.id_armado, payload, async () => {
+                    await cargarMateriales(armadoActivo.id_armado, (lista) => {
+                        const merged = mergeMateriales(lista);
+                        setMateriales(merged);
+                        setMaterialesSnapshot(crearSnapshotMateriales(merged));
+                        const cajasMateriales = merged.map((m) => nombreCajaSeguro(m.caja));
+                        const cajasEquipos = (equipos || []).map((e) => nombreCajaSeguro(e.caja));
+                        const cajasDetectadas = obtenerCajasDetectadas(cajasMateriales, cajasEquipos);
+                        setCajas(cajasDetectadas.length ? cajasDetectadas : [DEFAULT_PENDING_BOX]);
+                    });
+                    await cargarMovimientos(armadoActivo.id_armado, setMovimientos);
+                    await fetchArmados();
+                    recargarMovimientosRecientes();
+                });
+                setEditingId(null);
+                return;
+            }
             // Si ya existe un equipo con mismo nombre guardado, actualizamos para evitar duplicados
             const existente = equipos.find(
                 (e) =>
@@ -2991,7 +3079,7 @@ const ArmadoTecnico = () => {
                                                             {!esMovil && <th>IP</th>}
                                                             {!esMovil && <th>Observacion</th>}
                                                             {!esMovil && <th>Codigo</th>}
-                                                            <th>N Serie</th>
+                                                            <th>N Serie / Cantidad</th>
                                                             {!esMovil && <th>Estado</th>}
                                                             <th>Acciones</th>
                                                         </tr>
@@ -3018,7 +3106,13 @@ const ArmadoTecnico = () => {
                                                                 const eq = item.data;
                                                                 const rowKey = eq.id_equipo || `tmp-${eq.__idx}`;
                                                                 const enEdicion = editingId === rowKey;
-                                                                const estadoRegistro = normalizarEstadoRegistroEquipo(eq.estado_registro);
+                                                                const esEquipoCantidad = esEquipoPorCantidadNombre(eq?.nombre);
+                                                                const materialCantidad = esEquipoCantidad ? obtenerMaterialPorNombre(eq.nombre) : null;
+                                                                const estadoRegistro = esEquipoCantidad
+                                                                    ? normalizarEstadoRegistroMaterial(materialCantidad?.estado_registro)
+                                                                    : normalizarEstadoRegistroEquipo(eq.estado_registro);
+                                                                const cajaEquipo = esEquipoCantidad ? nombreCajaSeguro(materialCantidad?.caja) : nombreCajaSeguro(eq.caja);
+                                                                const cantidadEquipo = Number(materialCantidad?.cantidad || 0);
                                                                 const esNoAplica = estadoRegistro === "no_aplica";
                                                                 const esPendienteRegistro = estadoRegistro === "pendiente";
                                                                 return (
@@ -3030,8 +3124,8 @@ const ArmadoTecnico = () => {
                                                                                 {enEdicion ? (
                                                                                     <select
                                                                                         className="form-control form-control-sm"
-                                                                                        value={nombreCajaSeguro(eq.caja)}
-                                                                                    onChange={(e) => handleEquipoChange(eq.__idx, "caja", e.target.value)}
+                                                                                        value={cajaEquipo}
+                                                                                    onChange={(e) => esEquipoCantidad ? actualizarMaterialPorNombre(eq.nombre, { caja: e.target.value }) : handleEquipoChange(eq.__idx, "caja", e.target.value)}
                                                                                 >
                                                                                     {cajas.map((caja) => (
                                                                                         <option key={caja} value={caja}>
@@ -3044,20 +3138,20 @@ const ArmadoTecnico = () => {
                                                                                     {(() => {
                                                                                         const tecnicoMov = tecnicoRecientePorEquipo.get(String(eq.id_equipo || ""));
                                                                                         const hasTec =
-                                                                                            eq.caja_tecnico_nombre ||
-                                                                                            eq.caja_tecnico_id ||
-                                                                                            eq.numero_serie ||
-                                                                                            eq.codigo ||
-                                                                                            eq.ip ||
+                                                                                            (esEquipoCantidad ? materialCantidad?.caja_tecnico_nombre : eq.caja_tecnico_nombre) ||
+                                                                                            (esEquipoCantidad ? materialCantidad?.caja_tecnico_id : eq.caja_tecnico_id) ||
+                                                                                            (esEquipoCantidad ? cantidadEquipo : eq.numero_serie) ||
+                                                                                            (!esEquipoCantidad && eq.codigo) ||
+                                                                                            (!esEquipoCantidad && eq.ip) ||
                                                                                             eq.observacion;
                                                                                         const displayName =
-                                                                                            eq.caja_tecnico_nombre ||
-                                                                                            (eq.caja_tecnico_id ? `ID ${eq.caja_tecnico_id}` : tecnicoMov || "");
+                                                                                            (esEquipoCantidad ? materialCantidad?.caja_tecnico_nombre : eq.caja_tecnico_nombre) ||
+                                                                                            ((esEquipoCantidad ? materialCantidad?.caja_tecnico_id : eq.caja_tecnico_id) ? ("ID " + (esEquipoCantidad ? materialCantidad?.caja_tecnico_id : eq.caja_tecnico_id)) : tecnicoMov || "");
                                                                                         const color = hasTec
-                                                                                            ? colorTecnico(eq.caja_tecnico_nombre || eq.caja_tecnico_id || tecnicoMov || userId)
+                                                                                            ? colorTecnico((esEquipoCantidad ? materialCantidad?.caja_tecnico_nombre || materialCantidad?.caja_tecnico_id : eq.caja_tecnico_nombre || eq.caja_tecnico_id) || tecnicoMov || userId)
                                                                                             : "#6b7280";
                                                                                         const border = hasTec ? color : "#cbd5e1";
-                                                                                        const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : etiquetaBulto(nombreCajaSeguro(eq.caja));
+                                                                                        const cajaLabel = (esNoAplica || esPendienteRegistro) ? "-" : etiquetaBulto(cajaEquipo);
                                                                                         return (
                                                                                             <>
                                                                                                 <span
@@ -3083,14 +3177,14 @@ const ArmadoTecnico = () => {
                                                                         </td>
                                                                         {!esMovil && (
                                                                             <td>
-                                                                                {enEdicion ? (
+                                                                                {enEdicion && !esEquipoCantidad ? (
                                                                                     <input
                                                                                         className="form-control"
                                                                                         value={eq.ip || ""}
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "ip", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.ip || "-"
+                                                                                    esEquipoCantidad ? "-" : (eq.ip || "-")
                                                                                 )}
                                                                             </td>
                                                                         )}
@@ -3099,44 +3193,55 @@ const ArmadoTecnico = () => {
                                                                                 {enEdicion ? (
                                                                                     <input
                                                                                         className="form-control"
-                                                                                        value={eq.observacion || ""}
-                                                                                        onChange={(e) => handleEquipoChange(eq.__idx, "observacion", e.target.value)}
+                                                                                        value={esEquipoCantidad ? (materialCantidad?.observacion_registro || "") : (eq.observacion || "")}
+                                                                                        onChange={(e) => esEquipoCantidad ? actualizarMaterialPorNombre(eq.nombre, { observacion_registro: e.target.value }) : handleEquipoChange(eq.__idx, "observacion", e.target.value)}
                                                                                     />
                                                                                 ) : (
                                                                                     esPendienteRegistro ? (
                                                                                         <span style={{ color: "#c2410c", fontWeight: 700 }}>
-                                                                                            {eq.observacion_registro || eq.observacion || "-"}
+                                                                                            {esEquipoCantidad ? (materialCantidad?.observacion_registro || "-") : (eq.observacion_registro || eq.observacion || "-")}
                                                                                         </span>
                                                                                     ) : (
-                                                                                        eq.observacion || "-"
+                                                                                        esEquipoCantidad ? (materialCantidad?.observacion_registro || "-") : (eq.observacion || "-")
                                                                                     )
                                                                                 )}
                                                                             </td>
                                                                         )}
                                                                         {!esMovil && (
                                                                             <td>
-                                                                                {enEdicion ? (
+                                                                                {enEdicion && !esEquipoCantidad ? (
                                                                                     <input
                                                                                         className="form-control"
                                                                                         value={eq.codigo || ""}
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "codigo", e.target.value)}
                                                                                     />
                                                                                 ) : (
-                                                                                    eq.codigo || "-"
+                                                                                    esEquipoCantidad ? "-" : (eq.codigo || "-")
                                                                                 )}
                                                                             </td>
                                                                         )}
                                                                         <td>
                                                                     {enEdicion ? (
-                                                                        <input
-                                                                            className="form-control"
-                                                                            value={eq.numero_serie || ""}
-                                                                            onChange={(e) =>
-                                                                                handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
-                                                                            }
-                                                                        />
+                                                                        esEquipoCantidad ? (
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                className="form-control"
+                                                                                value={cantidadEquipo || ""}
+                                                                                onChange={(e) => actualizarMaterialPorNombre(eq.nombre, { cantidad: e.target.value })}
+                                                                                placeholder="0"
+                                                                            />
+                                                                        ) : (
+                                                                            <input
+                                                                                className="form-control"
+                                                                                value={eq.numero_serie || ""}
+                                                                                onChange={(e) =>
+                                                                                    handleEquipoChange(eq.__idx, "numero_serie", e.target.value)
+                                                                                }
+                                                                            />
+                                                                        )
                                                                     ) : (
-                                                                        eq.numero_serie || "-"
+                                                                        esEquipoCantidad ? (cantidadEquipo || "-") : (eq.numero_serie || "-")
                                                                     )}
                                                                         </td>
                                                                         {!esMovil && (
