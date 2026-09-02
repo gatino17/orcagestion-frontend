@@ -191,10 +191,12 @@ const Soporte = () => {
     const tableScrollRef = useRef(null);
     const dragScrollStateRef = useRef({
         isDown: false,
+        isDragging: false,
         startX: 0,
         scrollLeft: 0,
         pointerId: null,
-        scrollTarget: null
+        scrollTarget: null,
+        suppressClick: false
     });
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
@@ -620,11 +622,18 @@ const Soporte = () => {
         container.classList.remove("dragging");
         dragScrollStateRef.current = {
             isDown: false,
+            isDragging: false,
             startX: 0,
             scrollLeft: 0,
             pointerId: null,
-            scrollTarget: null
+            scrollTarget: null,
+            suppressClick: dragScrollStateRef.current.suppressClick
         };
+        if (dragScrollStateRef.current.suppressClick) {
+            window.setTimeout(() => {
+                dragScrollStateRef.current.suppressClick = false;
+            }, 150);
+        }
     };
 
     const handleTablePointerDown = (event) => {
@@ -633,14 +642,14 @@ const Soporte = () => {
         if (event.button !== undefined && event.button !== 0) return;
         const scrollTarget = obtenerScrollTargetTabla();
         if (!scrollTarget) return;
-        container.setPointerCapture?.(event.pointerId);
-        container.classList.add("dragging");
         dragScrollStateRef.current = {
             isDown: true,
+            isDragging: false,
             startX: event.clientX,
             scrollLeft: scrollTarget.scrollLeft,
             pointerId: event.pointerId,
-            scrollTarget
+            scrollTarget,
+            suppressClick: false
         };
     };
 
@@ -648,9 +657,23 @@ const Soporte = () => {
         const { scrollTarget } = dragScrollStateRef.current;
         if (!scrollTarget || !dragScrollStateRef.current.isDown) return;
         if (dragScrollStateRef.current.pointerId !== event.pointerId) return;
-        event.preventDefault();
         const walk = event.clientX - dragScrollStateRef.current.startX;
+        if (!dragScrollStateRef.current.isDragging) {
+            if (Math.abs(walk) < 8) return;
+            tableScrollRef.current?.setPointerCapture?.(event.pointerId);
+            tableScrollRef.current?.classList.add("dragging");
+            dragScrollStateRef.current.isDragging = true;
+            dragScrollStateRef.current.suppressClick = true;
+        }
+        event.preventDefault();
         scrollTarget.scrollLeft = dragScrollStateRef.current.scrollLeft - walk;
+    };
+
+    const handleTableClickCapture = (event) => {
+        if (!dragScrollStateRef.current.suppressClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragScrollStateRef.current.suppressClick = false;
     };
 
     const handleEditarSoporte = (soporte) => {
@@ -1516,10 +1539,11 @@ const Soporte = () => {
 	                        className="table-drag-scroll"
 	                        onPointerDown={handleTablePointerDown}
 	                        onPointerMove={handleTablePointerMove}
-	                        onPointerUp={finalizarArrastreTabla}
-	                        onPointerCancel={finalizarArrastreTabla}
-	                        onLostPointerCapture={finalizarArrastreTabla}
-	                    >
+		                        onPointerUp={finalizarArrastreTabla}
+		                        onPointerCancel={finalizarArrastreTabla}
+		                        onLostPointerCapture={finalizarArrastreTabla}
+		                        onClickCapture={handleTableClickCapture}
+		                    >
                         <DataTable
                             columns={columns}
                             data={datosOrdenados}
