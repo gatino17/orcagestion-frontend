@@ -537,12 +537,25 @@
     cursor: grab;
     user-select: none;
     scrollbar-width: thin;
+    touch-action: pan-y;
+    overscroll-behavior-x: contain;
 }
 
-.table-drag-scroll:active {
+.table-drag-scroll.dragging {
     cursor: grabbing;
 }
 
+.table-drag-scroll.dragging * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
 .table-drag-scroll .rdt_Table {
+    min-width: 1680px;
+}
+
+.table-drag-scroll .rdt_TableWrapper,
+.table-drag-scroll .rdt_TableHead,
+.table-drag-scroll .rdt_TableBody {
     min-width: 1680px;
 }

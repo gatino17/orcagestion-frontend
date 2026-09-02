@@ -192,7 +192,9 @@ const Soporte = () => {
     const dragScrollStateRef = useRef({
         isDown: false,
         startX: 0,
-        scrollLeft: 0
+        scrollLeft: 0,
+        pointerId: null,
+        scrollTarget: null
     });
     const [soportes, setSoportes] = useState([]);
     const [centros, setCentros] = useState([]);
@@ -207,6 +209,7 @@ const Soporte = () => {
     const [problema, setProblema] = useState("");
     const [tipo, setTipo] = useState("");
     const [origen, setOrigen] = useState("cliente");
+    const [prioridadSoporte, setPrioridadSoporte] = useState("media");
     const [fechaSoporte, setFechaSoporte] = useState("");
     const [solucion, setSolucion] = useState("");
     const [categoriaFalla, setCategoriaFalla] = useState("");
@@ -461,6 +464,7 @@ const Soporte = () => {
         setProblema("");
         setTipo("");
         setOrigen("cliente");
+        setPrioridadSoporte("media");
         setFechaSoporte("");
         setSolucion("");
         setCategoriaFalla("");
@@ -552,6 +556,7 @@ const Soporte = () => {
             problema,
             tipo,
             origen,
+            prioridad: prioridadSoporte,
             fecha_soporte: fechaSoporte,
             solucion,
             categoria_falla: categoriaFalla || null,
@@ -593,31 +598,59 @@ const Soporte = () => {
         }
     };
 
-    const handleTablePointerDown = (event) => {
+    const esElementoInteractivoTabla = (target) =>
+        Boolean(target?.closest?.("button, a, input, select, textarea, label, [role='button']"));
+
+    const obtenerScrollTargetTabla = () => {
+        const container = tableScrollRef.current;
+        if (!container) return null;
+        if (container.scrollWidth > container.clientWidth) return container;
+        return Array.from(container.querySelectorAll("*")).find(
+            (node) => node.scrollWidth > node.clientWidth && window.getComputedStyle(node).overflowX !== "visible"
+        ) || container;
+    };
+
+    const finalizarArrastreTabla = (event) => {
         const container = tableScrollRef.current;
         if (!container) return;
+        const { pointerId } = dragScrollStateRef.current;
+        if (pointerId !== null && event?.pointerId === pointerId) {
+            container.releasePointerCapture?.(pointerId);
+        }
+        container.classList.remove("dragging");
         dragScrollStateRef.current = {
-            isDown: true,
-            startX: event.pageX - container.offsetLeft,
-            scrollLeft: container.scrollLeft
+            isDown: false,
+            startX: 0,
+            scrollLeft: 0,
+            pointerId: null,
+            scrollTarget: null
         };
     };
 
-    const handleTablePointerLeave = () => {
-        dragScrollStateRef.current.isDown = false;
-    };
-
-    const handleTablePointerUp = () => {
-        dragScrollStateRef.current.isDown = false;
+    const handleTablePointerDown = (event) => {
+        const container = tableScrollRef.current;
+        if (!container || esElementoInteractivoTabla(event.target)) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        const scrollTarget = obtenerScrollTargetTabla();
+        if (!scrollTarget) return;
+        container.setPointerCapture?.(event.pointerId);
+        container.classList.add("dragging");
+        dragScrollStateRef.current = {
+            isDown: true,
+            startX: event.clientX,
+            scrollLeft: scrollTarget.scrollLeft,
+            pointerId: event.pointerId,
+            scrollTarget
+        };
     };
 
     const handleTablePointerMove = (event) => {
-        const container = tableScrollRef.current;
-        if (!container || !dragScrollStateRef.current.isDown) return;
+        const { scrollTarget } = dragScrollStateRef.current;
+        if (!scrollTarget || !dragScrollStateRef.current.isDown) return;
+        if (dragScrollStateRef.current.pointerId !== event.pointerId) return;
         event.preventDefault();
-        const x = event.pageX - container.offsetLeft;
-        const walk = x - dragScrollStateRef.current.startX;
-        container.scrollLeft = dragScrollStateRef.current.scrollLeft - walk;
+        const walk = event.clientX - dragScrollStateRef.current.startX;
+        scrollTarget.scrollLeft = dragScrollStateRef.current.scrollLeft - walk;
     };
 
     const handleEditarSoporte = (soporte) => {
@@ -634,6 +667,7 @@ const Soporte = () => {
         setProblema(soporte.problema);
         setTipo(soporte.tipo);
         setOrigen((soporte.origen || "cliente").toLowerCase());
+        setPrioridadSoporte((soporte.prioridad || "media").toLowerCase());
         const fechaSoporteNormalizada = formatearParaInputFecha(soporte.fecha_soporte);
         const fechaCierreNormalizada = formatearParaInputFecha(soporte.fecha_cierre);
         setFechaSoporte(fechaSoporteNormalizada);
@@ -929,6 +963,25 @@ const Soporte = () => {
                 return (
                     <span className={`badge badge-pill ${esOrca ? "badge-info" : "badge-secondary"}`}>
                         {esOrca ? "Orca" : "Cliente"}
+                    </span>
+                );
+            }
+        },
+        {
+            name: "Prioridad",
+            selector: (row) => row.prioridad || "media",
+            sortable: true,
+            width: "98px",
+            cell: (row) => {
+                const valor = String(row.prioridad || "media").toLowerCase();
+                const clases = {
+                    alta: "badge-danger",
+                    media: "badge-warning",
+                    baja: "badge-success"
+                };
+                return (
+                    <span className={`badge badge-pill ${clases[valor] || "badge-secondary"}`}>
+                        {valor.charAt(0).toUpperCase() + valor.slice(1)}
                     </span>
                 );
             }
@@ -1458,14 +1511,15 @@ const Soporte = () => {
                             />
                         </div>
                     </div>
-                    <div
-                        ref={tableScrollRef}
-                        className="table-drag-scroll"
-                        onMouseDown={handleTablePointerDown}
-                        onMouseLeave={handleTablePointerLeave}
-                        onMouseUp={handleTablePointerUp}
-                        onMouseMove={handleTablePointerMove}
-                    >
+	                    <div
+	                        ref={tableScrollRef}
+	                        className="table-drag-scroll"
+	                        onPointerDown={handleTablePointerDown}
+	                        onPointerMove={handleTablePointerMove}
+	                        onPointerUp={finalizarArrastreTabla}
+	                        onPointerCancel={finalizarArrastreTabla}
+	                        onLostPointerCapture={finalizarArrastreTabla}
+	                    >
                         <DataTable
                             columns={columns}
                             data={datosOrdenados}
@@ -1573,17 +1627,30 @@ const Soporte = () => {
                                     </div>
                                 </div>
 
-                                <div className="form-row">
+	                                <div className="form-row">
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold">Origen</label>
+	                                        <select
+	                                            value={origen}
+	                                            onChange={(e) => setOrigen(e.target.value)}
+	                                            className="form-control"
+	                                            required
+	                                        >
+	                                            <option value="cliente">Cliente</option>
+	                                            <option value="orca">Orca</option>
+	                                        </select>
+                                    </div>
+                                    <div className="form-group col-md-6">
+                                        <label className="text-muted small font-weight-semibold">Prioridad</label>
                                         <select
-                                            value={origen}
-                                            onChange={(e) => setOrigen(e.target.value)}
+                                            value={prioridadSoporte}
+                                            onChange={(e) => setPrioridadSoporte(e.target.value)}
                                             className="form-control"
                                             required
                                         >
-                                            <option value="cliente">Cliente</option>
-                                            <option value="orca">Orca</option>
+                                            <option value="alta">Alta</option>
+                                            <option value="media">Media</option>
+                                            <option value="baja">Baja</option>
                                         </select>
                                     </div>
                                 </div>

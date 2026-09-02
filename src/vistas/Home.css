@@ -274,6 +274,39 @@ button.metric-card.active {
     max-width: 760px;
 }
 
+.support-priority-filter {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    min-width: 132px;
+}
+
+.support-priority-filter span {
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.support-priority-filter select {
+    height: 34px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 0.82rem;
+    font-weight: 800;
+    padding: 0 0.65rem;
+    outline: none;
+}
+
+.support-priority-filter select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
 .support-client-cards {
     display: flex;
     align-items: center;
@@ -506,6 +539,32 @@ button.metric-card.active {
     color: #1d4ed8;
 }
 
+.support-priority-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.14rem 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.support-priority-chip.priority-alta {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.support-priority-chip.priority-media {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.support-priority-chip.priority-baja {
+    background: #dcfce7;
+    color: #166534;
+}
+
 .support-priority-days {
     white-space: nowrap;
     border-radius: 999px;
@@ -629,6 +688,11 @@ button.metric-card.active {
 .home-work-item.from-armado {
     border-color: rgba(37, 99, 235, 0.34);
     background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+
+.home-work-item.from-support-resolved {
+    border-color: rgba(22, 163, 74, 0.34);
+    background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
 }
 
 .home-work-main {
@@ -862,6 +926,7 @@ button.metric-card.active {
 .home-state-en-proceso { background: #fde68a; color: #92400e; }
 .home-state-pendiente { background: #dbeafe; color: #2563eb; }
 .home-state-finalizado { background: #dcfce7; color: #15803d; }
+.home-state-resuelto { background: #dcfce7; color: #166534; }
 .home-state-cancelado { background: #fee2e2; color: #b91c1c; }
 .home-state-sin-estado { background: #e2e8f0; color: #475569; }
 

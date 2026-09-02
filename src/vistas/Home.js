@@ -62,6 +62,7 @@ const Home = () => {
     const [paginaSoportes, setPaginaSoportes] = useState(1);
     const [clienteSoporte, setClienteSoporte] = useState("todos");
     const [filtroSoporteHome, setFiltroSoporteHome] = useState("todos");
+    const [prioridadSoporteHome, setPrioridadSoporteHome] = useState("todos");
     const [loading, setLoading] = useState(true);
 
     // Estado para actividad en edicion y mostrar modal
@@ -176,7 +177,7 @@ const Home = () => {
 
     useEffect(() => {
       setPaginaSoportes(1);
-    }, [clienteSoporte, filtroSoporteHome]);
+    }, [clienteSoporte, filtroSoporteHome, prioridadSoporteHome]);
  
     const handleGuardarActividad = async () => {
         const datosActividad = {
@@ -347,26 +348,41 @@ const filtrarSoportePorKpi = (soporte) => {
   return true;
 };
 const soportesFiltradosPorKpi = soportesPendientesAbiertos.filter(filtrarSoportePorKpi);
+const soportesFiltradosPorPrioridad = prioridadSoporteHome === "todos"
+  ? soportesFiltradosPorKpi
+  : soportesFiltradosPorKpi.filter(
+      (soporte) => String(soporte?.prioridad || "media").toLowerCase() === prioridadSoporteHome
+    );
 const clientesSoporte = Object.entries(
-	  soportesFiltradosPorKpi.reduce((acc, soporte) => {
+	  soportesFiltradosPorPrioridad.reduce((acc, soporte) => {
 	    const cliente = obtenerClienteSoporte(soporte);
 	    acc[cliente] = (acc[cliente] || 0) + 1;
 	    return acc;
 	  }, {})
 	).sort((a, b) => a[0].localeCompare(b[0]));
 const soportesBaseFiltradosPorCliente = clienteSoporte === "todos"
-	  ? soportesFiltradosPorKpi
-	  : soportesFiltradosPorKpi.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+	  ? soportesFiltradosPorPrioridad
+	  : soportesFiltradosPorPrioridad.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
 const obtenerOrdenSoporteHome = (soporte) => {
   if (actividadAsignadaPorSoporte.has(Number(soporte?.id_soporte || 0))) return 0;
   const estado = String(soporte?.estado || "pendiente").toLowerCase();
   if (estado === "pendiente") return 1;
   return 2;
 };
+const obtenerOrdenPrioridadSoporte = (soporte) => {
+  const prioridad = String(soporte?.prioridad || "media").toLowerCase();
+  if (prioridad === "alta") return 0;
+  if (prioridad === "media") return 1;
+  if (prioridad === "baja") return 2;
+  return 3;
+};
 	const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCliente].sort((a, b) => {
 	  const ordenA = obtenerOrdenSoporteHome(a);
 	  const ordenB = obtenerOrdenSoporteHome(b);
 	  if (ordenA !== ordenB) return ordenA - ordenB;
+	  const prioridadA = obtenerOrdenPrioridadSoporte(a);
+	  const prioridadB = obtenerOrdenPrioridadSoporte(b);
+	  if (prioridadA !== prioridadB) return prioridadA - prioridadB;
 	  const recienteA = obtenerTimestampSoporte(a);
 	  const recienteB = obtenerTimestampSoporte(b);
 	  if (recienteA !== recienteB) return recienteB - recienteA;
@@ -404,6 +420,15 @@ const fechaActividadKey = (actividad) => {
 };
 
 const estadoActividadKey = (actividad) => normalizarTexto(actividad?.estado || "");
+const estadoSoporteCerrado = (soporte) => {
+  const estado = normalizarTexto(soporte?.estado || "");
+  return ["resuelto", "finalizado", "cerrado"].includes(estado);
+};
+const fechaSoporteCierreKey = (soporte) => {
+  const fecha = parseFechaLocal(soporte?.fecha_cierre);
+  if (!fecha) return "";
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+};
 
 const trabajosCursoHoy = (Array.isArray(actividades) ? actividades : [])
   .filter((actividad) => {
@@ -424,7 +449,12 @@ const trabajosCursoHoy = (Array.isArray(actividades) ? actividades : [])
     const fechaA = new Date(a?.fecha_inicio || 0).getTime();
     const fechaB = new Date(b?.fecha_inicio || 0).getTime();
     return fechaA - fechaB;
-  })
+	  })
+	  .slice(0, 6);
+
+const soportesResueltosHoy = (Array.isArray(soportes) ? soportes : [])
+  .filter((soporte) => estadoSoporteCerrado(soporte) && fechaSoporteCierreKey(soporte) === hoyKey)
+  .sort((a, b) => obtenerTimestampSoporte(b) - obtenerTimestampSoporte(a))
   .slice(0, 6);
 
 const soportesPorPagina = 5;
@@ -513,12 +543,13 @@ const trabajosCursoHoyOperativos = [
       tipo: actividad.area || actividad.nombre_actividad || "Actividad",
       fecha: actividad.fecha_inicio,
       tecnicos: obtenerTecnicosActividad(actividad),
-      estado,
-      estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
-      destacado: Number(actividad?.soporte_id || 0) > 0,
-      extraClass: Number(actividad?.soporte_id || 0) > 0 ? "from-support" : "",
-      orden: Number(actividad?.soporte_id || 0) > 0 ? 0 : 2,
-      timestamp: new Date(actividad?.fecha_inicio || 0).getTime() || 0
+	      estado,
+	      estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
+	      destacado: Number(actividad?.soporte_id || 0) > 0,
+	      tipoClass: Number(actividad?.soporte_id || 0) > 0 ? "home-state-en-progreso" : "home-state-pendiente",
+	      extraClass: Number(actividad?.soporte_id || 0) > 0 ? "from-support" : "",
+	      orden: Number(actividad?.soporte_id || 0) > 0 ? 0 : 2,
+	      timestamp: new Date(actividad?.fecha_inicio || 0).getTime() || 0
     };
   }),
   ...armadosHomeOperativos
@@ -536,14 +567,36 @@ const trabajosCursoHoyOperativos = [
         tipo: "Armado",
         fecha: armado.fecha_inicio || armado.fecha_asignacion,
         tecnicos: obtenerTecnicosArmadoHome(armado),
-        estado,
-        estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
-        destacado: false,
-        extraClass: "from-armado",
-        orden: 1,
-        timestamp: new Date(armado.fecha_inicio || armado.fecha_asignacion || 0).getTime() || 0
-      };
-    })
+	        estado,
+	        estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
+	        destacado: false,
+	        tipoClass: "home-state-pendiente",
+	        extraClass: "from-armado",
+	        orden: 1,
+	        timestamp: new Date(armado.fecha_inicio || armado.fecha_asignacion || 0).getTime() || 0
+	      };
+	    })
+	  ,
+	  ...soportesResueltosHoy.map((soporte) => {
+	    const tipoSoporte = String(soporte.tipo || "").trim();
+	    return {
+	      key: `soporte-resuelto-${soporte.id_soporte}`,
+	      centro: soporte.centro?.nombre || soporte.centro_nombre || "Sin centro",
+	      cliente: soporte.centro?.cliente || soporte.cliente || "Sin cliente",
+	      tipo: tipoSoporte ? `Soporte ${tipoSoporte}` : "Soporte",
+	      fecha: soporte.fecha_cierre,
+	      tecnicos: [],
+	      estado: "Resuelto hoy",
+	      estadoClass: "resuelto",
+	      destacado: false,
+	      tipoClass: "home-state-resuelto",
+	      extraClass: "from-support-resolved",
+	      metaIcon: "fas fa-check-circle",
+	      metaLabel: "Soporte cerrado hoy",
+	      orden: 3,
+	      timestamp: obtenerTimestampSoporte(soporte)
+	    };
+	  })
 ].sort((a, b) => {
   if (a.orden !== b.orden) return a.orden - b.orden;
   return b.timestamp - a.timestamp;
@@ -826,16 +879,31 @@ const trabajosCursoHoyOperativos = [
                         <h5>Pendientes prioritarios</h5>
                         <p>Trabajos abiertos mas antiguos que requieren seguimiento.</p>
                     </div>
-                    <div className="support-priority-tools">
-                        <div className="support-client-cards" aria-label="Filtrar pendientes por cliente">
+	                    <div className="support-priority-tools">
+	                        <label className="support-priority-filter">
+	                            <span>Prioridad</span>
+		                            <select
+		                                value={prioridadSoporteHome}
+		                                onChange={(e) => {
+		                                    setPrioridadSoporteHome(e.target.value);
+		                                    setClienteSoporte("todos");
+		                                }}
+		                            >
+	                                <option value="todos">Todas</option>
+	                                <option value="alta">Alta</option>
+	                                <option value="media">Media</option>
+	                                <option value="baja">Baja</option>
+	                            </select>
+	                        </label>
+	                        <div className="support-client-cards" aria-label="Filtrar pendientes por cliente">
                             <button
                                 type="button"
                                 className={`support-client-card ${clienteSoporte === "todos" ? "active" : ""}`}
                                 onClick={() => setClienteSoporte("todos")}
-                            >
-                                <span>Todos</span>
-	                                <strong>{soportesFiltradosPorKpi.length}</strong>
-                            </button>
+	                            >
+	                                <span>Todos</span>
+	                                <strong>{soportesFiltradosPorPrioridad.length}</strong>
+	                            </button>
                             {clientesSoporte.map(([cliente, cantidad]) => (
                                 <button
                                     type="button"
@@ -856,12 +924,13 @@ const trabajosCursoHoyOperativos = [
 
                 {soportesPrioritariosHome.length ? (
                     <ul className="support-priority-list">
-	                        {soportesPrioritariosHome.map((soporte) => {
-	                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
-	                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
-	                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
-	                            const actividadAsignada = actividadAsignadaPorSoporte.get(Number(soporte.id_soporte || 0));
-	                            const tecnicosActividad = obtenerTecnicosActividad(actividadAsignada);
+		                        {soportesPrioritariosHome.map((soporte) => {
+		                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
+		                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
+		                            const prioridad = String(soporte.prioridad || "media").toLowerCase();
+		                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
+		                            const actividadAsignada = actividadAsignadaPorSoporte.get(Number(soporte.id_soporte || 0));
+		                            const tecnicosActividad = obtenerTecnicosActividad(actividadAsignada);
 	                            return (
 	                                <li className={`support-priority-item ${esAlerta ? "is-alert" : ""} ${actividadAsignada ? "is-scheduled" : ""}`} key={soporte.id_soporte}>
 	                                    <div className="support-priority-main">
@@ -870,10 +939,13 @@ const trabajosCursoHoyOperativos = [
 		                                            {ubicacionArea && (
 		                                                <span className="support-area-chip">{ubicacionArea}</span>
 		                                            )}
-		                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
-		                                                {esRemoto ? "Remoto" : "Terreno"}
-		                                            </span>
-		                                        </div>
+			                                            <span className={`support-type-chip ${esRemoto ? "remote" : "terrain"}`}>
+			                                                {esRemoto ? "Remoto" : "Terreno"}
+			                                            </span>
+			                                            <span className={`support-priority-chip priority-${prioridad}`}>
+			                                                {prioridad}
+			                                            </span>
+			                                        </div>
 	                                            <small className="support-priority-client-date">
 	                                                {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
 	                                            </small>
@@ -952,16 +1024,19 @@ const trabajosCursoHoyOperativos = [
 			                            return (
 			                                <div className={`home-work-item ${trabajo.extraClass}`} key={trabajo.key}>
 			                                    <div className="home-work-main">
-			                                        <div className="home-work-title-row">
-			                                            <strong>{trabajo.centro}</strong>
-			                                            <span className="home-pill home-state-en-progreso">{trabajo.tipo}</span>
-			                                        </div>
-			                                        <small>{trabajo.cliente}</small>
-			                                        <div className="home-work-meta">
-			                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(trabajo.fecha)}</span>
-			                                            <span><i className="fas fa-user-check mr-1" />{trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente"}</span>
-			                                        </div>
-			                                    </div>
+				                                        <div className="home-work-title-row">
+				                                            <strong>{trabajo.centro}</strong>
+				                                            <span className={`home-pill ${trabajo.tipoClass || "home-state-en-progreso"}`}>{trabajo.tipo}</span>
+				                                        </div>
+				                                        <small>{trabajo.cliente}</small>
+				                                        <div className="home-work-meta">
+				                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(trabajo.fecha)}</span>
+				                                            <span>
+				                                                <i className={`${trabajo.metaIcon || "fas fa-user-check"} mr-1`} />
+				                                                {trabajo.metaLabel || (trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente")}
+				                                            </span>
+				                                        </div>
+				                                    </div>
 		                                    <span className={`home-pill home-state-${trabajo.estadoClass}`}>{trabajo.estado}</span>
 		                                </div>
 		                            );
