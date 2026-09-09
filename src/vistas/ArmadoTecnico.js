@@ -445,7 +445,14 @@ const EQUIPOS_PREDEF = [
     "Switch 4",
 ];
 const EQUIPOS_MIGRADOS_A_MATERIALES = new Set(["bandeja rack - tornillos"]);
-const EQUIPOS_POR_CANTIDAD = new Set(["mouse", "teclado"]);
+const EQUIPOS_POR_CANTIDAD = new Set([
+    "mouse",
+    "teclado",
+    "parlantes",
+    "sensor magnetico",
+    "sensor magnetico respaldo",
+    "sensor magnetico cargador"
+]);
 const MATERIALES_PREDEF = [
     "Cable Eléctrico 3 x 1,5mm",
     "Cable Eléctrico 3 x 0,75mm",
@@ -540,7 +547,11 @@ const MATERIALES_PREDEF = [
     "conector planza a corrugado",
     "copla planza",
     "Mouse",
-    "Teclado"
+    "Teclado",
+    "Parlantes",
+    "Sensor Magnetico",
+    "Sensor magnetico respaldo",
+    "Sensor magnetico cargador"
 ];
 
 const MATERIAL_CATEGORY_OPTIONS = ["Todas", "Electricidad", "Redes", "Montaje", "Canalizacion", "Otros"];
