@@ -181,14 +181,10 @@ const ORDEN_EQUIPOS = [
     "tablero 500x400x200",
     "baliza interior",
     "bocina interior",
-    "baliza exterior 1",
-    "baliza exterior 2",
-    "bocina exterior 1",
-    "bocina exterior 2",
-    "foco led 1 150w",
-    "foco led 2 150w",
-    "foco led 1 50w",
-    "foco led 2 50w",
+    "baliza exterior",
+    "Bocina Exterior",
+    "foco led 150w",
+    "foco led 50w",
     "fuente poder 12v",
     "axis p8221",
     "mastil",
@@ -275,14 +271,10 @@ const GRUPOS_EQUIPOS = [
             "Tablero 500x400x200",
             "Baliza Interior",
             "Bocina Interior",
-            "Baliza Exterior 1",
-            "Baliza Exterior 2",
-            "Bocina Exterior 1",
-            "Bocina Exterior 2",
-            "Foco led 1 150W",
-            "Foco led 2 150W",
-            "Foco led 1 50W",
-            "Foco led 2 50W",
+            "Baliza Exterior",
+            "Bocina Exterior",
+            "Foco led 150W",
+            "Foco led 50W",
             "Fuente poder 12V",
             "Axis P8221"
         ]
@@ -398,14 +390,10 @@ const EQUIPOS_PREDEF = [
     "Tablero 500x400x200",
     "Baliza Interior",
     "Bocina Interior",
-    "Baliza Exterior 1",
-    "Baliza Exterior 2",
-    "Bocina Exterior 1",
-    "Bocina Exterior 2",
-    "Foco led 1 150W",
-    "Foco led 2 150W",
-    "Foco led 1 50W",
-    "Foco led 2 50W",
+    "Baliza Exterior",
+    "Bocina Exterior",
+    "Foco led 150W",
+    "Foco led 50W",
     "Fuente poder 12V",
     "Axis P8221",
     "Tablero Derivacion (400x300x200)",
@@ -451,7 +439,13 @@ const EQUIPOS_POR_CANTIDAD = new Set([
     "parlantes",
     "sensor magnetico",
     "sensor magnetico respaldo",
-    "sensor magnetico cargador"
+    "sensor magnetico cargador",
+    "baliza interior",
+    "bocina interior",
+    "baliza exterior",
+    "Bocina Exterior",
+    "foco led 150w",
+    "foco led 50w"
 ]);
 const MATERIALES_PREDEF = [
     "Cable Eléctrico 3 x 1,5mm",
@@ -551,19 +545,37 @@ const MATERIALES_PREDEF = [
     "Parlantes",
     "Sensor Magnetico",
     "Sensor magnetico respaldo",
-    "Sensor magnetico cargador"
+    "Sensor magnetico cargador",
+    "Baliza Interior",
+    "Bocina Interior",
+    "Baliza Exterior",
+    "Bocina Exterior",
+    "Foco led 150W",
+    "Foco led 50W"
 ];
 
 const MATERIAL_CATEGORY_OPTIONS = ["Todas", "Electricidad", "Redes", "Montaje", "Canalizacion", "Otros"];
 
-const normalizarNombreMaterialCategoria = (value = "") =>
-    normalizarTextoBase(value)
+const normalizarNombreMaterialCategoria = (value = "") => {
+    const normalizado = normalizarTextoBase(value)
         .replace(/\bmesa rack\b/g, "mesa respaldo");
+    if (["baliza exterior 1", "baliza exterior 2"].includes(normalizado)) return "baliza exterior";
+    if (["bocina exterior 1", "bocina exterior 2"].includes(normalizado)) return "bocina exterior";
+    if (["foco led 1 150w", "foco led 2 150w"].includes(normalizado)) return "foco led 150w";
+    if (["foco led 1 50w", "foco led 2 50w"].includes(normalizado)) return "foco led 50w";
+    return normalizado;
+};
 
 const canonizarNombreMaterial = (value = "") => {
     const texto = String(value || "").trim();
     if (!texto) return "";
-    return normalizarNombreMaterialCategoria(texto) === "mesa respaldo" ? "Mesa respaldo" : texto;
+    const normalizado = normalizarNombreMaterialCategoria(texto);
+    if (normalizado === "mesa respaldo") return "Mesa respaldo";
+    if (normalizado === "baliza exterior") return "Baliza Exterior";
+    if (normalizado === "bocina exterior") return "Bocina Exterior";
+    if (normalizado === "foco led 150w") return "Foco led 150W";
+    if (normalizado === "foco led 50w") return "Foco led 50W";
+    return texto;
 };
 
 const obtenerCategoriaMaterial = (nombre = "") => {
@@ -951,12 +963,31 @@ const ArmadoTecnico = () => {
     }, []);
 
     const mergeMateriales = useCallback((listaBackend = []) => {
-        const mapa = new Map(
-            (listaBackend || []).map((m) => [
-                normalizarNombreMaterialCategoria(m.nombre || ""),
-                m
-            ])
-        );
+        const mapa = new Map();
+        (listaBackend || []).forEach((m) => {
+            const key = normalizarNombreMaterialCategoria(m.nombre || "");
+            if (!key) return;
+            const previo = mapa.get(key);
+            if (!previo) {
+                mapa.set(key, m);
+                return;
+            }
+            mapa.set(key, {
+                ...previo,
+                ...m,
+                nombre: canonizarNombreMaterial(previo.nombre || m.nombre),
+                cantidad: Number(previo.cantidad || 0) + Number(m.cantidad || 0),
+                caja: previo.caja || m.caja,
+                caja_tecnico_id: previo.caja_tecnico_id || m.caja_tecnico_id,
+                caja_tecnico_nombre: previo.caja_tecnico_nombre || m.caja_tecnico_nombre,
+                estado_registro:
+                    normalizarEstadoRegistroMaterial(previo.estado_registro) === "pendiente" ||
+                    normalizarEstadoRegistroMaterial(m.estado_registro) === "pendiente"
+                        ? "pendiente"
+                        : normalizarEstadoRegistroMaterial(previo.estado_registro || m.estado_registro),
+                observacion_registro: previo.observacion_registro || m.observacion_registro || ""
+            });
+        });
         const base = MATERIALES_PREDEF.map((nombre) => {
             const found = mapa.get(normalizarNombreMaterialCategoria(nombre));
             const cantidad = found && found.cantidad !== undefined && found.cantidad !== null ? found.cantidad : "";
