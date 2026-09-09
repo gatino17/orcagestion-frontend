@@ -676,7 +676,163 @@
   background: linear-gradient(120deg, #f97316, #ea580c);
 }
 
-.centros-table-wrapper .rdt_Table {
+
+.centro-modal-dialog {
+  max-width: min(1180px, 96vw);
+}
+
+.centro-premium-form .form-group label {
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.centro-premium-form .form-control {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 12px;
+  min-height: 42px;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.centro-premium-form .form-control:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+}
+
+.centro-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: 1rem;
+}
+
+.centro-form-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  padding: 1.1rem;
+  background: #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+}
+
+.centro-form-panel--identity {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.centro-form-panel--operation {
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.1), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.centro-form-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.centro-form-panel-header small {
+  display: block;
+  color: #2563eb;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.centro-form-panel-header h5 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.centro-form-panel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 16px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f172a 0%, #0b3b8c 100%);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+}
+
+.centro-form-section--compact {
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+}
+
+.centro-central-toggle {
+  margin-top: 0.25rem;
+}
+
+.centro-central-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.centro-central-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.centro-central-toggle label span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.centro-central-toggle label strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.86rem;
+}
+
+.centro-central-toggle label small {
+  display: block;
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.centro-central-toggle input:checked + label {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: #eff6ff;
+}
+
+.centro-central-toggle input:checked + label span {
+  background: #0b3b8c;
+  color: #ffffff;
+}
+
+@media (max-width: 992px) {
+  .centro-form-grid {
+    grid-template-columns: 1fr;
+  }
+}.centros-table-wrapper .rdt_Table {
   border-radius: 18px;
   overflow: hidden;
 }

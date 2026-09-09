@@ -737,6 +737,17 @@ button.metric-card.active {
     margin-top: 0.35rem;
 }
 
+.home-work-solution {
+    margin-top: 0.45rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 12px;
+    background: rgba(22, 163, 74, 0.1);
+    color: #166534;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
 .home-insights-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

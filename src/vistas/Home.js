@@ -579,6 +579,7 @@ const trabajosCursoHoyOperativos = [
 	  ,
 	  ...soportesResueltosHoy.map((soporte) => {
 	    const tipoSoporte = String(soporte.tipo || "").trim();
+	    const solucion = String(soporte.solucion || "").trim();
 	    return {
 	      key: `soporte-resuelto-${soporte.id_soporte}`,
 	      centro: soporte.centro?.nombre || soporte.centro_nombre || "Sin centro",
@@ -593,6 +594,7 @@ const trabajosCursoHoyOperativos = [
 	      extraClass: "from-support-resolved",
 	      metaIcon: "fas fa-check-circle",
 	      metaLabel: "Soporte cerrado hoy",
+	      solucion,
 	      orden: 3,
 	      timestamp: obtenerTimestampSoporte(soporte)
 	    };
@@ -1036,6 +1038,12 @@ const trabajosCursoHoyOperativos = [
 				                                                {trabajo.metaLabel || (trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente")}
 				                                            </span>
 				                                        </div>
+				                                        {trabajo.solucion && (
+				                                            <div className="home-work-solution">
+				                                                <i className="fas fa-clipboard-check mr-1" />
+				                                                {trabajo.solucion}
+				                                            </div>
+				                                        )}
 				                                    </div>
 		                                    <span className={`home-pill home-state-${trabajo.estadoClass}`}>{trabajo.estado}</span>
 		                                </div>

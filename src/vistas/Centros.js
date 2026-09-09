@@ -1315,7 +1315,7 @@ function Centros() {
 
             {/* Modal para crear centro */}
             <div className="modal fade" id="modalCentro" tabIndex="-1" role="dialog" aria-labelledby="modalCentroLabel" aria-hidden="true">
-                <div className="modal-dialog" role="document">
+                <div className="modal-dialog modal-xl centro-modal-dialog" role="document">
                     <div className="modal-content">
                         <div className="modal-header">
                             <h5 className="modal-title" id="modalCentroLabel">{editarCentro ? 'Editar Centro' : 'Crear Centro'}</h5>
@@ -1324,175 +1324,220 @@ function Centros() {
                             </button>
                         </div>
                         <div className="modal-body">
-                            <form>
-                                <div className="form-group">
-                                    <label>Cliente</label>
-                                    <select
-                                        className="form-control"
-                                        value={clienteId}
-                                        onChange={(e) => setClienteId(e.target.value)}
-                                    >
-                                        <option value="">Seleccione un cliente</option>
-                                        {clientes.map((cliente) => (
-                                            <option key={cliente.id_cliente} value={cliente.id_cliente}>
-                                                {cliente.nombre}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Razón Social</label>
-                                    <select
-                                        className="form-control"
-                                        value={razonSocialId}
-                                        onChange={(e) => setRazonSocialId(e.target.value)}
-                                    >
-                                        <option value="">Seleccione una razón social</option>
-                                        {razonesSociales.map((razon) => (
-                                            <option key={razon.id_razon_social} value={razon.id_razon_social}>
-                                                {razon.razon_social}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Nombre del Centro</label>
-                                    <input type="text" className="form-control" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Nombre del Pontón</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={nombrePonton}
-                                        onChange={(e) => setNombrePonton(e.target.value)}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Ubicación</label>
-                                    <input type="text" className="form-control" value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Correo del Centro</label>
-                                    <input type="email" className="form-control" value={correoCentro} onChange={(e) => setCorreoCentro(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Área</label>
-                                    <input type="text" className="form-control" value={area} onChange={(e) => setArea(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Teléfono</label>
-                                    <input type="text" className="form-control" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
-                                </div>
-                                <div className="centro-form-section">
-                                    <h5 className="centro-form-section-title">Fechas del servicio</h5>
-                                    <div className="centro-form-dates">
-                                        <div className="form-group highlight-install">
-                                            <label>
-                                                Fecha de Instalación
-                                                <span className="date-pill">Principal</span>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                className="form-control"
-                                                value={fechaInstalacion}
-                                                onChange={(e) => setFechaInstalacion(e.target.value)}
-                                            />
+                            <form className="centro-premium-form">
+                                <div className="centro-form-grid">
+                                    <section className="centro-form-panel centro-form-panel--identity">
+                                        <div className="centro-form-panel-header">
+                                            <span className="centro-form-panel-icon"><i className="fas fa-map-marker-alt" /></span>
+                                            <div>
+                                                <small>Datos del centro</small>
+                                                <h5>Informacion principal</h5>
+                                            </div>
                                         </div>
+
                                         <div className="form-group">
-                                            <label>Fecha de Activación</label>
-                                            <input
-                                                type="date"
+                                            <label>Cliente</label>
+                                            <select
                                                 className="form-control"
-                                                value={fechaActivacion}
-                                                onChange={(e) => setFechaActivacion(e.target.value)}
-                                            />
+                                                value={clienteId}
+                                                onChange={(e) => setClienteId(e.target.value)}
+                                            >
+                                                <option value="">Seleccione un cliente</option>
+                                                {clientes.map((cliente) => (
+                                                    <option key={cliente.id_cliente} value={cliente.id_cliente}>
+                                                        {cliente.nombre}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Estado</label>
-                                    <select className="form-control" value={estado} onChange={(e) => setEstado(e.target.value)}>
-                                        <option value="activo">Activo</option>
-                                        <option value="traslado">Traslado</option>
-                                        <option value="cese">Cese</option>
-                                        <option value="retirado">Retirado</option>
-                                    </select>
-                                </div>
-                                {estado === 'cese' && (
-                                    <div className="centro-form-section centro-form-section--cese">
-                                        <h5 className="centro-form-section-title centro-form-section-title--cese">Fecha de termino por cese</h5>
-                                        <div className="centro-form-dates">
-                                            <div className="form-group highlight-termination">
-                                                <label>
-                                                    Fecha de Termino
-                                                    <span className="date-pill date-pill--cese">Cese</span>
-                                                </label>
+
+                                        <div className="form-group">
+                                            <label>Razon Social</label>
+                                            <select
+                                                className="form-control"
+                                                value={razonSocialId}
+                                                onChange={(e) => setRazonSocialId(e.target.value)}
+                                            >
+                                                <option value="">Seleccione una razon social</option>
+                                                {razonesSociales.map((razon) => (
+                                                    <option key={razon.id_razon_social} value={razon.id_razon_social}>
+                                                        {razon.razon_social}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Nombre del Centro</label>
+                                                <input type="text" className="form-control" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+                                            </div>
+                                            <div className="form-group col-md-6">
+                                                <label>Nombre del Ponton</label>
                                                 <input
-                                                    type="date"
+                                                    type="text"
                                                     className="form-control"
-                                                    value={fechaTermino}
-                                                    onChange={(e) => setFechaTermino(e.target.value)}
+                                                    value={nombrePonton}
+                                                    onChange={(e) => setNombrePonton(e.target.value)}
                                                 />
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-                                <div className="form-group">
-                                    <label>Base Tierra</label>
-                                    <select
-                                        className="form-control"
-                                        value={baseTierra}
-                                        onChange={(e) => setBaseTierra(e.target.value === 'true')}
-                                    >
-                                        <option value="true">Sí</option>
-                                        <option value="false">No</option>
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Respaldo Adicional</label>
-                                    <select
-                                        className="form-control"
-                                        value={respaldoAdicional}
-                                        onChange={(e) => setRespaldoAdicional(e.target.value === 'true')}
-                                    >
-                                        <option value="true">Sí</option>
-                                        <option value="false">No</option>
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Cantidad de Radares</label>
-                                    <input type="number" className="form-control" value={cantidadRadares} onChange={(e) => setCantidadRadares(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label>Cantidad de Cámaras</label>
-                                    <input type="number" className="form-control" value={cantidadCamaras} onChange={(e) => setCantidadCamaras(e.target.value)} />
-                                </div>
-                                {rolUsuario !== 'operaciones' && (
-                                    <div className="form-group">
-                                        <label>Valor del Contrato</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className="form-control"
-                                            value={valorContrato}
-                                            onChange={(e) => setValorContrato(e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                                <div className="form-group">
-                                    <div className="form-check">
-                                        <input
-                                            id="esCentralCheck"
-                                            type="checkbox"
-                                            className="form-check-input"
-                                            checked={esCentral}
-                                            onChange={(e) => setEsCentral(e.target.checked)}
-                                        />
-                                        <label className="form-check-label" htmlFor="esCentralCheck">
-                                            Marcar como Central
-                                        </label>
-                                    </div>
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Ubicacion</label>
+                                                <input type="text" className="form-control" value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} />
+                                            </div>
+                                            <div className="form-group col-md-6">
+                                                <label>Area</label>
+                                                <input type="text" className="form-control" value={area} onChange={(e) => setArea(e.target.value)} />
+                                            </div>
+                                        </div>
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Correo del Centro</label>
+                                                <input type="email" className="form-control" value={correoCentro} onChange={(e) => setCorreoCentro(e.target.value)} />
+                                            </div>
+                                            <div className="form-group col-md-6">
+                                                <label>Telefono</label>
+                                                <input type="text" className="form-control" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="centro-form-panel centro-form-panel--operation">
+                                        <div className="centro-form-panel-header">
+                                            <span className="centro-form-panel-icon"><i className="fas fa-sliders-h" /></span>
+                                            <div>
+                                                <small>Operacion y servicio</small>
+                                                <h5>Estado, fechas y equipamiento</h5>
+                                            </div>
+                                        </div>
+
+                                        <div className="centro-form-section centro-form-section--compact">
+                                            <h5 className="centro-form-section-title">Fechas del servicio</h5>
+                                            <div className="centro-form-dates">
+                                                <div className="form-group highlight-install">
+                                                    <label>
+                                                        Fecha de Instalacion
+                                                        <span className="date-pill">Principal</span>
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        className="form-control"
+                                                        value={fechaInstalacion}
+                                                        onChange={(e) => setFechaInstalacion(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Fecha de Activacion</label>
+                                                    <input
+                                                        type="date"
+                                                        className="form-control"
+                                                        value={fechaActivacion}
+                                                        onChange={(e) => setFechaActivacion(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Estado</label>
+                                                <select className="form-control" value={estado} onChange={(e) => setEstado(e.target.value)}>
+                                                    <option value="activo">Activo</option>
+                                                    <option value="traslado">Traslado</option>
+                                                    <option value="cese">Cese</option>
+                                                    <option value="retirado">Retirado</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group col-md-6">
+                                                <label>Base Tierra</label>
+                                                <select
+                                                    className="form-control"
+                                                    value={baseTierra}
+                                                    onChange={(e) => setBaseTierra(e.target.value === 'true')}
+                                                >
+                                                    <option value="true">Si</option>
+                                                    <option value="false">No</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {estado === 'cese' && (
+                                            <div className="centro-form-section centro-form-section--cese centro-form-section--compact">
+                                                <h5 className="centro-form-section-title centro-form-section-title--cese">Fecha de termino por cese</h5>
+                                                <div className="centro-form-dates">
+                                                    <div className="form-group highlight-termination">
+                                                        <label>
+                                                            Fecha de Termino
+                                                            <span className="date-pill date-pill--cese">Cese</span>
+                                                        </label>
+                                                        <input
+                                                            type="date"
+                                                            className="form-control"
+                                                            value={fechaTermino}
+                                                            onChange={(e) => setFechaTermino(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Respaldo Adicional</label>
+                                                <select
+                                                    className="form-control"
+                                                    value={respaldoAdicional}
+                                                    onChange={(e) => setRespaldoAdicional(e.target.value === 'true')}
+                                                >
+                                                    <option value="true">Si</option>
+                                                    <option value="false">No</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group col-md-6">
+                                                <label>Cantidad de Radares</label>
+                                                <input type="number" className="form-control" value={cantidadRadares} onChange={(e) => setCantidadRadares(e.target.value)} />
+                                            </div>
+                                        </div>
+
+                                        <div className="form-row">
+                                            <div className="form-group col-md-6">
+                                                <label>Cantidad de Camaras</label>
+                                                <input type="number" className="form-control" value={cantidadCamaras} onChange={(e) => setCantidadCamaras(e.target.value)} />
+                                            </div>
+                                            {rolUsuario !== 'operaciones' && (
+                                                <div className="form-group col-md-6">
+                                                    <label>Valor del Contrato</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        className="form-control"
+                                                        value={valorContrato}
+                                                        onChange={(e) => setValorContrato(e.target.value)}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="centro-central-toggle">
+                                            <input
+                                                id="esCentralCheck"
+                                                type="checkbox"
+                                                checked={esCentral}
+                                                onChange={(e) => setEsCentral(e.target.checked)}
+                                            />
+                                            <label htmlFor="esCentralCheck">
+                                                <span><i className="fas fa-building" /></span>
+                                                <div>
+                                                    <strong>Marcar como Central</strong>
+                                                    <small>Excluye este registro de ciertos indicadores operativos.</small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </section>
                                 </div>
                             </form>
                         </div>
