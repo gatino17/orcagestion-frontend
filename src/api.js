@@ -1521,6 +1521,74 @@ export const devolverInventarioBodegaDesdeTecnico = async (id, payload) => {
     }
 };
 
+const authHeaders = () => {
+    const token = localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+};
+
+export const obtenerInventarioBodegaTomas = async (params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/inventarios/bodega_tomas`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const obtenerInventarioBodegaTipos = async () => {
+    try {
+        const response = await axios.get(`${BASE_URL}/inventarios/bodega_tipos`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const crearInventarioBodegaToma = async (payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_tomas`, payload || {}, authHeaders());
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const obtenerInventarioBodegaToma = async (id, params = {}) => {
+    try {
+        const response = await axios.get(`${BASE_URL}/inventarios/bodega_tomas/${id}`, { params });
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const registrarInventarioBodegaEscaneo = async (id, payload) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_tomas/${id}/escaneos`, payload || {}, authHeaders());
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const cerrarInventarioBodegaToma = async (id) => {
+    try {
+        const response = await axios.post(`${BASE_URL}/inventarios/bodega_tomas/${id}/cerrar`, {}, authHeaders());
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const eliminarInventarioBodegaEscaneo = async (id) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/inventarios/bodega_tomas/escaneos/${id}`);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const obtenerCasosIsmael = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/soporte/ismael`, { params });

@@ -18,6 +18,7 @@ import SoporteDetalle from "./vistas/SoporteDetalle";
 import MantencionPreventiva from "./vistas/MantencionPreventiva";
 import InformesCentros from "./vistas/InformesCentros";
 import BodegaRetiros from "./vistas/BodegaRetiros";
+import InventarioBodega from "./vistas/InventarioBodega";
 import RevisionEquipos from "./vistas/RevisionEquipos";
 import Rendiciones from "./vistas/Rendiciones";
 import Clientes from "./vistas/Clientes";
@@ -41,6 +42,7 @@ const PAGE_ROUTE_MAP = {
     mantencion_preventiva: "/mantencion-preventiva",
     informes_centros: "/informes-centros",
     bodega_retiros: "/bodega-retiros",
+    inventario_bodega: "/inventario-bodega",
     revision_equipos: "/revision-equipos",
     rendiciones: "/rendiciones",
     armados: "/armados",
@@ -66,6 +68,7 @@ const PAGE_PRIORITY = [
     "soporte",
     "informes_centros",
     "bodega_retiros",
+    "inventario_bodega",
     "historial_trabajos",
     "historial_centro",
     "clientes",
@@ -274,6 +277,14 @@ function App() {
                             element={
                               <PrivateRoute requiredPage="bodega_retiros" allowedRoles={['admin', 'operaciones']}>
                                     <BodegaRetiros />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/inventario-bodega"
+                            element={
+                              <PrivateRoute requiredPage="inventario_bodega" allowedRoles={['admin', 'operaciones']}>
+                                    <InventarioBodega />
                                 </PrivateRoute>
                             }
                         />
