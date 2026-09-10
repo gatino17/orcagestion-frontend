@@ -638,6 +638,32 @@ export default function BodegaRetiros() {
     [enBodega, revisionResumenPorRetiro]
   );
 
+  const inventarioManualEnBodegaRows = useMemo(
+    () =>
+      (inventarioManual || [])
+        .filter((item) => {
+          const estadoAsignacion = normalizeText(item?.estado_asignacion || "en_bodega");
+          const ubicacion = normalizeText(item?.ubicacion || "Bodega central");
+          const estadoEquipo = normalizeText(item?.estado_equipo || "Operativo");
+          return estadoAsignacion !== "asignado_tecnico" && ubicacion === "bodega central" && !estadoEquipo.includes("baja");
+        })
+        .map((item, idx) => ({
+          tipoFila: "inventario_bodega",
+          rowKey: `inv-bod-${item?.id_bodega_equipo || item?.id || item?.codigo || item?.numero_serie || idx}`,
+          item: {
+            ...item,
+            id_bodega_equipo: item?.id_bodega_equipo || item?.id || null,
+            numero_serie: item?.numero_serie || "-",
+            codigo: item?.codigo || "-",
+            equipo_nombre: item?.equipo_nombre || "-",
+            ubicacion: item?.ubicacion || "Bodega central",
+            estado_equipo: item?.estado_equipo || "Operativo",
+            estado_asignacion: item?.estado_asignacion || "en_bodega",
+          },
+        })),
+    [inventarioManual]
+  );
+
   const enBodegaRows = useMemo(
     () => [
       ...(enBodega || []).map((retiro) => ({
@@ -648,8 +674,9 @@ export default function BodegaRetiros() {
       })),
       ...devolucionesInstalacionEnBodega,
       ...devolucionesMantencionEnBodega,
+      ...inventarioManualEnBodegaRows,
     ],
-    [enBodega, devolucionesInstalacionEnBodega, devolucionesMantencionEnBodega]
+    [enBodega, devolucionesInstalacionEnBodega, devolucionesMantencionEnBodega, inventarioManualEnBodegaRows]
   );
 
   const contarEquiposBodegaRow = (row) => {
@@ -661,6 +688,9 @@ export default function BodegaRetiros() {
     }
     if (row?.tipoFila === "mantencion_bodega") {
       return row?.cambio ? 1 : 0;
+    }
+    if (row?.tipoFila === "inventario_bodega") {
+      return row?.item ? 1 : 0;
     }
     return 0;
   };
@@ -682,6 +712,10 @@ export default function BodegaRetiros() {
       if (row.tipoFila === "mantencion_bodega") {
         const cambio = row?.cambio || {};
         return normalizeText(`${cambio?.serie_anterior || ""} ${cambio?.codigo_anterior || ""} ${cambio?.equipo || ""}`).includes(qSerie);
+      }
+      if (row.tipoFila === "inventario_bodega") {
+        const item = row?.item || {};
+        return normalizeText(`${item?.numero_serie || ""} ${item?.codigo || ""} ${item?.equipo_nombre || ""}`).includes(qSerie);
       }
       const equiposVista = Array.isArray(row?.equiposVista) ? row.equiposVista : Array.isArray(row?.retiro?.equipos) ? row.retiro.equipos : [];
       return equiposVista.some((eq) =>
@@ -894,7 +928,8 @@ export default function BodegaRetiros() {
     };
 
     const manual = (inventarioManual || []).map((r, idx) => ({
-      id_retiro_equipo: r.id || `manual-${idx}`,
+      id_bodega_equipo: r.id_bodega_equipo || r.id || null,
+      id_retiro_equipo: r.id_bodega_equipo || r.id || `manual-${idx}`,
       id_retiro_terreno: null,
       numero_serie: r.numero_serie || "-",
       codigo: r.codigo || "-",
@@ -2878,10 +2913,10 @@ export default function BodegaRetiros() {
                               Recepcionar
                             </button>
                           </td>
-                        </tr>
-                      );
-                    }
-	                    const r = row.retiro;
+		                        </tr>
+		                      );
+		                    }
+                    const r = row.retiro;
 	                      const equiposRetirados = Array.isArray(row?.equiposVista) ? row.equiposVista : obtenerEquiposPendientesRecepcionRetiro(r);
 	                    return (
 	                      <tr key={row.rowKey}>
@@ -3289,6 +3324,120 @@ export default function BodegaRetiros() {
                                   className="btn btn-outline-danger btn-sm"
                                   onClick={() => eliminarDevolucionMantencionEnBodega(row)}
                                   disabled={savingId === `mant-del-${cambio?.id_cambio_equipo_mantencion || 0}`}
+                                >
+                                  <i className="fas fa-trash-alt mr-1" />
+                                  Eliminar
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    if (row.tipoFila === "inventario_bodega") {
+                      const item = row.item || {};
+                      const itemId = Number(item?.id_bodega_equipo || 0);
+                      const enRevision = normalizeText(item?.estado_equipo || "").includes("revision");
+                      return (
+                        <tr key={row.rowKey}>
+                          <td>{itemId || "-"}</td>
+                          <td>{itemId ? `INV-${itemId}` : "INV"}</td>
+                          <td>{formatDate(item?.fecha_ingreso || item?.created_at)}</td>
+                          <td>{item?.ubicacion || "Bodega central"}</td>
+                          <td>
+                            <span className={`badge ${enRevision ? "badge-warning" : "badge-success"}`}>
+                              {enRevision ? "En revision" : "En bodega"}
+                            </span>
+                          </td>
+                          <td>{item?.asignado_por_nombre || "-"}</td>
+                          <td>{formatDateTime(item?.updated_at || item?.created_at)}</td>
+                          <td>
+                            <div className="d-flex flex-column" style={{ gap: 4 }}>
+                              <small style={{ lineHeight: 1.25 }}>
+                                <strong>{item?.equipo_nombre || "Equipo"}</strong>
+                              </small>
+                              <small style={{ lineHeight: 1.25 }}>
+                                {item?.numero_serie && item.numero_serie !== "-"
+                                  ? `N Serie: ${item.numero_serie}`
+                                  : item?.codigo && item.codigo !== "-"
+                                  ? `Codigo: ${item.codigo}`
+                                  : "-"}
+                              </small>
+                            </div>
+                          </td>
+                          <td className="text-center">
+                            <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
+                              <button
+                                className="btn btn-outline-warning btn-sm"
+                                onClick={async () => {
+                                  if (!itemId) return;
+                                  if (!window.confirm("Enviar este equipo a baja?")) return;
+                                  setSavingId(`inv-baja-${itemId}`);
+                                  try {
+                                    await actualizarInventarioBodegaEquipo(itemId, {
+                                      estado_equipo: "No operativo / baja",
+                                      ubicacion: "Bodega de baja",
+                                    });
+                                    await cargarInventarioManual();
+                                  } catch (e) {
+                                    alert(e?.response?.data?.error || "No se pudo enviar el equipo a baja.");
+                                  } finally {
+                                    setSavingId(null);
+                                  }
+                                }}
+                                disabled={!itemId || savingId === `inv-baja-${itemId}`}
+                              >
+                                <i className="fas fa-exclamation-triangle mr-1" />
+                                Baja
+                              </button>
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => {
+                                  const equipoActual = String(item.equipo_nombre || "").trim();
+                                  setInventarioEditandoId(itemId || null);
+                                  setNuevoEquipo({
+                                    numero_serie: item.numero_serie === "-" ? "" : item.numero_serie || "",
+                                    codigo: item.codigo === "-" ? "" : item.codigo || "",
+                                    equipo_nombre: equipoActual,
+                                    descripcion_producto: item.descripcion_producto || "",
+                                    fecha_ingreso: String(item.fecha_ingreso || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+                                    orden_compra: item.orden_compra || "",
+                                    valor: item.valor ?? "",
+                                    cantidad: 1,
+                                    modelo: item.modelo || "",
+                                    estado_equipo: item.estado_equipo || "Operativo",
+                                    ubicacion: item.ubicacion || "Bodega central",
+                                    imagen_base64: item.imagen_base64 || "",
+                                    imagen_nombre: item.imagen_nombre || "",
+                                  });
+                                  setEquipoEsNuevo(equipoActual ? !CATALOGO_EQUIPOS_ARMADO.includes(equipoActual) : false);
+                                  setCodigosAdicionales([]);
+                                  setSeriesPendientes([]);
+                                  setSeriesSeleccionadas([]);
+                                  setShowIngresoInventario(true);
+                                }}
+                                disabled={!itemId}
+                              >
+                                <i className="fas fa-edit mr-1" />
+                                Editar
+                              </button>
+                              {usuario?.rol === "admin" ? (
+                                <button
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={async () => {
+                                    if (!itemId) return;
+                                    if (!window.confirm("Eliminar este equipo del inventario?")) return;
+                                    setSavingId(`inv-del-${itemId}`);
+                                    try {
+                                      await eliminarInventarioBodegaEquipo(itemId);
+                                      await cargarInventarioManual();
+                                    } catch (e) {
+                                      alert(e?.response?.data?.error || "No se pudo eliminar el equipo.");
+                                    } finally {
+                                      setSavingId(null);
+                                    }
+                                  }}
+                                  disabled={!itemId || savingId === `inv-del-${itemId}`}
                                 >
                                   <i className="fas fa-trash-alt mr-1" />
                                   Eliminar
