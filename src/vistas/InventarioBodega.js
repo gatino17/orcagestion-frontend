@@ -65,6 +65,8 @@ export default function InventarioBodega() {
   const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", observacion: "" });
   const [filtroTomas, setFiltroTomas] = useState("todos");
   const [filtroDetalle, setFiltroDetalle] = useState("");
+  const [showNuevaTomaModal, setShowNuevaTomaModal] = useState(false);
+  const [showAgregarBodegaModal, setShowAgregarBodegaModal] = useState(false);
   const [form, setForm] = useState({
     nombre: "",
     ubicacion: "Bodega central",
@@ -200,6 +202,7 @@ export default function InventarioBodega() {
       });
       const nueva = data?.toma;
       setForm({ nombre: "", ubicacion: "Bodega central", observacion: "" });
+      setShowNuevaTomaModal(false);
       await cargarTomas(nueva?.id_toma);
     } catch (error) {
       console.error("Error al crear toma:", error);
@@ -281,9 +284,10 @@ export default function InventarioBodega() {
             estado_equipo: "Operativo",
           },
         ],
-      });
-      setBodegaForm({ codigo: "", numero_serie: "", observacion: "" });
-      alert("Equipo agregado a bodega central.");
+	      });
+	      setBodegaForm({ codigo: "", numero_serie: "", observacion: "" });
+	      setShowAgregarBodegaModal(false);
+	      alert("Equipo agregado a bodega central.");
     } catch (error) {
       console.error("Error al agregar equipo a bodega:", error);
       alert(error?.response?.data?.error || "No se pudo agregar el equipo a bodega.");
@@ -317,122 +321,50 @@ export default function InventarioBodega() {
       </div>
 
       <div className="row">
-        <div className="col-xl-4 mb-3">
-          <div className="card inventario-card">
+	        <div className="col-xl-3 mb-3">
+          <div className="card inventario-card inventario-actions-card">
             <div className="card-header bg-white">
               <strong>
-                <i className="fas fa-plus-circle mr-2 text-primary" />
-                Nueva toma
+                <i className="fas fa-boxes mr-2 text-primary" />
+                Inventario bodega
               </strong>
             </div>
-            <div className="card-body">
-              <div className="form-group">
-                <label>Nombre</label>
-                <input
-                  className="form-control"
-                  placeholder="Ej: Inventario bodega septiembre"
-                  value={form.nombre}
-                  onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Ubicacion</label>
-                <input
-                  className="form-control"
-                  value={form.ubicacion}
-                  onChange={(e) => setForm((prev) => ({ ...prev, ubicacion: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label>Observacion</label>
-                <textarea
-                  className="form-control"
-                  rows={3}
-                  value={form.observacion}
-                  onChange={(e) => setForm((prev) => ({ ...prev, observacion: e.target.value }))}
-                />
-              </div>
-              <button className="btn btn-primary btn-block" onClick={crearToma} disabled={saving}>
-                {saving ? "Creando..." : "Crear inventario"}
-              </button>
-            </div>
-	          </div>
-	
-	          <div className="card inventario-card mt-3">
-	            <div className="card-header bg-white">
-	              <strong>
-	                <i className="fas fa-warehouse mr-2 text-success" />
-	                Agregar equipos a bodega
-	              </strong>
-	            </div>
 	            <div className="card-body">
-	              <div className="form-group">
-	                <label>Categoria</label>
-	                <select
-	                  className="form-control"
-	                  value={categoriaSeleccionada}
-	                  onChange={(e) => {
-	                    setCategoriaSeleccionada(e.target.value);
-	                    setTipoSeleccionado("");
-	                  }}
-	                >
-	                  {categoriasInventario.map((categoria) => (
-	                    <option key={categoria} value={categoria}>{categoria}</option>
-	                  ))}
-	                </select>
-	              </div>
-	              <div className="form-group">
-	                <label>Equipo</label>
-	                <select
-	                  className="form-control"
-	                  value={tipoSeleccionado}
-	                  onChange={(e) => setTipoSeleccionado(e.target.value)}
-	                >
-	                  <option value="">Seleccionar</option>
-	                  {tiposCategoria.map((tipo) => (
-	                    <option key={`${tipo.categoria}-${tipo.equipo_nombre}`} value={tipo.equipo_nombre}>
-	                      {tipo.equipo_nombre}
-	                    </option>
-	                  ))}
-	                </select>
-	              </div>
-	              <div className="form-group">
-	                <label>Codigo</label>
-	                <input
-	                  className="form-control"
-	                  value={bodegaForm.codigo}
-	                  onChange={(e) => setBodegaForm((prev) => ({ ...prev, codigo: e.target.value }))}
-	                />
-	              </div>
-	              <div className="form-group">
-	                <label>N serie</label>
-	                <input
-	                  className="form-control"
-	                  placeholder="Si queda vacio usa el codigo"
-	                  value={bodegaForm.numero_serie}
-	                  onChange={(e) => setBodegaForm((prev) => ({ ...prev, numero_serie: e.target.value }))}
-	                />
-	              </div>
-	              <div className="form-group">
-	                <label>Observacion</label>
-	                <input
-	                  className="form-control"
-	                  value={bodegaForm.observacion}
-	                  onChange={(e) => setBodegaForm((prev) => ({ ...prev, observacion: e.target.value }))}
-	                />
-	              </div>
-	              <button
-	                className="btn btn-success btn-block"
-	                onClick={agregarEquipoBodega}
-	                disabled={saving || !tipoSeleccionado || !bodegaForm.codigo.trim()}
-	              >
-	                {saving ? "Guardando..." : "Agregar a bodega central"}
-	              </button>
-	              <div className="small text-muted mt-2">
-	                El equipo quedara visible en Bodega-retiros, seccion En bodega.
-	              </div>
-	            </div>
-	          </div>
+	              <div className="inventario-action-item">
+	                <div className="inventario-new-toma-icon">
+	                  <i className="fas fa-clipboard-list" />
+	                </div>
+	                <div className="inventario-action-content">
+	                  <div className="inventario-new-toma-title">Nuevo informe</div>
+	                  <p className="inventario-new-toma-text">Escaneo por categoria.</p>
+	                </div>
+                <button
+                  className="btn btn-primary inventario-action-btn"
+                  onClick={() => setShowNuevaTomaModal(true)}
+                >
+                  <i className="fas fa-plus-circle mr-2" />
+                  Crear
+                </button>
+              </div>
+              <div className="inventario-action-divider" />
+              <div className="inventario-action-item">
+                <div className="inventario-new-toma-icon inventario-add-bodega-icon">
+                  <i className="fas fa-warehouse" />
+                </div>
+	                <div className="inventario-action-content">
+	                  <div className="inventario-new-toma-title">Ingreso a bodega</div>
+	                  <p className="inventario-new-toma-text">Equipo disponible.</p>
+	                </div>
+                <button
+                  className="btn btn-success inventario-action-btn"
+                  onClick={() => setShowAgregarBodegaModal(true)}
+                >
+                  <i className="fas fa-plus mr-2" />
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
 
 	          <div className="card inventario-card mt-3">
             <div className="card-header bg-white d-flex align-items-center justify-content-between">
@@ -476,7 +408,7 @@ export default function InventarioBodega() {
           </div>
         </div>
 
-        <div className="col-xl-8 mb-3">
+	        <div className="col-xl-9 mb-3">
           <div className="card inventario-card inventario-detail-card">
             <div className="card-header bg-white d-flex align-items-center justify-content-between flex-wrap">
               <div>
@@ -485,7 +417,7 @@ export default function InventarioBodega() {
                   {tomaActiva ? tomaActiva.nombre : "Detalle de inventario"}
                 </strong>
                 <div className="small text-muted">
-                  {tomaActiva ? `${estadoLabel[tomaActiva.estado] || tomaActiva.estado} · ${formatDateTime(tomaActiva.fecha_inicio)}` : "Selecciona o crea una toma."}
+                  {tomaActiva ? `${estadoLabel[tomaActiva.estado] || tomaActiva.estado} · ${formatDateTime(tomaActiva.fecha_inicio)}` : "Selecciona o crea un informe."}
                 </div>
               </div>
               {tomaActiva?.estado === "abierto" ? (
@@ -704,8 +636,175 @@ export default function InventarioBodega() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+	        </div>
+	      </div>
+	      {showNuevaTomaModal ? (
+	        <div className="modal d-block inventario-modal-backdrop" tabIndex="-1" role="dialog">
+	          <div className="modal-dialog modal-dialog-centered" role="document">
+	            <div className="modal-content inventario-toma-modal">
+	              <div className="modal-header">
+	                <div>
+	                  <span className="inventario-eyebrow inventario-modal-eyebrow">Inventario bodega</span>
+	                  <h5 className="modal-title mb-0">Crear nuevo informe</h5>
+	                </div>
+	                <button
+	                  type="button"
+	                  className="close"
+	                  onClick={() => setShowNuevaTomaModal(false)}
+	                  disabled={saving}
+	                >
+	                  <span>&times;</span>
+	                </button>
+	              </div>
+	              <div className="modal-body">
+	                <div className="form-group">
+	                  <label>Nombre</label>
+	                  <input
+	                    className="form-control"
+	                    placeholder="Ej: Inventario bodega septiembre"
+	                    value={form.nombre}
+	                    onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
+	                  />
+	                </div>
+	                <div className="form-group">
+	                  <label>Ubicacion</label>
+	                  <input
+	                    className="form-control"
+	                    value={form.ubicacion}
+	                    onChange={(e) => setForm((prev) => ({ ...prev, ubicacion: e.target.value }))}
+	                  />
+	                </div>
+	                <div className="form-group mb-0">
+	                  <label>Observacion</label>
+	                  <textarea
+	                    className="form-control"
+	                    rows={4}
+	                    placeholder="Detalle opcional de la toma"
+	                    value={form.observacion}
+	                    onChange={(e) => setForm((prev) => ({ ...prev, observacion: e.target.value }))}
+	                  />
+	                </div>
+	              </div>
+	              <div className="modal-footer">
+	                <button
+	                  className="btn btn-light"
+	                  onClick={() => setShowNuevaTomaModal(false)}
+	                  disabled={saving}
+	                >
+	                  Cancelar
+	                </button>
+	                <button className="btn btn-primary" onClick={crearToma} disabled={saving}>
+	                  <i className="fas fa-save mr-2" />
+	                  {saving ? "Creando..." : "Crear informe"}
+	                </button>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+	      {showAgregarBodegaModal ? (
+	        <div className="modal d-block inventario-modal-backdrop" tabIndex="-1" role="dialog">
+	          <div className="modal-dialog modal-dialog-centered" role="document">
+	            <div className="modal-content inventario-toma-modal">
+	              <div className="modal-header">
+	                <div>
+	                  <span className="inventario-eyebrow inventario-modal-eyebrow">Bodega central</span>
+	                  <h5 className="modal-title mb-0">Agregar equipo a bodega</h5>
+	                </div>
+	                <button
+	                  type="button"
+	                  className="close"
+	                  onClick={() => setShowAgregarBodegaModal(false)}
+	                  disabled={saving}
+	                >
+	                  <span>&times;</span>
+	                </button>
+	              </div>
+	              <div className="modal-body">
+	                <div className="form-row">
+	                  <div className="form-group col-md-6">
+	                    <label>Categoria</label>
+	                    <select
+	                      className="form-control"
+	                      value={categoriaSeleccionada}
+	                      onChange={(e) => {
+	                        setCategoriaSeleccionada(e.target.value);
+	                        setTipoSeleccionado("");
+	                      }}
+	                    >
+	                      {categoriasInventario.map((categoria) => (
+	                        <option key={categoria} value={categoria}>{categoria}</option>
+	                      ))}
+	                    </select>
+	                  </div>
+	                  <div className="form-group col-md-6">
+	                    <label>Equipo</label>
+	                    <select
+	                      className="form-control"
+	                      value={tipoSeleccionado}
+	                      onChange={(e) => setTipoSeleccionado(e.target.value)}
+	                    >
+	                      <option value="">Seleccionar</option>
+	                      {tiposCategoria.map((tipo) => (
+	                        <option key={`${tipo.categoria}-${tipo.equipo_nombre}`} value={tipo.equipo_nombre}>
+	                          {tipo.equipo_nombre}
+	                        </option>
+	                      ))}
+	                    </select>
+	                  </div>
+	                </div>
+	                <div className="form-row">
+	                  <div className="form-group col-md-6">
+	                    <label>Codigo</label>
+	                    <input
+	                      className="form-control"
+	                      value={bodegaForm.codigo}
+	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, codigo: e.target.value }))}
+	                    />
+	                  </div>
+	                  <div className="form-group col-md-6">
+	                    <label>N serie</label>
+	                    <input
+	                      className="form-control"
+	                      placeholder="Si queda vacio usa el codigo"
+	                      value={bodegaForm.numero_serie}
+	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, numero_serie: e.target.value }))}
+	                    />
+	                  </div>
+	                </div>
+	                <div className="form-group mb-0">
+	                  <label>Observacion</label>
+	                  <input
+	                    className="form-control"
+	                    value={bodegaForm.observacion}
+	                    onChange={(e) => setBodegaForm((prev) => ({ ...prev, observacion: e.target.value }))}
+	                  />
+	                </div>
+	                <div className="small text-muted mt-3">
+	                  El equipo quedara visible en Bodega-retiros, seccion En bodega.
+	                </div>
+	              </div>
+	              <div className="modal-footer">
+	                <button
+	                  className="btn btn-light"
+	                  onClick={() => setShowAgregarBodegaModal(false)}
+	                  disabled={saving}
+	                >
+	                  Cancelar
+	                </button>
+	                <button
+	                  className="btn btn-success"
+	                  onClick={agregarEquipoBodega}
+	                  disabled={saving || !tipoSeleccionado || !bodegaForm.codigo.trim()}
+	                >
+	                  <i className="fas fa-save mr-2" />
+	                  {saving ? "Guardando..." : "Agregar a bodega central"}
+	                </button>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+	    </div>
+	  );
+	}

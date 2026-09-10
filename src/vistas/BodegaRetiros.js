@@ -645,7 +645,7 @@ export default function BodegaRetiros() {
           const estadoAsignacion = normalizeText(item?.estado_asignacion || "en_bodega");
           const ubicacion = normalizeText(item?.ubicacion || "Bodega central");
           const estadoEquipo = normalizeText(item?.estado_equipo || "Operativo");
-          return estadoAsignacion !== "asignado_tecnico" && ubicacion === "bodega central" && !estadoEquipo.includes("baja");
+          return estadoAsignacion === "en_bodega" && ubicacion === "bodega central" && !estadoEquipo.includes("baja");
         })
         .map((item, idx) => ({
           tipoFila: "inventario_bodega",
@@ -970,7 +970,10 @@ export default function BodegaRetiros() {
   }, [inventarioManual, inventarioEquiposBase, bodega2Nombre, filtroInventario]);
 
   const resumenInventario = useMemo(() => {
-    const bCentral = (inventarioEquipos || []).filter((x) => String(x.ubicacion || "").toLowerCase() === "bodega central").length;
+    const bCentral = (inventarioEquipos || []).filter((x) => {
+      const asignacion = String(x.estado_asignacion || "en_bodega").toLowerCase();
+      return asignacion === "en_bodega" && String(x.ubicacion || "").toLowerCase() === "bodega central";
+    }).length;
     const bBaja = (inventarioEquipos || []).filter((x) => {
       const u = String(x.ubicacion || "").toLowerCase();
       if (u === "bodega baja" || u === "bodega de baja") return true;
@@ -979,7 +982,10 @@ export default function BodegaRetiros() {
     const b2 = (inventarioEquipos || []).filter(
       (x) => String(x.ubicacion || "").toLowerCase() === String(bodega2Nombre || "Bodega 2").toLowerCase()
     ).length;
-    return { bCentral, bBaja, b2 };
+    const bArmado = (inventarioEquipos || []).filter(
+      (x) => String(x.estado_asignacion || "").toLowerCase() === "asignado_armado"
+    ).length;
+    return { bCentral, bBaja, b2, bArmado };
   }, [inventarioEquipos, bodega2Nombre]);
 
   const equiposAsignadosTecnicos = useMemo(
@@ -3365,12 +3371,35 @@ export default function BodegaRetiros() {
                               </small>
                             </div>
                           </td>
-                          <td className="text-center">
-                            <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
+	                          <td className="text-center">
+	                            <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
                               <button
-                                className="btn btn-outline-warning btn-sm"
+                                className="btn btn-outline-primary btn-sm"
                                 onClick={async () => {
                                   if (!itemId) return;
+                                  if (!window.confirm("Enviar este equipo a revision?")) return;
+                                  setSavingId(`inv-rev-${itemId}`);
+                                  try {
+                                    await actualizarInventarioBodegaEquipo(itemId, {
+                                      estado_equipo: "Requiere revision",
+                                      ubicacion: "Bodega central",
+                                    });
+                                    await cargarInventarioManual();
+                                  } catch (e) {
+                                    alert(e?.response?.data?.error || "No se pudo enviar el equipo a revision.");
+                                  } finally {
+                                    setSavingId(null);
+                                  }
+                                }}
+                                disabled={!itemId || savingId === `inv-rev-${itemId}`}
+                              >
+                                <i className="fas fa-stethoscope mr-1" />
+                                Revision
+                              </button>
+	                              <button
+	                                className="btn btn-outline-warning btn-sm"
+	                                onClick={async () => {
+	                                  if (!itemId) return;
                                   if (!window.confirm("Enviar este equipo a baja?")) return;
                                   setSavingId(`inv-baja-${itemId}`);
                                   try {
@@ -3908,36 +3937,54 @@ export default function BodegaRetiros() {
           </div>
         </div>
         <div className="card-body p-0">
-          <div className="px-3 pt-3">
-            <div className="row">
-              <div className="col-md-4 mb-2">
-                <div className="bodega-inv-kpi bodega-inv-kpi-central">
-                  <div className="small text-muted">Bodega central</div>
-                  <div className="h5 mb-0">{resumenInventario.bCentral}</div>
-                </div>
-              </div>
-              <div className="col-md-4 mb-2">
-                <div className="bodega-inv-kpi bodega-inv-kpi-baja">
-                  <div className="small text-muted">Bodega de baja</div>
-                  <div className="h5 mb-0">{resumenInventario.bBaja}</div>
-                </div>
-              </div>
-              <div className="col-md-4 mb-2">
-                <div className="bodega-inv-kpi bodega-inv-kpi-sec">
-                  <div className="d-flex align-items-center justify-content-between" style={{ gap: 8 }}>
-                    <div className="small text-muted">{bodega2Nombre}</div>
-                    <input
-                      className="form-control form-control-sm"
-                      style={{ maxWidth: 150 }}
-                      value={bodega2Nombre}
-                      onChange={(e) => setBodega2Nombre(e.target.value)}
-                    />
-                  </div>
-                  <div className="h5 mb-0 mt-1">{resumenInventario.b2}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+	          <div className="bodega-inv-summary">
+	            <div className="bodega-inv-summary-grid">
+	              <div className="bodega-inv-kpi bodega-inv-kpi-central">
+	                <div className="bodega-inv-kpi-icon">
+	                  <i className="fas fa-warehouse" />
+	                </div>
+	                <div>
+	                  <div className="bodega-inv-kpi-label">Bodega central</div>
+	                  <div className="bodega-inv-kpi-value">{resumenInventario.bCentral}</div>
+	                  <div className="bodega-inv-kpi-help">Disponibles para armado</div>
+	                </div>
+	              </div>
+	              <div className="bodega-inv-kpi bodega-inv-kpi-armado">
+	                <div className="bodega-inv-kpi-icon">
+	                  <i className="fas fa-tools" />
+	                </div>
+	                <div>
+	                  <div className="bodega-inv-kpi-label">Asignado a armado</div>
+	                  <div className="bodega-inv-kpi-value">{resumenInventario.bArmado}</div>
+	                  <div className="bodega-inv-kpi-help">Ya tomado por planilla</div>
+	                </div>
+	              </div>
+	              <div className="bodega-inv-kpi bodega-inv-kpi-baja">
+	                <div className="bodega-inv-kpi-icon">
+	                  <i className="fas fa-exclamation-triangle" />
+	                </div>
+	                <div>
+	                  <div className="bodega-inv-kpi-label">Bodega de baja</div>
+	                  <div className="bodega-inv-kpi-value">{resumenInventario.bBaja}</div>
+	                  <div className="bodega-inv-kpi-help">No operativos</div>
+	                </div>
+	              </div>
+	              <div className="bodega-inv-kpi bodega-inv-kpi-sec">
+	                <div className="bodega-inv-kpi-icon">
+	                  <i className="fas fa-box-open" />
+	                </div>
+	                <div className="flex-grow-1">
+	                  <div className="bodega-inv-kpi-label">{bodega2Nombre}</div>
+	                  <div className="bodega-inv-kpi-value">{resumenInventario.b2}</div>
+	                  <input
+	                    className="form-control form-control-sm bodega-inv-kpi-input"
+	                    value={bodega2Nombre}
+	                    onChange={(e) => setBodega2Nombre(e.target.value)}
+	                  />
+	                </div>
+	              </div>
+	            </div>
+	          </div>
           <div className="table-responsive">
             <table className="table table-sm mb-0 bodega-table">
               <thead className="thead-light">
@@ -3969,32 +4016,39 @@ export default function BodegaRetiros() {
                       <td>{r.equipo_nombre || "-"}</td>
                       <td>{r.cliente || "-"}</td>
                       <td>{r.centro || "-"}</td>
-                      <td>
-                        {r.estado_equipo === "Operativo" ? (
-                          <span className="badge badge-success">{r.estado_equipo}</span>
-                        ) : r.estado_equipo === "No operativo / baja" ? (
-                          <span className="badge badge-danger">{r.estado_equipo}</span>
-                        ) : r.estado_equipo === "Requiere repuesto" ? (
-                          <span className="badge badge-warning">{r.estado_equipo}</span>
-                        ) : (
-                          <span className="badge badge-secondary">{r.estado_equipo}</span>
-                        )}
-                      </td>
-                      <td>
-                        {String(r.estado_asignacion || "en_bodega").toLowerCase() === "asignado_tecnico" ? (
-                          <span className="badge badge-info">
-                            Asignado: {r.tecnico_asignado_nombre || "Tecnico"}
-                          </span>
-                        ) : (
-                          <span className="badge badge-secondary">En bodega</span>
-                        )}
-                      </td>
+	                      <td>
+	                        {(() => {
+	                          const estadoEquipoNorm = normalizeText(r.estado_equipo || "");
+	                          if (estadoEquipoNorm === "operativo") {
+	                            return <span className="badge badge-success">{r.estado_equipo}</span>;
+	                          }
+	                          if (estadoEquipoNorm.includes("baja")) {
+	                            return <span className="badge badge-danger">{r.estado_equipo}</span>;
+	                          }
+	                          if (estadoEquipoNorm.includes("revision") || estadoEquipoNorm.includes("repuesto")) {
+	                            return <span className="badge badge-warning">{r.estado_equipo}</span>;
+	                          }
+	                          return <span className="badge badge-secondary">{r.estado_equipo}</span>;
+	                        })()}
+	                      </td>
+	                      <td>
+	                        {(() => {
+	                          const asignacion = String(r.estado_asignacion || "en_bodega").toLowerCase();
+	                          if (asignacion === "asignado_tecnico") {
+	                            return <span className="badge badge-info">Asignado: {r.tecnico_asignado_nombre || "Tecnico"}</span>;
+	                          }
+	                          if (asignacion === "asignado_armado") {
+	                            return <span className="badge badge-primary">Asignado a armado</span>;
+	                          }
+	                          return <span className="badge badge-secondary">En bodega</span>;
+	                        })()}
+	                      </td>
                       <td>{r.ubicacion || "-"}</td>
                       <td>{formatDateTime(r.updated_at)}</td>
                       <td className="text-center">
                         {r.es_manual ? (
                           <div className="d-inline-flex" style={{ gap: 6 }}>
-                            {canGestionarAsignaciones && Number(r.id_bodega_equipo || 0) > 0 && String(r.estado_asignacion || "en_bodega").toLowerCase() !== "asignado_tecnico" ? (
+	                            {canGestionarAsignaciones && Number(r.id_bodega_equipo || 0) > 0 && String(r.estado_asignacion || "en_bodega").toLowerCase() === "en_bodega" ? (
                               <button
                                 className="btn btn-sm btn-primary"
                                 title="Asignar a tecnico"
