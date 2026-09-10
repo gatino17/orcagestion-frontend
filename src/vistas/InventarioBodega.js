@@ -52,6 +52,8 @@ const resumenVacio = {
   duplicados_detalle: [],
 };
 
+const TOMAS_POR_PAGINA = 8;
+
 export default function InventarioBodega() {
   const [tomas, setTomas] = useState([]);
   const [tomaActiva, setTomaActiva] = useState(null);
@@ -64,6 +66,7 @@ export default function InventarioBodega() {
   const [scanObs, setScanObs] = useState("");
   const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", observacion: "" });
   const [filtroTomas, setFiltroTomas] = useState("todos");
+  const [paginaTomas, setPaginaTomas] = useState(1);
   const [filtroDetalle, setFiltroDetalle] = useState("");
   const [showNuevaTomaModal, setShowNuevaTomaModal] = useState(false);
   const [showAgregarBodegaModal, setShowAgregarBodegaModal] = useState(false);
@@ -114,6 +117,7 @@ export default function InventarioBodega() {
 
   useEffect(() => {
     cargarTomas();
+    setPaginaTomas(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroTomas]);
 
@@ -130,6 +134,17 @@ export default function InventarioBodega() {
   }, [tomas]);
 
   const resumen = tomaActiva?.resumen || resumenVacio;
+  const totalPaginasTomas = Math.max(1, Math.ceil(tomas.length / TOMAS_POR_PAGINA));
+  const tomasPaginadas = useMemo(() => {
+    const paginaSegura = Math.min(Math.max(paginaTomas, 1), totalPaginasTomas);
+    const inicio = (paginaSegura - 1) * TOMAS_POR_PAGINA;
+    return tomas.slice(inicio, inicio + TOMAS_POR_PAGINA);
+  }, [paginaTomas, tomas, totalPaginasTomas]);
+
+  useEffect(() => {
+    if (paginaTomas > totalPaginasTomas) setPaginaTomas(totalPaginasTomas);
+  }, [paginaTomas, totalPaginasTomas]);
+
   const categoriasInventario = useMemo(() => {
     const out = [];
     tiposEquipo.forEach((tipo) => {
@@ -387,8 +402,8 @@ export default function InventarioBodega() {
               {!tomas.length ? (
                 <div className="p-3 text-muted small">Sin tomas registradas.</div>
               ) : (
-                tomas.map((item) => (
-                  <button
+	                tomasPaginadas.map((item) => (
+	                  <button
                     key={item.id_toma}
                     type="button"
                     className={`list-group-item list-group-item-action ${tomaActiva?.id_toma === item.id_toma ? "active" : ""}`}
@@ -402,11 +417,36 @@ export default function InventarioBodega() {
                       {formatDateTime(item.fecha_inicio)} · {item.resumen?.encontrados || 0}/{item.resumen?.total_esperado || 0}
                     </div>
                   </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+	                ))
+	              )}
+	            </div>
+	            {tomas.length > TOMAS_POR_PAGINA ? (
+	              <div className="inventario-history-pagination">
+	                <button
+	                  type="button"
+	                  className="btn btn-light btn-sm"
+	                  disabled={paginaTomas <= 1}
+	                  onClick={() => setPaginaTomas((prev) => Math.max(1, prev - 1))}
+	                >
+	                  <i className="fas fa-chevron-left mr-1" />
+	                  Anterior
+	                </button>
+	                <span>
+	                  Pagina {Math.min(paginaTomas, totalPaginasTomas)} de {totalPaginasTomas}
+	                </span>
+	                <button
+	                  type="button"
+	                  className="btn btn-light btn-sm"
+	                  disabled={paginaTomas >= totalPaginasTomas}
+	                  onClick={() => setPaginaTomas((prev) => Math.min(totalPaginasTomas, prev + 1))}
+	                >
+	                  Siguiente
+	                  <i className="fas fa-chevron-right ml-1" />
+	                </button>
+	              </div>
+	            ) : null}
+	          </div>
+	        </div>
 
 	        <div className="col-xl-9 mb-3">
           <div className="card inventario-card inventario-detail-card">
