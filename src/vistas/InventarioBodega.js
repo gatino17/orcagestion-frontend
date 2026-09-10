@@ -410,8 +410,8 @@ export default function InventarioBodega() {
 
 	        <div className="col-xl-9 mb-3">
           <div className="card inventario-card inventario-detail-card">
-            <div className="card-header bg-white d-flex align-items-center justify-content-between flex-wrap">
-              <div>
+            <div className="card-header bg-white inventario-detail-header">
+              <div className="inventario-detail-heading">
                 <strong>
                   <i className="fas fa-clipboard-check mr-2 text-primary" />
                   {tomaActiva ? tomaActiva.nombre : "Detalle de inventario"}
@@ -421,7 +421,7 @@ export default function InventarioBodega() {
                 </div>
               </div>
               {tomaActiva?.estado === "abierto" ? (
-                <button className="btn btn-outline-success btn-sm" onClick={cerrarToma} disabled={saving}>
+                <button className="btn btn-outline-success btn-sm inventario-close-toma-btn" onClick={cerrarToma} disabled={saving}>
                   <i className="fas fa-lock mr-1" />
                   Cerrar toma
                 </button>
@@ -431,7 +431,7 @@ export default function InventarioBodega() {
             {!tomaActiva ? (
               <div className="card-body text-center text-muted py-5">No hay una toma seleccionada.</div>
             ) : (
-              <div className="card-body">
+              <div className="card-body inventario-detail-body">
                 <div className="inventario-kpi-grid">
                   <div className="inventario-kpi blue">
                     <span>Esperados</span>
@@ -478,12 +478,12 @@ export default function InventarioBodega() {
                 </div>
 
                 {tomaActiva.estado === "abierto" ? (
-	                  <form className="inventario-scan-box" onSubmit={registrarEscaneo}>
-	                    <div className="row align-items-end">
-	                      <div className="col-md-3">
-	                        <label>Categoria</label>
-	                        <select
-	                          className="form-control"
+                  <form className="inventario-scan-box" onSubmit={registrarEscaneo}>
+                    <div className="inventario-scan-grid">
+                      <div className="inventario-scan-field">
+                        <label>Categoria</label>
+                        <select
+                          className="form-control"
 	                          value={categoriaSeleccionada}
 	                          onChange={(e) => {
 	                            setCategoriaSeleccionada(e.target.value);
@@ -492,13 +492,13 @@ export default function InventarioBodega() {
 	                        >
 	                          {categoriasInventario.map((categoria) => (
 	                            <option key={categoria} value={categoria}>{categoria}</option>
-	                          ))}
-	                        </select>
-	                      </div>
-	                      <div className="col-md-3 mt-2 mt-md-0">
-	                        <label>Equipo</label>
-	                        <select
-	                          className="form-control"
+                          ))}
+                        </select>
+                      </div>
+                      <div className="inventario-scan-field">
+                        <label>Equipo</label>
+                        <select
+                          className="form-control"
 	                          value={tipoSeleccionado}
 	                          onChange={(e) => setTipoSeleccionado(e.target.value)}
 	                        >
@@ -507,32 +507,32 @@ export default function InventarioBodega() {
 	                            <option key={`${tipo.categoria}-${tipo.equipo_nombre}`} value={tipo.equipo_nombre}>
 	                              {tipo.equipo_nombre}
 	                            </option>
-	                          ))}
-	                        </select>
-	                      </div>
-	                      <div className="col-md-3 mt-2 mt-md-0">
-	                        <label>Codigo o numero de serie</label>
-	                        <input
-	                          className="form-control form-control-lg"
+                          ))}
+                        </select>
+                      </div>
+                      <div className="inventario-scan-field inventario-scan-code">
+                        <label>Codigo o numero de serie</label>
+                        <input
+                          className="form-control form-control-lg"
                           placeholder="Escanea o escribe el codigo"
                           value={scanValor}
                           onChange={(e) => setScanValor(e.target.value)}
-	                          autoFocus
-	                        />
-	                      </div>
-	                      <div className="col-md-2 mt-2 mt-md-0">
-	                        <label>Observacion</label>
-	                        <input
-	                          className="form-control"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="inventario-scan-field">
+                        <label>Observacion</label>
+                        <input
+                          className="form-control"
                           value={scanObs}
-	                          onChange={(e) => setScanObs(e.target.value)}
-	                        />
-	                      </div>
-	                      <div className="col-md-1 mt-2 mt-md-0">
-	                        <button className="btn btn-primary btn-block" disabled={saving || !scanValor.trim() || !tipoSeleccionado}>
-	                          {saving ? "..." : "Registrar"}
-	                        </button>
-	                      </div>
+                          onChange={(e) => setScanObs(e.target.value)}
+                        />
+                      </div>
+                      <div className="inventario-scan-action">
+                        <button className="btn btn-primary btn-block inventario-scan-submit" disabled={saving || !scanValor.trim() || !tipoSeleccionado}>
+                          {saving ? "..." : "Registrar"}
+                        </button>
+                      </div>
                     </div>
                   </form>
                 ) : null}
