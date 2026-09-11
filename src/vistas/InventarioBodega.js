@@ -37,6 +37,13 @@ const formatDateTime = (value) => {
   });
 };
 
+const normalizarBusqueda = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
 const resumenVacio = {
   total_esperado: 0,
   total_escaneos: 0,
@@ -65,6 +72,7 @@ export default function InventarioBodega() {
   const [scanValor, setScanValor] = useState("");
   const [scanObs, setScanObs] = useState("");
   const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", observacion: "" });
+  const [busquedaEquipoBodega, setBusquedaEquipoBodega] = useState("");
   const [filtroTomas, setFiltroTomas] = useState("todos");
   const [paginaTomas, setPaginaTomas] = useState(1);
   const [filtroDetalle, setFiltroDetalle] = useState("");
@@ -157,6 +165,18 @@ export default function InventarioBodega() {
     () => tiposEquipo.filter((tipo) => String(tipo.categoria || "Sin categoria").trim() === categoriaSeleccionada),
     [categoriaSeleccionada, tiposEquipo]
   );
+  const tiposBodegaVisibles = useMemo(() => {
+    const q = normalizarBusqueda(busquedaEquipoBodega);
+    if (!q) return tiposCategoria;
+    return tiposEquipo.filter((tipo) => {
+      const categoria = normalizarBusqueda(tipo.categoria || "Sin categoria");
+      const equipo = normalizarBusqueda(tipo.equipo_nombre);
+      return categoria.includes(q) || equipo.includes(q);
+    });
+  }, [busquedaEquipoBodega, tiposCategoria, tiposEquipo]);
+  const equipoBodegaSelectValue = tipoSeleccionado
+    ? `${categoriaSeleccionada}|||${tipoSeleccionado}`
+    : "";
 
   useEffect(() => {
     if (!categoriasInventario.length) return;
@@ -759,19 +779,42 @@ export default function InventarioBodega() {
 	                >
 	                  <span>&times;</span>
 	                </button>
-	              </div>
-	              <div className="modal-body">
-	                <div className="form-row">
-	                  <div className="form-group col-md-6">
-	                    <label>Categoria</label>
+		              </div>
+		              <div className="modal-body">
+		                <div className="form-group">
+		                  <label>Buscar equipo</label>
+		                  <div className="inventario-modal-search">
+		                    <i className="fas fa-search" />
+		                    <input
+		                      className="form-control"
+		                      placeholder="Ej: router, camara, tablero..."
+		                      value={busquedaEquipoBodega}
+		                      onChange={(e) => setBusquedaEquipoBodega(e.target.value)}
+		                    />
+		                    {busquedaEquipoBodega.trim() ? (
+		                      <button
+		                        type="button"
+		                        className="inventario-modal-search-clear"
+		                        onClick={() => setBusquedaEquipoBodega("")}
+		                        title="Limpiar busqueda"
+		                      >
+		                        <i className="fas fa-times" />
+		                      </button>
+		                    ) : null}
+		                  </div>
+		                </div>
+		                <div className="form-row">
+		                  <div className="form-group col-md-6">
+		                    <label>Categoria</label>
 	                    <select
 	                      className="form-control"
-	                      value={categoriaSeleccionada}
-	                      onChange={(e) => {
-	                        setCategoriaSeleccionada(e.target.value);
-	                        setTipoSeleccionado("");
-	                      }}
-	                    >
+		                      value={categoriaSeleccionada}
+		                      onChange={(e) => {
+		                        setCategoriaSeleccionada(e.target.value);
+		                        setTipoSeleccionado("");
+		                        setBusquedaEquipoBodega("");
+		                      }}
+		                    >
 	                      {categoriasInventario.map((categoria) => (
 	                        <option key={categoria} value={categoria}>{categoria}</option>
 	                      ))}
@@ -779,19 +822,27 @@ export default function InventarioBodega() {
 	                  </div>
 	                  <div className="form-group col-md-6">
 	                    <label>Equipo</label>
-	                    <select
-	                      className="form-control"
-	                      value={tipoSeleccionado}
-	                      onChange={(e) => setTipoSeleccionado(e.target.value)}
-	                    >
-	                      <option value="">Seleccionar</option>
-	                      {tiposCategoria.map((tipo) => (
-	                        <option key={`${tipo.categoria}-${tipo.equipo_nombre}`} value={tipo.equipo_nombre}>
-	                          {tipo.equipo_nombre}
-	                        </option>
-	                      ))}
-	                    </select>
-	                  </div>
+		                    <select
+		                      className="form-control"
+		                      value={equipoBodegaSelectValue}
+		                      onChange={(e) => {
+		                        const [categoria, equipo] = String(e.target.value || "").split("|||");
+		                        setCategoriaSeleccionada(categoria || categoriaSeleccionada);
+		                        setTipoSeleccionado(equipo || "");
+		                      }}
+		                    >
+		                      <option value="">Seleccionar</option>
+		                      {tiposBodegaVisibles.map((tipo) => {
+		                        const categoria = String(tipo.categoria || "Sin categoria").trim() || "Sin categoria";
+		                        const equipo = String(tipo.equipo_nombre || "").trim();
+		                        return (
+		                        <option key={`${categoria}-${equipo}`} value={`${categoria}|||${equipo}`}>
+		                          {busquedaEquipoBodega.trim() ? `${equipo} · ${categoria}` : equipo}
+		                        </option>
+		                        );
+		                      })}
+		                    </select>
+		                  </div>
 	                </div>
 	                <div className="form-row">
 	                  <div className="form-group col-md-6">

@@ -246,6 +246,46 @@
   border-top: 1px solid #e2e8f0;
 }
 
+.inventario-modal-search {
+  position: relative;
+}
+
+.inventario-modal-search > i {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  z-index: 2;
+  color: #64748b;
+  transform: translateY(-50%);
+}
+
+.inventario-modal-search .form-control {
+  height: 44px;
+  padding-left: 2.45rem;
+  padding-right: 2.45rem;
+  border-color: #bfdbfe;
+  border-radius: 14px;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.inventario-modal-search-clear {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  color: #64748b;
+  background: #eaf2ff;
+  transform: translateY(-50%);
+}
+
 .inventario-tomas-list {
   max-height: 520px;
   overflow: auto;
