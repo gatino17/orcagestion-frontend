@@ -1562,6 +1562,15 @@ export const obtenerInventarioBodegaToma = async (id, params = {}) => {
     }
 };
 
+export const eliminarInventarioBodegaToma = async (id) => {
+    try {
+        const response = await axios.delete(`${BASE_URL}/inventarios/bodega_tomas/${id}`, authHeaders());
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const registrarInventarioBodegaEscaneo = async (id, payload) => {
     try {
         const response = await axios.post(`${BASE_URL}/inventarios/bodega_tomas/${id}/escaneos`, payload || {}, authHeaders());
@@ -1582,7 +1591,7 @@ export const cerrarInventarioBodegaToma = async (id) => {
 
 export const eliminarInventarioBodegaEscaneo = async (id) => {
     try {
-        const response = await axios.delete(`${BASE_URL}/inventarios/bodega_tomas/escaneos/${id}`);
+        const response = await axios.delete(`${BASE_URL}/inventarios/bodega_tomas/escaneos/${id}`, authHeaders());
         return response.data;
     } catch (error) {
         throw error;

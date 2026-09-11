@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { jwtDecode } from "jwt-decode";
 import {
   cerrarInventarioBodegaToma,
   crearInventarioBodegaEquipos,
   crearInventarioBodegaToma,
+  eliminarInventarioBodegaToma,
   eliminarInventarioBodegaEscaneo,
   obtenerInventarioBodegaToma,
   obtenerInventarioBodegaTomas,
@@ -29,6 +31,7 @@ const formatDateTime = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("es-CL", {
+    timeZone: "America/Santiago",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -83,6 +86,17 @@ export default function InventarioBodega() {
     ubicacion: "Bodega central",
     observacion: "",
   });
+
+  const esAdmin = useMemo(() => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return false;
+      const decoded = jwtDecode(token);
+      return String(decoded?.rol || decoded?.role || "").trim().toLowerCase() === "admin";
+    } catch {
+      return false;
+    }
+  }, []);
 
   const cargarTomas = async (seleccionarId = null) => {
     setLoading(true);
@@ -142,6 +156,7 @@ export default function InventarioBodega() {
   }, [tomas]);
 
   const resumen = tomaActiva?.resumen || resumenVacio;
+  const puedeEliminarEscaneos = tomaActiva?.estado === "abierto" || esAdmin;
   const totalPaginasTomas = Math.max(1, Math.ceil(tomas.length / TOMAS_POR_PAGINA));
   const tomasPaginadas = useMemo(() => {
     const paginaSegura = Math.min(Math.max(paginaTomas, 1), totalPaginasTomas);
@@ -290,15 +305,39 @@ export default function InventarioBodega() {
     }
   };
 
-  const eliminarEscaneo = async (id) => {
-    if (!id || !window.confirm("Eliminar este escaneo de la toma?")) return;
+  const eliminarEscaneo = async (item) => {
+    if (!item?.id_escaneo) return;
+    const nombreEquipo = item.equipo_nombre || item.codigo || item.numero_serie || "este equipo";
+    if (!window.confirm(`Eliminar ${nombreEquipo} del informe?`)) return;
     setSaving(true);
     try {
-      await eliminarInventarioBodegaEscaneo(id);
+      await eliminarInventarioBodegaEscaneo(item.id_escaneo);
       await cargarTomas(tomaActiva?.id_toma);
     } catch (error) {
       console.error("Error al eliminar escaneo:", error);
       alert(error?.response?.data?.error || "No se pudo eliminar el escaneo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const eliminarToma = async (item) => {
+    if (!item?.id_toma || !esAdmin) return;
+    const totalEscaneos = Number(item?.resumen?.total_escaneos || 0);
+    const mensaje = totalEscaneos
+      ? `Eliminar el informe "${item.nombre}" y sus ${totalEscaneos} escaneo(s)? Esta accion no se puede deshacer.`
+      : `Eliminar el informe "${item.nombre}"? Esta accion no se puede deshacer.`;
+    if (!window.confirm(mensaje)) return;
+    setSaving(true);
+    try {
+      await eliminarInventarioBodegaToma(item.id_toma);
+      if (tomaActiva?.id_toma === item.id_toma) {
+        setTomaActiva(null);
+      }
+      await cargarTomas(null);
+    } catch (error) {
+      console.error("Error al eliminar informe de inventario:", error);
+      alert(error?.response?.data?.error || "No se pudo eliminar el informe.");
     } finally {
       setSaving(false);
     }
@@ -423,20 +462,37 @@ export default function InventarioBodega() {
                 <div className="p-3 text-muted small">Sin tomas registradas.</div>
               ) : (
 	                tomasPaginadas.map((item) => (
-	                  <button
+	                  <div
                     key={item.id_toma}
-                    type="button"
-                    className={`list-group-item list-group-item-action ${tomaActiva?.id_toma === item.id_toma ? "active" : ""}`}
-                    onClick={() => cargarDetalle(item.id_toma)}
+                    className={`list-group-item inventario-toma-row ${tomaActiva?.id_toma === item.id_toma ? "active" : ""}`}
                   >
-                    <div className="d-flex justify-content-between align-items-start">
-                      <strong>{item.nombre}</strong>
-                      <span className={`inventario-status ${item.estado}`}>{estadoLabel[item.estado] || item.estado}</span>
-                    </div>
-                    <div className="small mt-1">
-                      {formatDateTime(item.fecha_inicio)} · {item.resumen?.encontrados || 0}/{item.resumen?.total_esperado || 0}
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      className="inventario-toma-main"
+                      onClick={() => cargarDetalle(item.id_toma)}
+                    >
+                      <div className="d-flex justify-content-between align-items-start">
+                        <strong>{item.nombre}</strong>
+                        <span className={`inventario-status ${item.estado}`}>{estadoLabel[item.estado] || item.estado}</span>
+                      </div>
+                      <div className="small mt-1">
+                        {formatDateTime(item.fecha_inicio)} &middot; {item.resumen?.encontrados || 0}/{item.resumen?.total_esperado || 0}
+                      </div>
+                    </button>
+                    {esAdmin ? (
+                      <div className="inventario-toma-actions">
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => eliminarToma(item)}
+                          title="Eliminar informe"
+                          disabled={saving}
+                        >
+                          <i className="fas fa-trash" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
 	                ))
 	              )}
 	            </div>
@@ -477,7 +533,7 @@ export default function InventarioBodega() {
                   {tomaActiva ? tomaActiva.nombre : "Detalle de inventario"}
                 </strong>
                 <div className="small text-muted">
-                  {tomaActiva ? `${estadoLabel[tomaActiva.estado] || tomaActiva.estado} · ${formatDateTime(tomaActiva.fecha_inicio)}` : "Selecciona o crea un informe."}
+                  {tomaActiva ? `${estadoLabel[tomaActiva.estado] || tomaActiva.estado} - ${formatDateTime(tomaActiva.fecha_inicio)}` : "Selecciona o crea un informe."}
                 </div>
               </div>
               {tomaActiva?.estado === "abierto" ? (
@@ -643,11 +699,12 @@ export default function InventarioBodega() {
                                 </td>
                                 <td>{formatDateTime(item.created_at)}</td>
                                 <td className="text-right">
-                                  {tomaActiva.estado === "abierto" ? (
+                                  {puedeEliminarEscaneos ? (
                                     <button
                                       className="btn btn-outline-danger btn-sm"
-                                      onClick={() => eliminarEscaneo(item.id_escaneo)}
-                                      title="Eliminar escaneo"
+                                      onClick={() => eliminarEscaneo(item)}
+                                      title="Eliminar equipo del informe"
+                                      disabled={saving}
                                     >
                                       <i className="fas fa-trash" />
                                     </button>
@@ -837,7 +894,7 @@ export default function InventarioBodega() {
 		                        const equipo = String(tipo.equipo_nombre || "").trim();
 		                        return (
 		                        <option key={`${categoria}-${equipo}`} value={`${categoria}|||${equipo}`}>
-		                          {busquedaEquipoBodega.trim() ? `${equipo} · ${categoria}` : equipo}
+		                          {busquedaEquipoBodega.trim() ? `${equipo} - ${categoria}` : equipo}
 		                        </option>
 		                        );
 		                      })}
@@ -899,3 +956,5 @@ export default function InventarioBodega() {
 	    </div>
 	  );
 	}
+
+
