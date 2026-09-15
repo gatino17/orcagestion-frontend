@@ -10,6 +10,7 @@ import {
   obtenerInventarioBodegaTomas,
   obtenerInventarioBodegaTipos,
   registrarInventarioBodegaEscaneo,
+  reabrirInventarioBodegaToma,
 } from "../api";
 import "./InventarioBodega.css";
 
@@ -305,6 +306,22 @@ export default function InventarioBodega() {
     }
   };
 
+  const reabrirToma = async (item = tomaActiva) => {
+    if (!item?.id_toma || !esAdmin || saving) return;
+    if (!window.confirm(`Reabrir el informe "${item.nombre}" para editar sus equipos?`)) return;
+    setSaving(true);
+    try {
+      const data = await reabrirInventarioBodegaToma(item.id_toma);
+      setTomaActiva(data?.toma || null);
+      await cargarTomas(data?.toma?.id_toma || item.id_toma);
+    } catch (error) {
+      console.error("Error al reabrir toma:", error);
+      alert(error?.response?.data?.error || "No se pudo reabrir el informe.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const eliminarEscaneo = async (item) => {
     if (!item?.id_escaneo) return;
     const nombreEquipo = item.equipo_nombre || item.codigo || item.numero_serie || "este equipo";
@@ -481,6 +498,17 @@ export default function InventarioBodega() {
                     </button>
                     {esAdmin ? (
                       <div className="inventario-toma-actions">
+                        {item.estado === "cerrado" ? (
+                          <button
+                            type="button"
+                            className="btn btn-outline-warning btn-sm"
+                            onClick={() => reabrirToma(item)}
+                            title="Reabrir informe"
+                            disabled={saving}
+                          >
+                            <i className="fas fa-lock-open" />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="btn btn-outline-danger btn-sm"
@@ -536,12 +564,20 @@ export default function InventarioBodega() {
                   {tomaActiva ? `${estadoLabel[tomaActiva.estado] || tomaActiva.estado} - ${formatDateTime(tomaActiva.fecha_inicio)}` : "Selecciona o crea un informe."}
                 </div>
               </div>
-              {tomaActiva?.estado === "abierto" ? (
-                <button className="btn btn-outline-success btn-sm inventario-close-toma-btn" onClick={cerrarToma} disabled={saving}>
-                  <i className="fas fa-lock mr-1" />
-                  Cerrar toma
-                </button>
-              ) : null}
+              <div className="inventario-detail-actions">
+                {tomaActiva?.estado === "abierto" ? (
+                  <button className="btn btn-outline-success btn-sm inventario-close-toma-btn" onClick={cerrarToma} disabled={saving}>
+                    <i className="fas fa-lock mr-1" />
+                    Cerrar toma
+                  </button>
+                ) : null}
+                {tomaActiva?.estado === "cerrado" && esAdmin ? (
+                  <button className="btn btn-outline-warning btn-sm inventario-close-toma-btn" onClick={() => reabrirToma()} disabled={saving}>
+                    <i className="fas fa-lock-open mr-1" />
+                    Reabrir informe
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {!tomaActiva ? (

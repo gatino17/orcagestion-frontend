@@ -497,6 +497,14 @@
   font-size: 0.98rem;
 }
 
+.inventario-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .inventario-close-toma-btn {
   min-width: 122px;
   white-space: nowrap;
