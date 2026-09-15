@@ -629,6 +629,23 @@ export default function BodegaRetiros() {
     });
     return map;
   }, [ordenesRevision]);
+  const revisionActivaPorInventario = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(ordenesRevision) ? ordenesRevision : []).forEach((o) => {
+      if (String(o?.estado || "").toLowerCase() === "cerrado") return;
+      const area = String(o?.area || "").toLowerCase();
+      (Array.isArray(o?.detalles) ? o.detalles : []).forEach((d) => {
+        const idBodega = Number(d?.bodega_equipo_id || 0);
+        if (!idBodega) return;
+        map.set(idBodega, {
+          area,
+          estadoOrden: String(o?.estado || "").toLowerCase(),
+          id_revision_orden: o?.id_revision_orden || null,
+        });
+      });
+    });
+    return map;
+  }, [ordenesRevision]);
   const enBodegaDisponibles = useMemo(
     () =>
       enBodega.filter((r) => {
@@ -647,21 +664,27 @@ export default function BodegaRetiros() {
           const estadoEquipo = normalizeText(item?.estado_equipo || "Operativo");
           return estadoAsignacion === "en_bodega" && ubicacion === "bodega central" && !estadoEquipo.includes("baja");
         })
-        .map((item, idx) => ({
-          tipoFila: "inventario_bodega",
-          rowKey: `inv-bod-${item?.id_bodega_equipo || item?.id || item?.codigo || item?.numero_serie || idx}`,
-          item: {
-            ...item,
-            id_bodega_equipo: item?.id_bodega_equipo || item?.id || null,
-            numero_serie: item?.numero_serie || "-",
-            codigo: item?.codigo || "-",
-            equipo_nombre: item?.equipo_nombre || "-",
-            ubicacion: item?.ubicacion || "Bodega central",
-            estado_equipo: item?.estado_equipo || "Operativo",
-            estado_asignacion: item?.estado_asignacion || "en_bodega",
-          },
-        })),
-    [inventarioManual]
+        .map((item, idx) => {
+          const idBodega = Number(item?.id_bodega_equipo || item?.id || 0);
+          const revisionActiva = revisionActivaPorInventario.get(idBodega);
+          return {
+            tipoFila: "inventario_bodega",
+            rowKey: `inv-bod-${item?.id_bodega_equipo || item?.id || item?.codigo || item?.numero_serie || idx}`,
+            item: {
+              ...item,
+              id_bodega_equipo: item?.id_bodega_equipo || item?.id || null,
+              numero_serie: item?.numero_serie || "-",
+              codigo: item?.codigo || "-",
+              equipo_nombre: item?.equipo_nombre || "-",
+              ubicacion: item?.ubicacion || "Bodega central",
+              estado_equipo: revisionActiva ? "Requiere revision" : item?.estado_equipo || "Operativo",
+              estado_asignacion: item?.estado_asignacion || "en_bodega",
+              revision_area: revisionActiva?.area || "",
+              revision_orden_id: revisionActiva?.id_revision_orden || null,
+            },
+          };
+        }),
+    [inventarioManual, revisionActivaPorInventario]
   );
 
   const enBodegaRows = useMemo(
@@ -1639,6 +1662,30 @@ export default function BodegaRetiros() {
       id_retiro_terreno: r?.id_retiro_terreno || null,
       centro: r?.centro || "-",
       empresa: r?.empresa || r?.cliente || "-",
+      row,
+    });
+  };
+
+  const abrirRevisionInventarioBodega = (row) => {
+    const item = row?.item || {};
+    const idBodega = Number(item?.id_bodega_equipo || 0);
+    if (!idBodega) return;
+    const revisionActiva = revisionActivaPorInventario.get(idBodega);
+    setRevisionEquiposArea([
+      {
+        id_retiro_equipo: `inv-${idBodega}`,
+        id_bodega_equipo: idBodega,
+        equipo_nombre: item?.equipo_nombre || "-",
+        numero_serie: item?.numero_serie || "",
+        codigo: item?.codigo || "",
+        area: revisionActiva?.area || "",
+        bloqueado: !!revisionActiva,
+      },
+    ]);
+    setRetiroRevision({
+      tipoFuente: "inventario_bodega",
+      centro: "Bodega central",
+      empresa: "Inventario bodega",
       row,
     });
   };
@@ -3350,11 +3397,11 @@ export default function BodegaRetiros() {
                           <td>{itemId ? `INV-${itemId}` : "INV"}</td>
                           <td>{formatDate(item?.fecha_ingreso || item?.created_at)}</td>
                           <td>{item?.ubicacion || "Bodega central"}</td>
-                          <td>
-                            <span className={`badge ${enRevision ? "badge-warning" : "badge-success"}`}>
-                              {enRevision ? "En revision" : "En bodega"}
-                            </span>
-                          </td>
+	                          <td>
+	                            <span className={`badge ${enRevision ? "badge-warning" : "badge-success"}`}>
+	                              {enRevision ? `En revision${item?.revision_area ? ` (${labelArea(item.revision_area)})` : ""}` : "En bodega"}
+	                            </span>
+	                          </td>
                           <td>{item?.asignado_por_nombre || "-"}</td>
                           <td>{formatDateTime(item?.updated_at || item?.created_at)}</td>
                           <td>
@@ -3373,26 +3420,11 @@ export default function BodegaRetiros() {
                           </td>
 	                          <td className="text-center">
 	                            <div className="d-flex justify-content-center flex-wrap" style={{ gap: 6 }}>
-                              <button
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={async () => {
-                                  if (!itemId) return;
-                                  if (!window.confirm("Enviar este equipo a revision?")) return;
-                                  setSavingId(`inv-rev-${itemId}`);
-                                  try {
-                                    await actualizarInventarioBodegaEquipo(itemId, {
-                                      estado_equipo: "Requiere revision",
-                                      ubicacion: "Bodega central",
-                                    });
-                                    await cargarInventarioManual();
-                                  } catch (e) {
-                                    alert(e?.response?.data?.error || "No se pudo enviar el equipo a revision.");
-                                  } finally {
-                                    setSavingId(null);
-                                  }
-                                }}
-                                disabled={!itemId || savingId === `inv-rev-${itemId}`}
-                              >
+	                              <button
+	                                className="btn btn-outline-primary btn-sm"
+	                                onClick={() => abrirRevisionInventarioBodega(row)}
+	                                disabled={!itemId || savingId === `inv-rev-${itemId}`}
+	                              >
                                 <i className="fas fa-stethoscope mr-1" />
                                 Revision
                               </button>
@@ -4505,10 +4537,11 @@ export default function BodegaRetiros() {
                   className="btn btn-primary"
                   disabled={asignandoRevision}
 		                  onClick={async () => {
-			                    const esBodegaDirecta = ["instalacion_bodega", "mantencion_bodega"].includes(String(retiroRevision?.tipoFuente || ""));
-			                    const esInstalacionBodega = retiroRevision?.tipoFuente === "instalacion_bodega";
-			                    const esMantencionBodega = retiroRevision?.tipoFuente === "mantencion_bodega";
-                            const esRetiroBodega = retiroRevision?.tipoFuente === "retiro_bodega";
+				                    const esBodegaDirecta = ["instalacion_bodega", "mantencion_bodega", "inventario_bodega"].includes(String(retiroRevision?.tipoFuente || ""));
+				                    const esInstalacionBodega = retiroRevision?.tipoFuente === "instalacion_bodega";
+				                    const esMantencionBodega = retiroRevision?.tipoFuente === "mantencion_bodega";
+				                    const esInventarioBodega = retiroRevision?.tipoFuente === "inventario_bodega";
+	                            const esRetiroBodega = retiroRevision?.tipoFuente === "retiro_bodega";
 		                    const retiroId = Number(retiroRevision?.id_retiro_terreno || 0);
 		                    const activos = esBodegaDirecta ? null : revisionActivaPorRetiro.get(retiroId);
 		                    if (!esBodegaDirecta && !retiroId) return;
@@ -4535,22 +4568,23 @@ export default function BodegaRetiros() {
 		                      setAsignandoRevision(true);
 		                      for (const [area, equipos] of Object.entries(grupos)) {
 		                        await crearOrdenRevisionEquipos({
-		                          ...(esBodegaDirecta
-		                            ? {
-		                                centro_id: Number(
-		                                  retiroRevision?.acta?.centro_id ||
-		                                    retiroRevision?.acta?.centro?.id_centro ||
-		                                    retiroRevision?.mantencion?.centro_id ||
-		                                    0
-		                                ),
-		                              }
-		                            : { retiro_terreno_id: retiroId }),
-		                          area,
-		                          detalles: equipos.map((eq) => ({
-		                            ...(esBodegaDirecta ? {} : { retiro_equipo_id: eq.id_retiro_equipo }),
-		                            equipo_nombre: eq.equipo_nombre,
-		                            numero_serie: eq.numero_serie,
-		                            codigo: eq.codigo,
+			                          ...(esBodegaDirecta
+			                            ? {
+			                                centro_id: Number(
+			                                  retiroRevision?.acta?.centro_id ||
+			                                    retiroRevision?.acta?.centro?.id_centro ||
+			                                    retiroRevision?.mantencion?.centro_id ||
+			                                    0
+			                                ),
+			                              }
+			                            : { retiro_terreno_id: retiroId }),
+			                          area,
+			                          detalles: equipos.map((eq) => ({
+			                            ...(esBodegaDirecta ? {} : { retiro_equipo_id: eq.id_retiro_equipo }),
+			                            ...(esInventarioBodega ? { bodega_equipo_id: eq.id_bodega_equipo } : {}),
+			                            equipo_nombre: eq.equipo_nombre,
+			                            numero_serie: eq.numero_serie,
+			                            codigo: eq.codigo,
 		                          })),
 		                        });
 		                      }
@@ -4571,12 +4605,23 @@ export default function BodegaRetiros() {
                                     setAsignandoRevision(false);
                                     return;
                                   }
-                                  await actualizarEstadoCambioEquipoMantencion(
-                                    Number(retiroRevision.row.cambio.id_cambio_equipo_mantencion),
-                                    { estado_logistico: "revision_bodega" }
-                                  );
-			                      } else if (esRetiroBodega && retiroRevision?.row?.retiro?.id_retiro_terreno) {
-                              await actualizarLogisticaBodegaRetiro(Number(retiroRevision.row.retiro.id_retiro_terreno), {
+	                                  await actualizarEstadoCambioEquipoMantencion(
+	                                    Number(retiroRevision.row.cambio.id_cambio_equipo_mantencion),
+	                                    { estado_logistico: "revision_bodega" }
+	                                  );
+				                      } else if (esInventarioBodega) {
+                                await Promise.all(
+                                  seleccionados
+                                    .filter((eq) => Number(eq?.id_bodega_equipo || 0) > 0)
+                                    .map((eq) =>
+                                      actualizarInventarioBodegaEquipo(Number(eq.id_bodega_equipo), {
+                                        estado_equipo: "Requiere revision",
+                                        ubicacion: "Bodega central",
+                                      })
+                                    )
+                                );
+				                      } else if (esRetiroBodega && retiroRevision?.row?.retiro?.id_retiro_terreno) {
+	                              await actualizarLogisticaBodegaRetiro(Number(retiroRevision.row.retiro.id_retiro_terreno), {
                                 recepcion_bodega_por: usuario.nombre,
                                 recepcion_bodega_user_id: usuario.id,
                                 equipos: revisionEquiposArea
@@ -4587,10 +4632,11 @@ export default function BodegaRetiros() {
                                   })),
                               });
 			                      }
-	                      alert("Orden(es) de revision creada(s).");
-	                      setRetiroRevision(null);
-	                      setRevisionEquiposArea([]);
-	                      await cargarRetiros();
+		                      alert("Orden(es) de revision creada(s).");
+		                      setRetiroRevision(null);
+		                      setRevisionEquiposArea([]);
+		                      await cargarRetiros();
+                          if (esInventarioBodega) await cargarInventarioManual();
                     } catch (e) {
                       alert(e?.response?.data?.error || "No se pudo crear la orden de revision.");
                     } finally {
