@@ -212,7 +212,9 @@ export default function InventarioBodega() {
 
   const escaneosFiltrados = useMemo(() => {
     const q = filtroDetalle.trim().toLowerCase();
-    const rows = Array.isArray(tomaActiva?.escaneos) ? tomaActiva.escaneos : [];
+    const rows = Array.isArray(tomaActiva?.escaneos)
+      ? tomaActiva.escaneos.filter((item) => String(item?.resultado || "").toLowerCase() !== "duplicado")
+      : [];
     if (!q) return rows;
     return rows.filter((item) =>
       [
@@ -601,10 +603,6 @@ export default function InventarioBodega() {
                     <span>No esperados</span>
                     <strong>{resumen.no_esperados}</strong>
                   </div>
-	                  <div className="inventario-kpi slate">
-	                    <span>Duplicados</span>
-	                    <strong>{resumen.duplicados}</strong>
-	                  </div>
 	                  <div className="inventario-kpi blue">
 	                    <span>Manuales</span>
 	                    <strong>{resumen.manuales || 0}</strong>
