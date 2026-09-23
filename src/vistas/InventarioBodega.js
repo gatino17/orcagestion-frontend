@@ -65,6 +65,28 @@ const nombreArchivoSeguro = (value) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "inventario-bodega";
 
+const generarSeriesBodega = (codigoValue, serieValue, cantidadValue) => {
+  const codigo = String(codigoValue || "").trim();
+  const serieIngresada = String(serieValue || "").trim();
+  const cantidad = Math.min(500, Math.max(1, Number.parseInt(cantidadValue, 10) || 1));
+  if (!/^\d{5}$/.test(codigo) || !/^\d+$/.test(serieIngresada)) return [];
+
+  const serieCompleta = serieIngresada.startsWith(codigo) && serieIngresada.length > codigo.length;
+  const correlativoTexto = serieCompleta
+    ? serieIngresada.slice(codigo.length)
+    : serieIngresada;
+  if (!/^\d+$/.test(correlativoTexto)) return [];
+
+  const correlativoInicial = Number.parseInt(correlativoTexto, 10);
+  if (!Number.isSafeInteger(correlativoInicial)) return [];
+  const anchoCorrelativo = serieCompleta || correlativoTexto.startsWith("00")
+    ? correlativoTexto.length
+    : correlativoTexto.length + 2;
+  return Array.from({ length: cantidad }, (_, index) =>
+    `${codigo}${String(correlativoInicial + index).padStart(anchoCorrelativo, "0")}`
+  );
+};
+
 const resumenVacio = {
   total_esperado: 0,
   total_escaneos: 0,
@@ -91,7 +113,8 @@ export default function InventarioBodega() {
   const [exportando, setExportando] = useState(false);
   const [scanValor, setScanValor] = useState("");
   const [scanObs, setScanObs] = useState("");
-  const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", observacion: "" });
+  const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", cantidad: 1, observacion: "" });
+  const [seriesBodegaEditadas, setSeriesBodegaEditadas] = useState([]);
   const [busquedaEquipoBodega, setBusquedaEquipoBodega] = useState("");
   const [filtroTomas, setFiltroTomas] = useState("todos");
   const [paginaTomas, setPaginaTomas] = useState(1);
@@ -114,6 +137,14 @@ export default function InventarioBodega() {
       return false;
     }
   }, []);
+  const seriesGeneradasBodega = useMemo(
+    () => generarSeriesBodega(bodegaForm.codigo, bodegaForm.numero_serie, bodegaForm.cantidad),
+    [bodegaForm.cantidad, bodegaForm.codigo, bodegaForm.numero_serie]
+  );
+
+  useEffect(() => {
+    setSeriesBodegaEditadas(seriesGeneradasBodega);
+  }, [seriesGeneradasBodega]);
 
   const cargarTomas = async (seleccionarId = null) => {
     setLoading(true);
@@ -476,24 +507,40 @@ export default function InventarioBodega() {
   };
 
   const agregarEquipoBodega = async () => {
-    if (saving || !tipoSeleccionado || !bodegaForm.codigo.trim()) return;
+    if (saving || !tipoSeleccionado) return;
+    if (!seriesBodegaEditadas.length) {
+      alert("Ingresa un codigo de 5 digitos y el correlativo inicial de la serie.");
+      return;
+    }
+    const seriesNormalizadas = seriesBodegaEditadas.map((serie) => String(serie || "").trim());
+    const seriesValidas = seriesNormalizadas.every(
+      (serie) => /^\d+$/.test(serie) && serie.startsWith(bodegaForm.codigo.trim())
+    );
+    if (!seriesValidas) {
+      alert("Revisa las series: todas deben ser numericas y comenzar con el codigo ingresado.");
+      return;
+    }
+    if (new Set(seriesNormalizadas).size !== seriesNormalizadas.length) {
+      alert("Hay numeros de serie repetidos en el lote. Corrigelos antes de guardar.");
+      return;
+    }
     setSaving(true);
     try {
       await crearInventarioBodegaEquipos({
-        items: [
-          {
-            codigo: bodegaForm.codigo.trim(),
-            numero_serie: bodegaForm.numero_serie.trim() || bodegaForm.codigo.trim(),
-            equipo_nombre: tipoSeleccionado,
-            descripcion_producto: bodegaForm.observacion.trim() || undefined,
-            ubicacion: "Bodega central",
-            estado_equipo: "Operativo",
-          },
-        ],
+        items: seriesNormalizadas.map((numeroSerie) => ({
+          codigo: bodegaForm.codigo.trim(),
+          numero_serie: numeroSerie,
+          equipo_nombre: tipoSeleccionado,
+          descripcion_producto: bodegaForm.observacion.trim() || undefined,
+          ubicacion: "Bodega central",
+          estado_equipo: "Operativo",
+        })),
 	      });
-	      setBodegaForm({ codigo: "", numero_serie: "", observacion: "" });
+	      const totalAgregado = seriesNormalizadas.length;
+	      setBodegaForm({ codigo: "", numero_serie: "", cantidad: 1, observacion: "" });
+	      setSeriesBodegaEditadas([]);
 	      setShowAgregarBodegaModal(false);
-	      alert("Equipo agregado a bodega central.");
+	      alert(`${totalAgregado} ${totalAgregado === 1 ? "equipo agregado" : "equipos agregados"} a bodega central.`);
     } catch (error) {
       console.error("Error al agregar equipo a bodega:", error);
       alert(error?.response?.data?.error || "No se pudo agregar el equipo a bodega.");
@@ -956,7 +1003,7 @@ export default function InventarioBodega() {
 	      ) : null}
 	      {showAgregarBodegaModal ? (
 	        <div className="modal d-block inventario-modal-backdrop" tabIndex="-1" role="dialog">
-	          <div className="modal-dialog modal-dialog-centered" role="document">
+	          <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
 	            <div className="modal-content inventario-toma-modal">
 	              <div className="modal-header">
 	                <div>
@@ -1037,24 +1084,68 @@ export default function InventarioBodega() {
 		                  </div>
 	                </div>
 	                <div className="form-row">
-	                  <div className="form-group col-md-6">
+	                  <div className="form-group col-md-4">
+	                    <label>Cantidad</label>
+	                    <input
+	                      type="number"
+	                      className="form-control"
+	                      min="1"
+	                      max="500"
+	                      value={bodegaForm.cantidad}
+	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, cantidad: e.target.value }))}
+	                    />
+	                  </div>
+	                  <div className="form-group col-md-4">
 	                    <label>Codigo</label>
 	                    <input
 	                      className="form-control"
+	                      inputMode="numeric"
+	                      maxLength={5}
+	                      placeholder="Ej: 60102"
 	                      value={bodegaForm.codigo}
-	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, codigo: e.target.value }))}
+	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, codigo: e.target.value.replace(/\D/g, "").slice(0, 5) }))}
 	                    />
 	                  </div>
-	                  <div className="form-group col-md-6">
-	                    <label>N serie</label>
+	                  <div className="form-group col-md-4">
+	                    <label>N serie inicial</label>
 	                    <input
 	                      className="form-control"
-	                      placeholder="Si queda vacio usa el codigo"
+	                      inputMode="numeric"
+	                      placeholder="Ej: 423"
 	                      value={bodegaForm.numero_serie}
-	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, numero_serie: e.target.value }))}
+	                      onChange={(e) => setBodegaForm((prev) => ({ ...prev, numero_serie: e.target.value.replace(/\D/g, "") }))}
 	                    />
 	                  </div>
 	                </div>
+	                {seriesBodegaEditadas.length ? (
+	                  <div className="inventario-series-editor">
+	                    <div className="inventario-series-editor-header">
+	                      <div>
+	                        <strong>Numeros de serie generados</strong>
+	                        <span>Puedes corregir cualquier serie antes de guardar.</span>
+	                      </div>
+	                      <span className="badge badge-success">{seriesBodegaEditadas.length}</span>
+	                    </div>
+	                    <div className="inventario-series-grid">
+	                      {seriesBodegaEditadas.map((serie, index) => (
+	                        <label key={index} className="inventario-serie-item">
+	                          <span>Nro. {index + 1}</span>
+	                          <input
+	                            className="form-control form-control-sm"
+	                            inputMode="numeric"
+	                            value={serie}
+	                            onChange={(e) => {
+	                              const value = e.target.value.replace(/\D/g, "");
+	                              setSeriesBodegaEditadas((actuales) =>
+	                                actuales.map((item, posicion) => (posicion === index ? value : item))
+	                              );
+	                            }}
+	                          />
+	                        </label>
+	                      ))}
+	                    </div>
+	                  </div>
+	                ) : null}
 	                <div className="form-group mb-0">
 	                  <label>Observacion</label>
 	                  <input
@@ -1078,7 +1169,7 @@ export default function InventarioBodega() {
 	                <button
 	                  className="btn btn-success"
 	                  onClick={agregarEquipoBodega}
-	                  disabled={saving || !tipoSeleccionado || !bodegaForm.codigo.trim()}
+	                  disabled={saving || !tipoSeleccionado || !seriesBodegaEditadas.length}
 	                >
 	                  <i className="fas fa-save mr-2" />
 	                  {saving ? "Guardando..." : "Agregar a bodega central"}
