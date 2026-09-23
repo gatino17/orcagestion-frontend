@@ -21,7 +21,6 @@ const estadoLabel = {
 
 const resultadoLabel = {
   encontrado: "Encontrado",
-  no_esperado: "No esperado",
   duplicado: "Duplicado",
   no_corresponde: "No corresponde",
   manual: "Manual",
@@ -48,18 +47,34 @@ const normalizarBusqueda = (value) =>
     .trim()
     .toLowerCase();
 
+const escaparExcelXml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+const crearFilaExcel = (values, styleId = "") => {
+  const style = styleId ? ` ss:StyleID="${styleId}"` : "";
+  return `<Row>${values.map((value) => `<Cell${style}><Data ss:Type="String">${escaparExcelXml(value)}</Data></Cell>`).join("")}</Row>`;
+};
+
+const nombreArchivoSeguro = (value) =>
+  normalizarBusqueda(value || "inventario-bodega")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "inventario-bodega";
+
 const resumenVacio = {
   total_esperado: 0,
   total_escaneos: 0,
   encontrados: 0,
   faltantes: 0,
-  no_esperados: 0,
   duplicados: 0,
   manuales: 0,
   no_corresponden: 0,
   cumplimiento: 0,
   faltantes_detalle: [],
-  no_esperados_detalle: [],
   duplicados_detalle: [],
 };
 
@@ -73,6 +88,7 @@ export default function InventarioBodega() {
   const [tipoSeleccionado, setTipoSeleccionado] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [scanValor, setScanValor] = useState("");
   const [scanObs, setScanObs] = useState("");
   const [bodegaForm, setBodegaForm] = useState({ codigo: "", numero_serie: "", observacion: "" });
@@ -213,7 +229,7 @@ export default function InventarioBodega() {
   const escaneosFiltrados = useMemo(() => {
     const q = filtroDetalle.trim().toLowerCase();
     const rows = Array.isArray(tomaActiva?.escaneos)
-      ? tomaActiva.escaneos.filter((item) => String(item?.resultado || "").toLowerCase() !== "duplicado")
+      ? tomaActiva.escaneos.filter((item) => !["duplicado", "no_esperado"].includes(String(item?.resultado || "").toLowerCase()))
       : [];
     if (!q) return rows;
     return rows.filter((item) =>
@@ -305,6 +321,100 @@ export default function InventarioBodega() {
       alert(error?.response?.data?.error || "No se pudo cerrar la toma.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const descargarExcel = async () => {
+    if (!tomaActiva?.id_toma || exportando) return;
+    setExportando(true);
+    try {
+      const informe = await obtenerInventarioBodegaToma(tomaActiva.id_toma);
+      const escaneos = (Array.isArray(informe?.escaneos) ? informe.escaneos : []).filter(
+        (item) => !["duplicado", "no_esperado"].includes(String(item?.resultado || "").toLowerCase())
+      );
+      if (!escaneos.length) {
+        alert("El informe no tiene equipos escaneados para exportar.");
+        return;
+      }
+
+      const filasInformacion = [
+        ["Informe", informe.nombre || "Inventario bodega"],
+        ["Estado", estadoLabel[informe.estado] || informe.estado || "-"],
+        ["Ubicacion", informe.ubicacion || "Bodega central"],
+        ["Responsable", informe.responsable_nombre || "-"],
+        ["Inicio", formatDateTime(informe.fecha_inicio)],
+        ["Cierre", formatDateTime(informe.fecha_cierre)],
+      ];
+      const categoriaPorEquipo = new Map(
+        tiposEquipo.map((tipo) => [normalizarBusqueda(tipo.equipo_nombre), tipo.categoria || "Sin categoria"])
+      );
+      const encabezados = [
+        "Categoria",
+        "Equipo",
+        "Codigo",
+        "Numero de serie",
+        "Resultado",
+        "Ubicacion del sistema",
+        "Estado del equipo",
+        "Fecha y hora",
+        "Observacion",
+      ];
+      const filasDetalle = escaneos.map((item) => [
+        item.categoria_seleccionada || categoriaPorEquipo.get(normalizarBusqueda(item.equipo_nombre)) || "Sin categoria",
+        item.equipo_nombre || "-",
+        item.codigo || "-",
+        item.numero_serie || "-",
+        resultadoLabel[item.resultado] || item.resultado || "Registrado",
+        item.ubicacion_sistema || "-",
+        item.estado_sistema || "-",
+        formatDateTime(item.created_at),
+        item.observacion || "-",
+      ]);
+      const contenido = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0B3B8C" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Meta"><Font ss:Bold="1"/><Interior ss:Color="#EAF2FF" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Logo"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="14" ss:Color="#FFFFFF"/><Interior ss:Color="#245B98" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="LogoSub"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="9" ss:Color="#245B98"/></Style>
+  <Style ss:ID="Title"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="16" ss:Color="#245B98"/></Style>
+  <Style ss:ID="ReportName"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="11" ss:Color="#334155"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Inventario bodega"><Table>
+  <Column ss:Width="95"/><Column ss:Width="130"/><Column ss:Width="80"/><Column ss:Width="110"/><Column ss:Width="90"/><Column ss:Width="125"/><Column ss:Width="105"/><Column ss:Width="125"/><Column ss:Width="170"/>
+  <Row ss:Height="30">
+   <Cell ss:MergeAcross="6" ss:StyleID="Title"><Data ss:Type="String">INFORME ORCAGEST - INVENTARIO</Data></Cell>
+   <Cell ss:MergeAcross="1" ss:StyleID="Logo"><Data ss:Type="String">ORCA</Data></Cell>
+  </Row>
+  <Row ss:Height="22">
+   <Cell ss:MergeAcross="6" ss:StyleID="ReportName"><Data ss:Type="String">${escaparExcelXml(informe.nombre || "Inventario bodega")}</Data></Cell>
+   <Cell ss:MergeAcross="1" ss:StyleID="LogoSub"><Data ss:Type="String">TECNOLOGIA</Data></Cell>
+  </Row>
+  ${crearFilaExcel([""])}
+  ${filasInformacion.map((fila) => crearFilaExcel(fila, "Meta")).join("")}
+  ${crearFilaExcel([""])}
+  ${crearFilaExcel(encabezados, "Header")}
+  ${filasDetalle.map((fila) => crearFilaExcel(fila)).join("")}
+ </Table></Worksheet>
+</Workbook>`;
+      const blob = new Blob([contenido], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = `${nombreArchivoSeguro(informe.nombre)}-${String(informe.fecha_inicio || "").slice(0, 10) || "inventario"}.xls`;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al exportar inventario:", error);
+      alert(error?.response?.data?.error || "No se pudo descargar el informe en Excel.");
+    } finally {
+      setExportando(false);
     }
   };
 
@@ -567,6 +677,12 @@ export default function InventarioBodega() {
                 </div>
               </div>
               <div className="inventario-detail-actions">
+                {tomaActiva ? (
+                  <button className="btn btn-outline-primary btn-sm inventario-close-toma-btn" onClick={descargarExcel} disabled={exportando}>
+                    <i className={`fas ${exportando ? "fa-spinner fa-spin" : "fa-file-excel"} mr-1`} />
+                    {exportando ? "Generando..." : "Descargar Excel"}
+                  </button>
+                ) : null}
                 {tomaActiva?.estado === "abierto" ? (
                   <button className="btn btn-outline-success btn-sm inventario-close-toma-btn" onClick={cerrarToma} disabled={saving}>
                     <i className="fas fa-lock mr-1" />
@@ -599,10 +715,6 @@ export default function InventarioBodega() {
                     <span>Faltantes</span>
                     <strong>{resumen.faltantes}</strong>
                   </div>
-                  <div className="inventario-kpi amber">
-                    <span>No esperados</span>
-                    <strong>{resumen.no_esperados}</strong>
-                  </div>
 	                  <div className="inventario-kpi blue">
 	                    <span>Manuales</span>
 	                    <strong>{resumen.manuales || 0}</strong>
@@ -612,20 +724,6 @@ export default function InventarioBodega() {
 	                    <strong>{resumen.no_corresponden || 0}</strong>
 	                  </div>
 	                </div>
-
-                <div className="inventario-progress-block">
-                  <div className="d-flex justify-content-between">
-                    <strong>Cumplimiento fisico</strong>
-                    <strong>{resumen.cumplimiento || 0}%</strong>
-                  </div>
-                  <div className="progress">
-                    <div
-                      className="progress-bar"
-                      role="progressbar"
-                      style={{ width: `${Math.min(100, Number(resumen.cumplimiento || 0))}%` }}
-                    />
-                  </div>
-                </div>
 
                 {tomaActiva.estado === "abierto" ? (
                   <form className="inventario-scan-box" onSubmit={registrarEscaneo}>

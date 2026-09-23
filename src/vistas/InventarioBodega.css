@@ -404,7 +404,7 @@
 
 .inventario-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
@@ -453,24 +453,6 @@
 
 .inventario-kpi.slate strong {
   color: #334155;
-}
-
-.inventario-progress-block {
-  margin-top: 0.9rem;
-  padding: 0.78rem 0.85rem;
-  border-radius: 16px;
-  background: #f8fbff;
-  border: 1px solid #dbeafe;
-}
-
-.inventario-progress-block .progress {
-  height: 10px;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-
-.inventario-progress-block .progress-bar {
-  background: linear-gradient(90deg, #0ea5e9, #22c55e);
 }
 
 .inventario-scan-box {
@@ -586,7 +568,7 @@
 
 @media (max-width: 1400px) {
   .inventario-kpi-grid {
-    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    grid-template-columns: repeat(5, minmax(110px, 1fr));
   }
 
   .inventario-scan-grid {
@@ -616,7 +598,11 @@
 
 @media (max-width: 576px) {
   .inventario-kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventario-kpi-grid .inventario-kpi:last-child {
+    grid-column: 1 / -1;
   }
 
   .inventario-scan-grid {
