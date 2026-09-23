@@ -340,6 +340,7 @@ export default function InventarioBodega() {
       const filasInformacion = [
         ["Informe", informe.nombre || "Inventario bodega"],
         ["Estado", estadoLabel[informe.estado] || informe.estado || "-"],
+        ["Total equipos", escaneos.length],
         ["Ubicacion", informe.ubicacion || "Bodega central"],
         ["Responsable", informe.responsable_nombre || "-"],
         ["Inicio", formatDateTime(informe.fecha_inicio)],
@@ -349,6 +350,7 @@ export default function InventarioBodega() {
         tiposEquipo.map((tipo) => [normalizarBusqueda(tipo.equipo_nombre), tipo.categoria || "Sin categoria"])
       );
       const encabezados = [
+        "N°",
         "Categoria",
         "Equipo",
         "Codigo",
@@ -359,7 +361,8 @@ export default function InventarioBodega() {
         "Fecha y hora",
         "Observacion",
       ];
-      const filasDetalle = escaneos.map((item) => [
+      const filasDetalle = escaneos.map((item, index) => [
+        index + 1,
         item.categoria_seleccionada || categoriaPorEquipo.get(normalizarBusqueda(item.equipo_nombre)) || "Sin categoria",
         item.equipo_nombre || "-",
         item.codigo || "-",
@@ -385,13 +388,13 @@ export default function InventarioBodega() {
   <Style ss:ID="ReportName"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="11" ss:Color="#334155"/></Style>
  </Styles>
  <Worksheet ss:Name="Inventario bodega"><Table>
-  <Column ss:Width="95"/><Column ss:Width="130"/><Column ss:Width="80"/><Column ss:Width="110"/><Column ss:Width="90"/><Column ss:Width="125"/><Column ss:Width="105"/><Column ss:Width="125"/><Column ss:Width="170"/>
+  <Column ss:Width="42"/><Column ss:Width="95"/><Column ss:Width="130"/><Column ss:Width="80"/><Column ss:Width="110"/><Column ss:Width="90"/><Column ss:Width="125"/><Column ss:Width="105"/><Column ss:Width="125"/><Column ss:Width="170"/>
   <Row ss:Height="30">
-   <Cell ss:MergeAcross="6" ss:StyleID="Title"><Data ss:Type="String">INFORME ORCAGEST - INVENTARIO</Data></Cell>
+   <Cell ss:MergeAcross="7" ss:StyleID="Title"><Data ss:Type="String">INFORME ORCAGEST - INVENTARIO</Data></Cell>
    <Cell ss:MergeAcross="1" ss:StyleID="Logo"><Data ss:Type="String">ORCA</Data></Cell>
   </Row>
   <Row ss:Height="22">
-   <Cell ss:MergeAcross="6" ss:StyleID="ReportName"><Data ss:Type="String">${escaparExcelXml(informe.nombre || "Inventario bodega")}</Data></Cell>
+   <Cell ss:MergeAcross="7" ss:StyleID="ReportName"><Data ss:Type="String">${escaparExcelXml(informe.nombre || "Inventario bodega")}</Data></Cell>
    <Cell ss:MergeAcross="1" ss:StyleID="LogoSub"><Data ss:Type="String">TECNOLOGIA</Data></Cell>
   </Row>
   ${crearFilaExcel([""])}
