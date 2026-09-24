@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import {
   API_BASE_URL,
@@ -221,6 +221,7 @@ function AsistenteOperativo() {
   const [consulta, setConsulta] = useState("");
   const [error, setError] = useState("");
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const ultimoCodigoConsultadoRef = useRef("");
   const [mensajes, setMensajes] = useState([
     {
       id: "intro",
@@ -450,6 +451,94 @@ function AsistenteOperativo() {
           ? "Encontre este codigo instalado en un centro."
           : "Encontre registros historicos para este codigo.",
       items,
+    };
+  };
+
+  const responderHistorialEquipo = async (codigo) => {
+    const codigoNorm = normalizar(codigo);
+    const instalados = datos.equipos.filter((equipo) => {
+      const coincide = normalizar(equipo?.numero_serie) === codigoNorm || normalizar(equipo?.codigo) === codigoNorm;
+      const estado = normalizar(equipo?.estado_registro || equipo?.estado_uso || equipo?.estado_logistico);
+      return coincide && !["no_aplica", "retirado", "retirado_bodega", "devuelto_bodega", "reemplazado"].includes(estado);
+    });
+    const equiposBodega = datos.bodega.filter(
+      (equipo) => normalizar(equipo?.numero_serie) === codigoNorm || normalizar(equipo?.codigo) === codigoNorm
+    );
+    const equipoBodega = equiposBodega[0] || null;
+    const idEquipoBodega = Number(equipoBodega?.id_bodega_equipo || equipoBodega?.id || 0);
+    const revisiones = datos.revisiones
+      .filter((orden) =>
+        (Array.isArray(orden?.detalles) ? orden.detalles : []).some((detalle) => {
+          if (idEquipoBodega && Number(detalle?.bodega_equipo_id || 0) === idEquipoBodega) return true;
+          return normalizar(detalle?.numero_serie) === codigoNorm || normalizar(detalle?.codigo) === codigoNorm;
+        })
+      )
+      .sort((a, b) => new Date(a?.fecha_asignacion || 0).getTime() - new Date(b?.fecha_asignacion || 0).getTime());
+    const revisionActiva = [...revisiones].reverse().find((orden) => normalizar(orden?.estado) !== "cerrado");
+
+    let ubicacionActual = "No pude determinar su ubicacion actual.";
+    if (revisionActiva) {
+      ubicacionActual = `Actualmente esta en revision, area ${getAreaRevisionLegible(revisionActiva?.area) || "sin informar"}.`;
+    } else if (instalados.length) {
+      const instalado = instalados[0];
+      const centro = centroPorId.get(Number(instalado?.centro_id || 0));
+      ubicacionActual = `Actualmente esta instalado en el centro ${getCentroNombre(centro)}, cliente ${getClienteNombre(centro)}.`;
+    } else if (equipoBodega) {
+      ubicacionActual = `Actualmente esta en ${equipoBodega?.ubicacion || "Bodega central"}.`;
+    }
+
+    const eventos = [];
+    const fechaIngreso = formatoFechaLarga(equipoBodega?.fecha_ingreso || equipoBodega?.created_at);
+    if (fechaIngreso) {
+      eventos.push(`Ingreso a ${equipoBodega?.ubicacion || "Bodega central"} el ${fechaIngreso}.`);
+    }
+
+    revisiones.forEach((orden) => {
+      const area = getAreaRevisionLegible(orden?.area) || "sin informar";
+      const fechaAsignacion = formatoFechaLarga(orden?.fecha_asignacion);
+      const fechaInicio = formatoFechaLarga(orden?.fecha_inicio_revision);
+      const eventoDevolucion = (Array.isArray(orden?.eventos) ? orden.eventos : [])
+        .filter((evento) => normalizar(evento?.evento) === "devuelto_bodega")
+        .sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())[0];
+      const fechaDevolucion = formatoFechaLarga(eventoDevolucion?.created_at || orden?.fecha_cierre);
+      const detalle = (Array.isArray(orden?.detalles) ? orden.detalles : []).find((item) => {
+        if (idEquipoBodega && Number(item?.bodega_equipo_id || 0) === idEquipoBodega) return true;
+        return normalizar(item?.numero_serie) === codigoNorm || normalizar(item?.codigo) === codigoNorm;
+      });
+
+      if (fechaAsignacion) eventos.push(`Fue asignado a revision en el area ${area} el ${fechaAsignacion}.`);
+      if (fechaInicio && fechaInicio !== fechaAsignacion) eventos.push(`La revision comenzo el ${fechaInicio}.`);
+      if (fechaDevolucion) {
+        const resultado = getEstadoLegible(detalle?.resultado || eventoDevolucion?.resultado);
+        eventos.push(`Volvio a ${equipoBodega?.ubicacion || "Bodega central"} el ${fechaDevolucion}${resultado !== "-" ? `, con resultado ${resultado}` : ""}.`);
+      }
+    });
+
+    let movimientos = [];
+    try {
+      const resp = await obtenerMovimientosRecientes(20, 1, { numero_serie: codigo });
+      movimientos = Array.isArray(resp?.items) ? resp.items : [];
+    } catch (err) {
+      movimientos = [];
+    }
+    movimientos
+      .slice()
+      .reverse()
+      .forEach((movimiento) => {
+        const fecha = formatoFechaLarga(movimiento?.fecha);
+        if (!fecha) return;
+        const centro = movimiento?.centro_nombre;
+        const accion = movimiento?.accion && String(movimiento.accion).trim() ? movimiento.accion : "registro";
+        const texto = centro
+          ? `${getEstadoLegible(accion)} en el centro ${centro} el ${fecha}.`
+          : `${getEstadoLegible(accion)} el ${fecha}.`;
+        if (!eventos.includes(texto)) eventos.push(texto);
+      });
+
+    return {
+      titulo: `Historial del codigo ${codigo}`,
+      texto: ubicacionActual,
+      items: eventos.length ? eventos : ["No encontre movimientos historicos para este codigo."],
     };
   };
 
@@ -710,8 +799,19 @@ function AsistenteOperativo() {
 
   const resolverConsulta = async (texto) => {
     const query = normalizar(texto);
-    const codigo = extraerCodigo(texto);
+    const codigoIngresado = extraerCodigo(texto);
+    const solicitaHistorial = query.includes("historial") || query.includes("historia") || query.includes("recorrido");
+    if (codigoIngresado) ultimoCodigoConsultadoRef.current = codigoIngresado;
+    const codigo = codigoIngresado || (solicitaHistorial ? ultimoCodigoConsultadoRef.current : "");
 
+    if (solicitaHistorial && codigo) return responderHistorialEquipo(codigo);
+    if (solicitaHistorial) {
+      return {
+        titulo: "Indica el codigo del equipo",
+        texto: "Escribe el codigo o numero de serie para consultar su historial.",
+        items: ["Ejemplo: historial del codigo 241050016"],
+      };
+    }
     if (codigo) return responderSerie(codigo);
     if (/^(hola|holi|buenas|buen dia|buenos dias|buenas tardes|buenas noches)(\b|[!,.])/.test(query)) {
       return {

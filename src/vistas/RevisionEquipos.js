@@ -3,7 +3,6 @@ import { jwtDecode } from "jwt-decode";
 import {
   actualizarOrdenRevisionEquipos,
   devolverOperativosRevisionABodega,
-  eliminarOrdenRevisionEquipos,
   obtenerOrdenRevisionEquipos,
   obtenerOrdenesRevisionEquipos,
 } from "../api";
@@ -271,6 +270,7 @@ function isCamarasArea(area) {
 function formatEstadoLabel(value) {
   const v = String(value || "").toLowerCase();
   if (v === "cerrado") return "Finalizado";
+  if (v === "anulado") return "Anulado";
   if (v === "en_revision") return "En revision";
   if (v === "diagnosticado") return "Diagnosticado";
   if (v === "pendiente") return "Pendiente";
@@ -293,12 +293,39 @@ function formatResultadoLabel(value) {
 
 function getFlujoRevision(orden) {
   const detalles = Array.isArray(orden?.detalles) ? orden.detalles : [];
-  const enviadoBodega = detalles.some((d) => !!d?.disponible_bodega);
-  if (enviadoBodega) return "Enviado a bodega";
+  if (String(orden?.estado || "").toLowerCase() === "anulado") return "Anulado";
+  const enviadosBodega = detalles.filter((d) => !!d?.disponible_bodega).length;
+  if (enviadosBodega && enviadosBodega === detalles.length) return "Enviado a bodega";
+  if (enviadosBodega) return "Devolucion parcial";
   const estado = String(orden?.estado || "").toLowerCase();
   if (estado === "cerrado") return "Finalizado (sin envio)";
   if (estado === "diagnosticado") return "Diagnosticado";
   return "En revisión";
+}
+
+function esResultadoDevueltoABodega(value) {
+  return ["operativo", "no_operativo"].includes(normalizeResultado(value));
+}
+
+function puedeDevolverOrden(orden) {
+  if (String(orden?.estado || "").toLowerCase() !== "cerrado") return false;
+  return (Array.isArray(orden?.detalles) ? orden.detalles : []).some(
+    (detalle) => esResultadoDevueltoABodega(detalle?.resultado) && !detalle?.disponible_bodega
+  );
+}
+
+function esOrdenHistorica(orden) {
+  if (String(orden?.estado || "").toLowerCase() === "anulado") return true;
+  const detalles = Array.isArray(orden?.detalles) ? orden.detalles : [];
+  return detalles.length > 0 && detalles.every((detalle) => !!detalle?.disponible_bodega);
+}
+
+function getFechaDevolucionOrden(orden) {
+  const fechas = (Array.isArray(orden?.detalles) ? orden.detalles : [])
+    .filter((detalle) => detalle?.disponible_bodega && detalle?.fecha_disponible_bodega)
+    .map((detalle) => detalle.fecha_disponible_bodega)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  return fechas[0] || orden?.fecha_cierre || null;
 }
 
 
@@ -335,7 +362,7 @@ export default function RevisionEquipos() {
   const [fechaInicioPersonalizada, setFechaInicioPersonalizada] = useState("");
   const [fechaFinPersonalizada, setFechaFinPersonalizada] = useState("");
   const [filtroTexto, setFiltroTexto] = useState("");
-  const [tabEstado, setTabEstado] = useState("todos");
+  const [tabEstado, setTabEstado] = useState("activas");
   const [verMasRecientes, setVerMasRecientes] = useState(false);
   const [verMasFallas, setVerMasFallas] = useState(false);
   const [paginaBandeja, setPaginaBandeja] = useState(1);
@@ -595,7 +622,10 @@ export default function RevisionEquipos() {
     const q = String(filtroTexto || "").trim().toLowerCase();
     return (ordenes || []).filter((o) => {
       const estado = String(o?.estado || "").toLowerCase();
-      if (tabEstado !== "todos" && estado !== tabEstado) return false;
+      const historica = esOrdenHistorica(o);
+      if (tabEstado === "activas" && historica) return false;
+      if (tabEstado === "historial" && !historica) return false;
+      if (!["activas", "historial", "todos"].includes(tabEstado) && estado !== tabEstado) return false;
       const estadoEquipo = getResumenEstadoEquipo(o);
       if (filtroEstadoEquipo && estadoEquipo !== filtroEstadoEquipo) return false;
 
@@ -640,6 +670,7 @@ export default function RevisionEquipos() {
   const esAreaEnergia = isEnergiaArea(ordenDetalle?.area);
   const esAreaCamaras = isCamarasArea(ordenDetalle?.area);
   const esAreaConChecklist = esAreaEnergia || esAreaCamaras;
+  const ordenDetalleHistorica = esOrdenHistorica(ordenDetalle);
   const checklistTemplateOptions = esAreaCamaras ? CHECKLIST_TEMPLATE_OPTIONS_CAMARAS : CHECKLIST_TEMPLATE_OPTIONS;
   const equipoPrincipalChecklist = (ordenDetalle?.detalles || [])[0] || null;
 
@@ -739,11 +770,15 @@ export default function RevisionEquipos() {
             </div>
           )}
           <div className="d-flex flex-wrap gap-2 mt-3">
-            <button className={`btn btn-sm ${tabEstado === "todos" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTabEstado("todos")}>Todos</button>
+            <button className={`btn btn-sm ${tabEstado === "activas" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTabEstado("activas")}>
+              <i className="fas fa-inbox mr-1" /> Bandeja activa
+            </button>
             <button className={`btn btn-sm ${tabEstado === "pendiente" ? "btn-warning" : "btn-outline-warning"}`} onClick={() => setTabEstado("pendiente")}>Pendiente</button>
             <button className={`btn btn-sm ${tabEstado === "en_revision" ? "btn-info" : "btn-outline-info"}`} onClick={() => setTabEstado("en_revision")}>En revision</button>
             <button className={`btn btn-sm ${tabEstado === "diagnosticado" ? "btn-secondary" : "btn-outline-secondary"}`} onClick={() => setTabEstado("diagnosticado")}>Diagnosticado</button>
-            <button className={`btn btn-sm ${tabEstado === "cerrado" ? "btn-success" : "btn-outline-success"}`} onClick={() => setTabEstado("cerrado")}>Finalizado</button>
+            <button className={`btn btn-sm ${tabEstado === "historial" ? "btn-success" : "btn-outline-success"}`} onClick={() => setTabEstado("historial")}>
+              <i className="fas fa-history mr-1" /> Historial
+            </button>
           </div>
         </div>
       </div>
@@ -822,7 +857,10 @@ export default function RevisionEquipos() {
 
       <div className="card shadow-sm border-0">
         <div className="card-header revision-bandeja-header d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 8 }}>
-          <strong><i className="fas fa-clipboard-check mr-2" /> Bandeja de revision</strong>
+          <strong>
+            <i className={`fas ${tabEstado === "historial" ? "fa-history" : "fa-clipboard-check"} mr-2`} />
+            {tabEstado === "historial" ? "Historial de revisiones" : "Bandeja de revision"}
+          </strong>
           {loading ? <span className="revision-bandeja-loading">Cargando...</span> : <span className="badge badge-light border">{ordenesFiltradas.length} ordenes</span>}
         </div>
         <div className="card-body p-0">
@@ -838,7 +876,7 @@ export default function RevisionEquipos() {
                   <th>Centro</th>
                   <th>Cliente</th>
                   <th>Asignado</th>
-                  <th>Fecha</th>
+                  <th>{tabEstado === "historial" ? "Fecha devolucion" : "Fecha"}</th>
                   <th className="text-center">Accion</th>
                 </tr>
               </thead>
@@ -861,13 +899,13 @@ export default function RevisionEquipos() {
                     <td>{o.centro?.nombre || "-"}</td>
                     <td>{o.cliente?.nombre || "-"}</td>
                     <td>{o.asignado_nombre || "-"}</td>
-                    <td>{formatDate(o.fecha_asignacion)}</td>
+                    <td>{formatDate(tabEstado === "historial" ? getFechaDevolucionOrden(o) : o.fecha_asignacion)}</td>
                     <td className="text-center">
                       <div className="d-inline-flex" style={{ gap: 6 }}>
                         <button className="btn btn-outline-primary btn-sm" title="Ver orden" onClick={() => abrirDetalle(o.id_revision_orden)}>
                           <i className="fas fa-eye" />
                         </button>
-                        {String(o?.estado || "").toLowerCase() === "cerrado" && (
+                        {puedeDevolverOrden(o) && (
                           <button
                             className="btn btn-outline-success btn-sm"
                             title="Devolver a bodega"
@@ -886,21 +924,29 @@ export default function RevisionEquipos() {
                             <i className="fas fa-warehouse" />
                           </button>
                         )}
-                        {rolUsuario === "admin" && (
+                        {rolUsuario === "admin" && !esOrdenHistorica(o) && (
                           <button
                             className="btn btn-outline-danger btn-sm"
-                            title="Eliminar orden"
+                            title="Anular orden"
                             onClick={async () => {
-                              if (!window.confirm(`Eliminar orden #${o.id_revision_orden}?`)) return;
+                              const motivo = window.prompt(`Motivo para anular la orden #${o.id_revision_orden}:`);
+                              if (motivo === null) return;
+                              if (!String(motivo).trim()) {
+                                alert("Debes indicar el motivo de anulacion.");
+                                return;
+                              }
                               try {
-                                await eliminarOrdenRevisionEquipos(o.id_revision_orden);
+                                await actualizarOrdenRevisionEquipos(o.id_revision_orden, {
+                                  estado: "anulado",
+                                  observacion: String(motivo).trim(),
+                                });
                                 await cargarBandeja();
                               } catch (e) {
-                                alert(e?.response?.data?.error || "No se pudo eliminar la orden.");
+                                alert(e?.response?.data?.error || "No se pudo anular la orden.");
                               }
                             }}
                           >
-                            <i className="fas fa-trash-alt" />
+                            <i className="fas fa-ban" />
                           </button>
                         )}
                       </div>
@@ -1117,6 +1163,7 @@ export default function RevisionEquipos() {
                         className="form-control form-control-sm revision-estado-orden-select"
                         value={ordenDetalle.estado || "pendiente"}
                         onChange={(e) => setOrdenDetalle((p) => ({ ...p, estado: e.target.value }))}
+                        disabled={ordenDetalleHistorica}
                       >
                         {ESTADOS.filter((s) => s.value).map((s) => (
                           <option key={s.value} value={s.value}>{s.label}</option>
@@ -1147,6 +1194,7 @@ export default function RevisionEquipos() {
                               value={d.diagnostico || ""}
                               onChange={(e) => actualizarDetalle(d.id_revision_detalle, { diagnostico: e.target.value })}
                               placeholder="Diagnostico breve"
+                              disabled={ordenDetalleHistorica}
                             />
                           </td>
                           <td>
@@ -1154,6 +1202,7 @@ export default function RevisionEquipos() {
                               className="form-control form-control-sm"
                               value={d.resultado || ""}
                               onChange={(e) => actualizarDetalle(d.id_revision_detalle, { resultado: e.target.value })}
+                              disabled={ordenDetalleHistorica}
                             >
                               {RESULTADOS.map((r) => (
                                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -1187,7 +1236,9 @@ export default function RevisionEquipos() {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowDetalle(false)}>Cerrar</button>
-                <button className="btn btn-primary" onClick={guardarDiagnostico} disabled={guardando}>Guardar diagnostico</button>
+                {!ordenDetalleHistorica && (
+                  <button className="btn btn-primary" onClick={guardarDiagnostico} disabled={guardando}>Guardar diagnostico</button>
+                )}
               </div>
             </div>
           </div>
