@@ -60,6 +60,14 @@ const crearFilaExcel = (values, styleId = "") => {
   return `<Row>${values.map((value) => `<Cell${style}><Data ss:Type="String">${escaparExcelXml(value)}</Data></Cell>`).join("")}</Row>`;
 };
 
+const areaRevisionLabel = (value) => {
+  const area = String(value || "").trim().toLowerCase();
+  if (area === "pc") return "PC";
+  if (area === "camaras") return "Camaras";
+  if (area === "energia") return "Energia";
+  return value || "";
+};
+
 const nombreArchivoSeguro = (value) =>
   normalizarBusqueda(value || "inventario-bodega")
     .replace(/[^a-z0-9]+/g, "-")
@@ -270,6 +278,7 @@ export default function InventarioBodega() {
         item.equipo_nombre,
         item.ubicacion_sistema,
         item.estado_sistema,
+        item.revision_area,
         item.resultado,
         item.escaneado_por_nombre,
       ]
@@ -387,6 +396,7 @@ export default function InventarioBodega() {
         "Codigo",
         "Numero de serie",
         "Resultado",
+        "Area de revision",
         "Ubicacion del sistema",
         "Estado del equipo",
         "Fecha y hora",
@@ -399,6 +409,7 @@ export default function InventarioBodega() {
         item.codigo || "-",
         item.numero_serie || "-",
         resultadoLabel[item.resultado] || item.resultado || "Registrado",
+        areaRevisionLabel(item.revision_area) || "-",
         item.ubicacion_sistema || "-",
         item.estado_sistema || "-",
         formatDateTime(item.created_at),
@@ -419,13 +430,13 @@ export default function InventarioBodega() {
   <Style ss:ID="ReportName"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="11" ss:Color="#334155"/></Style>
  </Styles>
  <Worksheet ss:Name="Inventario bodega"><Table>
-  <Column ss:Width="42"/><Column ss:Width="95"/><Column ss:Width="130"/><Column ss:Width="80"/><Column ss:Width="110"/><Column ss:Width="90"/><Column ss:Width="125"/><Column ss:Width="105"/><Column ss:Width="125"/><Column ss:Width="170"/>
-  <Row ss:Height="30">
-   <Cell ss:MergeAcross="7" ss:StyleID="Title"><Data ss:Type="String">INFORME ORCAGEST - INVENTARIO</Data></Cell>
-   <Cell ss:MergeAcross="1" ss:StyleID="Logo"><Data ss:Type="String">ORCA</Data></Cell>
-  </Row>
-  <Row ss:Height="22">
-   <Cell ss:MergeAcross="7" ss:StyleID="ReportName"><Data ss:Type="String">${escaparExcelXml(informe.nombre || "Inventario bodega")}</Data></Cell>
+	  <Column ss:Width="42"/><Column ss:Width="95"/><Column ss:Width="130"/><Column ss:Width="80"/><Column ss:Width="110"/><Column ss:Width="90"/><Column ss:Width="100"/><Column ss:Width="125"/><Column ss:Width="105"/><Column ss:Width="125"/><Column ss:Width="170"/>
+	  <Row ss:Height="30">
+	   <Cell ss:MergeAcross="8" ss:StyleID="Title"><Data ss:Type="String">INFORME ORCAGEST - INVENTARIO</Data></Cell>
+	   <Cell ss:MergeAcross="1" ss:StyleID="Logo"><Data ss:Type="String">ORCA</Data></Cell>
+	  </Row>
+	  <Row ss:Height="22">
+	   <Cell ss:MergeAcross="8" ss:StyleID="ReportName"><Data ss:Type="String">${escaparExcelXml(informe.nombre || "Inventario bodega")}</Data></Cell>
    <Cell ss:MergeAcross="1" ss:StyleID="LogoSub"><Data ss:Type="String">TECNOLOGIA</Data></Cell>
   </Row>
   ${crearFilaExcel([""])}
@@ -874,11 +885,18 @@ export default function InventarioBodega() {
                                 <td>{item.equipo_nombre || "-"}</td>
                                 <td>{item.codigo || "-"}</td>
                                 <td>{item.numero_serie || "-"}</td>
-                                <td>
-                                  <span className={`inventario-result ${item.resultado}`}>
-                                    {resultadoLabel[item.resultado] || item.resultado}
-                                  </span>
-                                </td>
+	                                <td>
+	                                  <div className="d-flex align-items-center flex-wrap" style={{ gap: 6 }}>
+	                                    <span className={`inventario-result ${item.resultado}`}>
+	                                      {resultadoLabel[item.resultado] || item.resultado}
+	                                    </span>
+	                                    {item.revision_area ? (
+	                                      <small className="font-weight-bold text-primary text-nowrap">
+	                                        Area: {areaRevisionLabel(item.revision_area)}
+	                                      </small>
+	                                    ) : null}
+	                                  </div>
+	                                </td>
                                 <td>{formatDateTime(item.created_at)}</td>
                                 <td className="text-right">
                                   {puedeEliminarEscaneos ? (

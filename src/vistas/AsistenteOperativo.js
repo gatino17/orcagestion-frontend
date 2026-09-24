@@ -9,6 +9,7 @@ import {
   obtenerGuiasSalidaArmado,
   obtenerInventarioBodegaEquipos,
   obtenerMovimientosRecientes,
+  obtenerOrdenesRevisionEquipos,
   obtenerSoportes,
 } from "../api";
 import "./AsistenteOperativo.css";
@@ -25,6 +26,22 @@ const formatoFecha = (value) => {
   const fecha = new Date(value);
   if (Number.isNaN(fecha.getTime())) return String(value).slice(0, 10) || "-";
   return fecha.toLocaleDateString("es-CL");
+};
+
+const formatoFechaLarga = (value) => {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T12:00:00`)
+    : parseFechaHoraBackend(raw);
+  if (!fecha || Number.isNaN(fecha.getTime())) return "";
+  return fecha.toLocaleDateString("es-CL", {
+    timeZone: "America/Santiago",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 };
 
 const parseFechaHoraBackend = (value) => {
@@ -79,6 +96,14 @@ const getEstadoLegible = (value) => {
   const normalizado = normalizar(raw).replace(/_/g, " ");
   if (!normalizado || normalizado === "-") return "-";
   return normalizado.charAt(0).toUpperCase() + normalizado.slice(1);
+};
+
+const getAreaRevisionLegible = (value) => {
+  const area = normalizar(value);
+  if (area === "pc") return "PC";
+  if (area === "camaras") return "Camaras";
+  if (area === "energia") return "Energia";
+  return value || "";
 };
 
 const estadoAbiertoSoporte = (soporte) => {
@@ -189,6 +214,7 @@ function AsistenteOperativo() {
     bodega: [],
     centros: [],
     guias: [],
+    revisiones: [],
   });
   const [loading, setLoading] = useState(true);
   const [consultando, setConsultando] = useState(false);
@@ -212,7 +238,7 @@ function AsistenteOperativo() {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const [equipos, armados, soportes, actividades, bodega, centrosResp, guias] = await Promise.all([
+      const [equipos, armados, soportes, actividades, bodega, centrosResp, guias, revisiones] = await Promise.all([
         obtenerEquipos().catch(() => []),
         obtenerArmados().catch(() => []),
         obtenerSoportes().catch(() => []),
@@ -220,6 +246,7 @@ function AsistenteOperativo() {
         obtenerInventarioBodegaEquipos().catch(() => []),
         obtenerCentros({ page: 1, per_page: 0 }).catch(() => ({ centros: [] })),
         obtenerGuiasSalidaArmado().catch(() => []),
+        obtenerOrdenesRevisionEquipos().catch(() => []),
       ]);
 
       setDatos({
@@ -230,6 +257,7 @@ function AsistenteOperativo() {
         bodega: Array.isArray(bodega) ? bodega : [],
         centros: Array.isArray(centrosResp?.centros) ? centrosResp.centros : Array.isArray(centrosResp) ? centrosResp : [],
         guias: Array.isArray(guias) ? guias : [],
+        revisiones: Array.isArray(revisiones) ? revisiones : [],
       });
       setUltimaActualizacion(new Date());
     } catch (err) {
@@ -284,6 +312,24 @@ function AsistenteOperativo() {
     return map;
   }, [datos.guias]);
 
+  const revisionPorEquipoBodega = useMemo(() => {
+    const map = new Map();
+    datos.revisiones
+      .filter((orden) => normalizar(orden?.estado) !== "cerrado")
+      .forEach((orden) => {
+        (Array.isArray(orden?.detalles) ? orden.detalles : []).forEach((detalle) => {
+          const idEquipo = Number(detalle?.bodega_equipo_id || 0);
+          if (idEquipo && !map.has(idEquipo)) {
+            map.set(idEquipo, {
+              area: orden?.area || "",
+              fechaAsignacion: orden?.fecha_asignacion || null,
+            });
+          }
+        });
+      });
+    return map;
+  }, [datos.revisiones]);
+
   const resumen = useMemo(() => {
     const soportesAbiertos = datos.soportes.filter(estadoAbiertoSoporte);
     const soportesPendientes = soportesAbiertos.filter((s) => normalizar(s?.estado || "pendiente") === "pendiente");
@@ -327,13 +373,22 @@ function AsistenteOperativo() {
 
     const ubicacionActual = enBodega[0] || instalado[0] || null;
     const estaEnBodega = !!enBodega[0];
+    const idEquipoBodega = Number(ubicacionActual?.id_bodega_equipo || ubicacionActual?.id || 0);
+    const revisionActiva = estaEnBodega ? revisionPorEquipoBodega.get(idEquipoBodega) : null;
     const items = [];
 
     if (ubicacionActual) {
       if (estaEnBodega) {
-        items.push(`Actualmente se encuentra en ${ubicacionActual.ubicacion || "Bodega central"}.`);
         items.push(`Corresponde al equipo ${ubicacionActual.equipo_nombre || ubicacionActual.nombre || "Equipo"}, serie ${ubicacionActual.numero_serie || "-"}.`);
-        items.push(`Su estado registrado es ${ubicacionActual.estado_equipo || ubicacionActual.estado_asignacion || "sin estado informado"}.`);
+        const areaRevision = getAreaRevisionLegible(ubicacionActual?.revision_area || revisionActiva?.area);
+        const fechaRevision = formatoFechaLarga(revisionActiva?.fechaAsignacion);
+        const fechaBodega = formatoFechaLarga(ubicacionActual?.fecha_ingreso || ubicacionActual?.created_at);
+        if (areaRevision && fechaRevision) {
+          items.push(`Fue asignado a revision en el area ${areaRevision} el ${fechaRevision}.`);
+        }
+        if (fechaBodega) {
+          items.push(`Se encuentra en ${ubicacionActual.ubicacion || "Bodega central"} desde el ${fechaBodega}.`);
+        }
       } else {
         const centro = centroPorId.get(Number(ubicacionActual?.centro_id || 0));
         items.push(`Actualmente se encuentra instalado en el centro ${getCentroNombre(centro)}, cliente ${getClienteNombre(centro)}.`);
@@ -363,7 +418,7 @@ function AsistenteOperativo() {
       movimientosUnicos.push(mov);
     });
 
-    if (movimientosUnicos.length) {
+    if (movimientosUnicos.length && !revisionActiva) {
       const mov = movimientosUnicos[0];
       const accion = mov.accion && String(mov.accion).trim() ? mov.accion : "registro en historial";
       items.push(
@@ -382,7 +437,15 @@ function AsistenteOperativo() {
     return {
       titulo: `Ubicacion actual del codigo ${codigo}`,
       texto: estaEnBodega
-        ? "Encontre este codigo en bodega."
+        ? (() => {
+            const ubicacion = ubicacionActual?.ubicacion || "Bodega central";
+            const area = getAreaRevisionLegible(
+              ubicacionActual?.revision_area || revisionActiva?.area
+            );
+            return area
+              ? `Encontre este codigo en ${ubicacion}, en el area ${area}.`
+              : `Encontre este codigo en ${ubicacion}.`;
+          })()
         : instalado.length
           ? "Encontre este codigo instalado en un centro."
           : "Encontre registros historicos para este codigo.",
@@ -650,6 +713,13 @@ function AsistenteOperativo() {
     const codigo = extraerCodigo(texto);
 
     if (codigo) return responderSerie(codigo);
+    if (/^(hola|holi|buenas|buen dia|buenos dias|buenas tardes|buenas noches)(\b|[!,.])/.test(query)) {
+      return {
+        titulo: "Hola",
+        texto: "En que te puedo ayudar hoy? Puedes consultarme por equipos, soportes, armados o actividades.",
+        items: [],
+      };
+    }
     if ((query.includes("soporte") || query.includes("falla")) && (query.includes("ano") || query.includes("este ano") || query.includes("actual"))) {
       return responderSoportesAnio();
     }
