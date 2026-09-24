@@ -175,6 +175,8 @@ export default function BodegaRetiros() {
   const [filtroHistorial, setFiltroHistorial] = useState("");
   const [filtroInventario, setFiltroInventario] = useState("");
   const [filtroSerieBodega, setFiltroSerieBodega] = useState("");
+  const [enBodegaPage, setEnBodegaPage] = useState(1);
+  const [enBodegaPageSize, setEnBodegaPageSize] = useState(5);
   const [filtroSerieBaja, setFiltroSerieBaja] = useState("");
   const [filtroTecnicoAsignacion, setFiltroTecnicoAsignacion] = useState("");
   const [filtroDespachoCentro, setFiltroDespachoCentro] = useState("");
@@ -750,6 +752,24 @@ export default function BodegaRetiros() {
     () => (enBodegaFiltrados || []).reduce((acc, row) => acc + contarEquiposBodegaRow(row), 0),
     [enBodegaFiltrados]
   );
+  const totalEnBodegaPages = useMemo(
+    () => Math.max(1, Math.ceil(enBodegaFiltrados.length / enBodegaPageSize)),
+    [enBodegaFiltrados.length, enBodegaPageSize]
+  );
+  const enBodegaPaginados = useMemo(() => {
+    const start = (enBodegaPage - 1) * enBodegaPageSize;
+    return enBodegaFiltrados.slice(start, start + enBodegaPageSize);
+  }, [enBodegaFiltrados, enBodegaPage, enBodegaPageSize]);
+
+  useEffect(() => {
+    setEnBodegaPage(1);
+  }, [clienteId, centroId, filtroSerieBodega, enBodegaPageSize]);
+
+  useEffect(() => {
+    if (enBodegaPage > totalEnBodegaPages) {
+      setEnBodegaPage(totalEnBodegaPages);
+    }
+  }, [enBodegaPage, totalEnBodegaPages]);
   const totalPendienteTransito =
     enTransito.length + devolucionesInstalacionEnTransito.length + devolucionesMantencionEnTransito.length;
   const transitoRows = useMemo(
@@ -3238,7 +3258,7 @@ export default function BodegaRetiros() {
                     </td>
                   </tr>
                 ) : (
-                  enBodegaFiltrados.map((row) => {
+                  enBodegaPaginados.map((row) => {
 	                    if (row.tipoFila === "instalacion_bodega") {
 	                      const acta = row.acta || {};
 	                      const permiso = row.permiso || {};
@@ -3586,9 +3606,51 @@ export default function BodegaRetiros() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      </div>
+	          </div>
+	        </div>
+	        <div className="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
+	          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+	            <span className="text-muted small">Ver</span>
+	            <select
+	              className="form-control form-control-sm d-inline-block"
+	              style={{ width: 82 }}
+	              value={enBodegaPageSize}
+	              onChange={(e) => setEnBodegaPageSize(Number(e.target.value) || 5)}
+	            >
+	              <option value={5}>5</option>
+	              <option value={10}>10</option>
+	              <option value={15}>15</option>
+	              <option value={20}>20</option>
+	            </select>
+	            <span className="text-muted small">registros</span>
+	          </div>
+	          <small className="text-muted">
+	            Mostrando {enBodegaFiltrados.length ? (enBodegaPage - 1) * enBodegaPageSize + 1 : 0}
+	            -{Math.min(enBodegaPage * enBodegaPageSize, enBodegaFiltrados.length)} de {enBodegaFiltrados.length}
+	          </small>
+	          <div className="d-flex align-items-center" style={{ gap: 6 }}>
+	            <button
+	              className="btn btn-sm btn-outline-secondary"
+	              disabled={enBodegaPage <= 1}
+	              onClick={() => setEnBodegaPage((prev) => Math.max(1, prev - 1))}
+	            >
+	              <i className="fas fa-chevron-left mr-1" />
+	              Anterior
+	            </button>
+	            <span className="small text-muted">
+	              Pagina {enBodegaPage} / {totalEnBodegaPages}
+	            </span>
+	            <button
+	              className="btn btn-sm btn-outline-secondary"
+	              disabled={enBodegaPage >= totalEnBodegaPages}
+	              onClick={() => setEnBodegaPage((prev) => Math.min(totalEnBodegaPages, prev + 1))}
+	            >
+	              Siguiente
+	              <i className="fas fa-chevron-right ml-1" />
+	            </button>
+	          </div>
+	        </div>
+	      </div>
       ) : null}
 
       {mostrarTablaAsignaciones ? (
