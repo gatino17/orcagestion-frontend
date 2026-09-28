@@ -177,7 +177,7 @@ button.metric-card.active {
 
 .home-operational-grid {
     display: grid;
-    grid-template-columns: minmax(0, 2.65fr) minmax(260px, 0.65fr);
+    grid-template-columns: minmax(0, 2.2fr) minmax(350px, 1fr);
     gap: 1rem;
     align-items: start;
     margin-bottom: 1.5rem;
@@ -250,19 +250,6 @@ button.metric-card.active {
     color: #ffffff;
     text-decoration: none;
     background: #0757b8;
-}
-
-.support-priority-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.75rem;
-    height: 2.75rem;
-    border-radius: 16px;
-    background: #0b3b8c;
-    color: #ffffff;
-    box-shadow: 0 14px 28px rgba(11, 59, 140, 0.2);
-    font-size: 1.05rem;
 }
 
 .support-priority-tools {
@@ -366,6 +353,352 @@ button.metric-card.active {
 .support-client-card.active strong {
     background: rgba(255, 255, 255, 0.18);
     color: #ffffff;
+}
+
+.support-area-overview {
+    margin: -0.1rem 0 1rem;
+    padding: 0.85rem;
+    border: 1px solid rgba(14, 116, 144, 0.18);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #ecfeff 100%);
+}
+
+.support-area-overview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.65rem;
+}
+
+.support-area-overview-heading > div:first-child {
+    display: flex;
+    flex-direction: column;
+}
+
+.support-area-overview-heading > div:first-child span {
+    color: #0891b2;
+    font-size: 0.64rem;
+    font-weight: 900;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.support-area-overview-heading > div:first-child strong {
+    color: #0f172a;
+    font-size: 1rem;
+}
+
+.support-area-overview-metrics {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.support-area-overview-metrics span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid rgba(14, 116, 144, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.support-area-overview-metrics b {
+    color: #0e7490;
+    font-size: 0.82rem;
+}
+
+.support-area-centers {
+    display: flex;
+    gap: 0.45rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+}
+
+.support-area-center {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 0 0 auto;
+    max-width: 190px;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid rgba(14, 116, 144, 0.16);
+    border-radius: 12px;
+    background: #ffffff;
+    color: #334155;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.support-area-center span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.support-area-center strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 999px;
+    background: #cffafe;
+    color: #0e7490;
+    font-size: 0.72rem;
+}
+
+.support-area-center:hover,
+.support-area-center.active {
+    border-color: #0e7490;
+    background: #0e7490;
+    color: #ffffff;
+}
+
+.support-area-center.active strong,
+.support-area-center:hover strong {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.support-area-slider-view {
+    min-height: 340px;
+    padding: 0.85rem;
+    border: 1px solid rgba(14, 116, 144, 0.16);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at top right, rgba(34, 211, 238, 0.12), transparent 34%),
+        linear-gradient(145deg, #f8fafc 0%, #ecfeff 100%);
+}
+
+.support-area-slider-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.support-area-slider-heading > div:first-child span {
+    color: #0891b2;
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.support-area-slider-heading h6 {
+    margin: 0.1rem 0 0;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.support-area-slider-heading > div:last-child {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.38rem 0.65rem;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.support-area-slider-heading > div:last-child strong {
+    color: #0e7490;
+    font-size: 1.1rem;
+}
+
+.support-area-slider-heading > div:last-child small {
+    color: #64748b;
+    font-weight: 700;
+}
+
+.support-area-slider-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.support-area-slider-card {
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid rgba(14, 116, 144, 0.15);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #334155;
+    text-align: left;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.support-area-slider-card:hover {
+    transform: translateY(-2px);
+    border-color: #22a6b3;
+    box-shadow: 0 12px 24px rgba(14, 116, 144, 0.12);
+}
+
+.support-area-slider-card-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.support-area-slider-card-title span {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 0.88rem;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.support-area-slider-card-title strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    background: #cffafe;
+    color: #0e7490;
+    font-size: 0.8rem;
+}
+
+.support-area-slider-card > small {
+    display: block;
+    margin-top: 0.1rem;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.support-area-slider-centers {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.support-area-slider-centers span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 0.2rem 0.4rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.67rem;
+    font-weight: 700;
+}
+
+.support-area-slider-centers b {
+    color: #0e7490;
+}
+
+.support-slider-footer {
+    margin-top: 0.9rem;
+}
+
+.support-slider-progress-track {
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.support-slider-progress {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0b3b8c, #0ea5e9);
+    transform-origin: left;
+    animation: support-slider-progress 15s linear forwards;
+}
+
+.support-slider-progress.paused {
+    animation-play-state: paused;
+}
+
+@keyframes support-slider-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+.support-slider-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    margin-top: 0.55rem;
+}
+
+.support-slider-arrow,
+.support-slider-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    border: 1px solid rgba(11, 59, 140, 0.16);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0b3b8c;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.support-slider-arrow {
+    width: 30px;
+    padding: 0;
+}
+
+.support-slider-toggle {
+    min-width: 90px;
+    padding: 0.3rem 0.65rem;
+    gap: 0.35rem;
+}
+
+.support-slider-arrow:hover,
+.support-slider-toggle:hover {
+    border-color: #0b3b8c;
+    background: #eff6ff;
+}
+
+.support-slider-dots {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+}
+
+.support-slider-dots button {
+    width: 7px;
+    height: 7px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transition: width 0.18s ease, background 0.18s ease;
+}
+
+.support-slider-dots button.active {
+    width: 18px;
+    background: #0b3b8c;
+}
+
+.support-slider-label {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
 }
 
 .support-priority-summary {
@@ -685,6 +1018,26 @@ button.metric-card.active {
     background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
 }
 
+.home-work-item.from-ismael {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(234, 88, 12, 0.5);
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+.home-work-item.from-ismael::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: #f97316;
+}
+
+.home-work-item.from-ismael .home-work-solution {
+    background: rgba(234, 88, 12, 0.09);
+    color: #9a3412;
+}
+
 .home-work-item.from-armado {
     border-color: rgba(37, 99, 235, 0.34);
     background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
@@ -938,6 +1291,8 @@ button.metric-card.active {
 .home-state-pendiente { background: #dbeafe; color: #2563eb; }
 .home-state-finalizado { background: #dcfce7; color: #15803d; }
 .home-state-resuelto { background: #dcfce7; color: #166534; }
+.home-state-ismael { background: #ffedd5; color: #9a3412; }
+.home-state-sin-revisar { background: #ea580c; color: #ffffff; }
 .home-state-cancelado { background: #fee2e2; color: #b91c1c; }
 .home-state-sin-estado { background: #e2e8f0; color: #475569; }
 
@@ -1048,6 +1403,31 @@ button.metric-card.active {
     .support-priority-item {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .support-area-overview-heading {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .support-area-slider-heading {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .support-area-slider-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .support-slider-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .support-slider-label {
+        order: -1;
+        width: 100%;
+        text-align: center;
     }
 
     .support-priority-tools {

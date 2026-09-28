@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import DataTable from 'react-data-table-component';
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -11,7 +11,7 @@ import './Home.css';
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
-import { obtenerArmados, obtenerGuiasSalidaArmado, obtenerSoportes } from "../api";
+import { obtenerArmados, obtenerCasosIsmael, obtenerGuiasSalidaArmado, obtenerSoportes } from "../api";
 
 const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
 
@@ -56,11 +56,20 @@ const Home = () => {
     const [encargados, setEncargados] = useState([]);
     const [centros, setCentros] = useState([]);  // Estado para los centros
     const [soportes, setSoportes] = useState([]);
+    const [casosIsmael, setCasosIsmael] = useState([]);
     const [armadosHome, setArmadosHome] = useState([]);
     const [guiasSalidaHome, setGuiasSalidaHome] = useState([]);
     const [loadingArmadosHome, setLoadingArmadosHome] = useState(false);
     const [paginaSoportes, setPaginaSoportes] = useState(1);
+    const [vistaResumenAreas, setVistaResumenAreas] = useState(false);
+    const [sliderPausaInteraccion, setSliderPausaInteraccion] = useState(false);
+    const [sliderPausaManual, setSliderPausaManual] = useState(false);
+    const [sliderCicloKey, setSliderCicloKey] = useState(0);
+    const sliderMouseDentroRef = useRef(false);
+    const sliderReanudarRef = useRef(null);
     const [clienteSoporte, setClienteSoporte] = useState("todos");
+    const [areaSoporteHome, setAreaSoporteHome] = useState("todos");
+    const [centroSoporteHome, setCentroSoporteHome] = useState("todos");
     const [filtroSoporteHome, setFiltroSoporteHome] = useState("todos");
     const [prioridadSoporteHome, setPrioridadSoporteHome] = useState("todos");
     const [loading, setLoading] = useState(true);
@@ -122,6 +131,16 @@ const Home = () => {
       }
     }, []);
 
+    const cargarCasosIsmaelHome = useCallback(async () => {
+      try {
+        const casos = await obtenerCasosIsmael({ limit: 200 });
+        setCasosIsmael(Array.isArray(casos) ? casos : []);
+      } catch (error) {
+        console.error("No se pudieron cargar las entradas de Ismael:", error);
+        setCasosIsmael([]);
+      }
+    }, []);
+
     const cargarDatosHome = useCallback(async () => {
           setLoading(true);
   
@@ -132,10 +151,11 @@ const Home = () => {
           const encargadosData = await cargarEncargados(); // Carga encargados
           setEncargados(encargadosData);
 	          await cargarSoportesHome();
+	          await cargarCasosIsmaelHome();
 	          await cargarArmadosHome();
 	                              
 	          setLoading(false);
-	    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
+	    }, [cargarActividadesHome, cargarArmadosHome, cargarCasosIsmaelHome, cargarSoportesHome]);
 
     useEffect(() => {
       cargarDatosHome();
@@ -152,7 +172,10 @@ const Home = () => {
         transports: process.env.REACT_APP_SOCKET_POLLING_ONLY === "1" ? ["polling"] : ["websocket", "polling"],
         reconnection: true
       });
-      const refrescarSoportes = () => cargarSoportesHome();
+      const refrescarSoportes = () => {
+        cargarSoportesHome();
+        cargarCasosIsmaelHome();
+      };
       const refrescarActividades = () => cargarActividadesHome();
       const refrescarArmados = () => cargarArmadosHome({ silent: true });
       socket.on("soporte_updated", refrescarSoportes);
@@ -164,20 +187,52 @@ const Home = () => {
         socket.off("armado_updated", refrescarArmados);
         socket.disconnect();
       };
-    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
+    }, [cargarActividadesHome, cargarArmadosHome, cargarCasosIsmaelHome, cargarSoportesHome]);
 
     useEffect(() => {
       const interval = setInterval(() => {
         cargarSoportesHome();
+        cargarCasosIsmaelHome();
         cargarActividadesHome();
         cargarArmadosHome({ silent: true });
       }, 8000);
       return () => clearInterval(interval);
-    }, [cargarActividadesHome, cargarArmadosHome, cargarSoportesHome]);
+    }, [cargarActividadesHome, cargarArmadosHome, cargarCasosIsmaelHome, cargarSoportesHome]);
 
     useEffect(() => {
       setPaginaSoportes(1);
-    }, [clienteSoporte, filtroSoporteHome, prioridadSoporteHome]);
+      setVistaResumenAreas(false);
+      setSliderCicloKey((valor) => valor + 1);
+    }, [areaSoporteHome, centroSoporteHome, clienteSoporte, filtroSoporteHome, prioridadSoporteHome]);
+
+    const detenerSliderPorInteraccion = useCallback(() => {
+      if (sliderReanudarRef.current) {
+        clearTimeout(sliderReanudarRef.current);
+        sliderReanudarRef.current = null;
+      }
+      setSliderPausaInteraccion(true);
+    }, []);
+
+    const programarReanudacionSlider = useCallback(() => {
+      if (sliderReanudarRef.current) clearTimeout(sliderReanudarRef.current);
+      setSliderPausaInteraccion(true);
+      sliderReanudarRef.current = setTimeout(() => {
+        if (!sliderMouseDentroRef.current) {
+          setSliderPausaInteraccion(false);
+          setSliderCicloKey((valor) => valor + 1);
+          sliderReanudarRef.current = null;
+        }
+      }, 20000);
+    }, []);
+
+    const registrarInteraccionSlider = useCallback(() => {
+      detenerSliderPorInteraccion();
+      if (!sliderMouseDentroRef.current) programarReanudacionSlider();
+    }, [detenerSliderPorInteraccion, programarReanudacionSlider]);
+
+    useEffect(() => () => {
+      if (sliderReanudarRef.current) clearTimeout(sliderReanudarRef.current);
+    }, []);
  
     const handleGuardarActividad = async () => {
         const datosActividad = {
@@ -323,6 +378,8 @@ const totalSoportesTerreno = soportesPendientesAbiertos.filter(
   (soporte) => String(soporte.tipo || "").toLowerCase() === "terreno"
 ).length;
 const obtenerClienteSoporte = (soporte) => soporte?.centro?.cliente || soporte?.cliente || "Cliente sin nombre";
+const obtenerAreaSoporte = (soporte) => String(soporte?.centro?.area || "").trim() || "Sin area";
+const obtenerCentroSoporte = (soporte) => String(soporte?.centro?.nombre || "").trim() || "Centro sin nombre";
 const obtenerUbicacionAreaCentro = (soporte) => {
   const ubicacion = String(soporte?.centro?.ubicacion || "").trim();
   const areaCentro = String(soporte?.centro?.area || "").trim();
@@ -353,16 +410,36 @@ const soportesFiltradosPorPrioridad = prioridadSoporteHome === "todos"
   : soportesFiltradosPorKpi.filter(
       (soporte) => String(soporte?.prioridad || "media").toLowerCase() === prioridadSoporteHome
     );
+const areasSoporte = Object.entries(
+  soportesFiltradosPorPrioridad.reduce((acc, soporte) => {
+    const areaCentro = obtenerAreaSoporte(soporte);
+    acc[areaCentro] = (acc[areaCentro] || 0) + 1;
+    return acc;
+  }, {})
+).sort((a, b) => a[0].localeCompare(b[0]));
+const soportesFiltradosPorArea = areaSoporteHome === "todos"
+  ? soportesFiltradosPorPrioridad
+  : soportesFiltradosPorPrioridad.filter((soporte) => obtenerAreaSoporte(soporte) === areaSoporteHome);
 const clientesSoporte = Object.entries(
-	  soportesFiltradosPorPrioridad.reduce((acc, soporte) => {
+	  soportesFiltradosPorArea.reduce((acc, soporte) => {
 	    const cliente = obtenerClienteSoporte(soporte);
 	    acc[cliente] = (acc[cliente] || 0) + 1;
 	    return acc;
 	  }, {})
 	).sort((a, b) => a[0].localeCompare(b[0]));
 const soportesBaseFiltradosPorCliente = clienteSoporte === "todos"
-	  ? soportesFiltradosPorPrioridad
-	  : soportesFiltradosPorPrioridad.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+	  ? soportesFiltradosPorArea
+	  : soportesFiltradosPorArea.filter((soporte) => obtenerClienteSoporte(soporte) === clienteSoporte);
+const centrosAreaSoporte = Object.entries(
+  soportesBaseFiltradosPorCliente.reduce((acc, soporte) => {
+    const centro = obtenerCentroSoporte(soporte);
+    acc[centro] = (acc[centro] || 0) + 1;
+    return acc;
+  }, {})
+).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+const soportesBaseFiltradosPorCentro = centroSoporteHome === "todos"
+  ? soportesBaseFiltradosPorCliente
+  : soportesBaseFiltradosPorCliente.filter((soporte) => obtenerCentroSoporte(soporte) === centroSoporteHome);
 const obtenerOrdenSoporteHome = (soporte) => {
   if (actividadAsignadaPorSoporte.has(Number(soporte?.id_soporte || 0))) return 0;
   const estado = String(soporte?.estado || "pendiente").toLowerCase();
@@ -376,7 +453,7 @@ const obtenerOrdenPrioridadSoporte = (soporte) => {
   if (prioridad === "baja") return 2;
   return 3;
 };
-	const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCliente].sort((a, b) => {
+	const soportesFiltradosPorCliente = [...soportesBaseFiltradosPorCentro].sort((a, b) => {
 	  const ordenA = obtenerOrdenSoporteHome(a);
 	  const ordenB = obtenerOrdenSoporteHome(b);
 	  if (ordenA !== ordenB) return ordenA - ordenB;
@@ -430,6 +507,34 @@ const fechaSoporteCierreKey = (soporte) => {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
 };
 
+const obtenerFechaIsmael = (caso) => caso?.hora_llegada || caso?.created_at || caso?.updated_at || null;
+
+const formatearLlegadaIsmael = (caso) => {
+  const valor = obtenerFechaIsmael(caso);
+  if (!valor) return "Hora no informada";
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return "Hora no informada";
+  return new Intl.DateTimeFormat("es-CL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(fecha);
+};
+
+const obtenerAntiguedadIsmael = (caso) => {
+  const valor = obtenerFechaIsmael(caso);
+  const llegada = valor ? new Date(valor) : null;
+  if (!llegada || Number.isNaN(llegada.getTime())) return "Sin revisar";
+  const inicio = new Date(llegada.getFullYear(), llegada.getMonth(), llegada.getDate());
+  const ahora = new Date();
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const dias = Math.max(0, Math.floor((hoy.getTime() - inicio.getTime()) / 86400000));
+  if (dias === 0) return "Nuevo hoy";
+  return `Sin abrir hace ${dias} dia${dias === 1 ? "" : "s"}`;
+};
+
 const trabajosCursoHoy = (Array.isArray(actividades) ? actividades : [])
   .filter((actividad) => {
     const estado = estadoActividadKey(actividad);
@@ -463,6 +568,72 @@ const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / sopo
 const paginaSoportesActual = Math.min(paginaSoportes, totalPaginasSoportes);
 const inicioSoportes = (paginaSoportesActual - 1) * soportesPorPagina;
 const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoportes, inicioSoportes + soportesPorPagina);
+const resumenAreasSlider = Object.values(
+  soportesFiltradosPorCliente.reduce((acc, soporte) => {
+    const areaCentro = obtenerAreaSoporte(soporte);
+    const centro = obtenerCentroSoporte(soporte);
+    if (!acc[areaCentro]) acc[areaCentro] = { area: areaCentro, total: 0, centros: {} };
+    acc[areaCentro].total += 1;
+    acc[areaCentro].centros[centro] = (acc[areaCentro].centros[centro] || 0) + 1;
+    return acc;
+  }, {})
+).map((item) => ({
+  ...item,
+  centros: Object.entries(item.centros).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+})).sort((a, b) => b.total - a.total || a.area.localeCompare(b.area));
+const totalVistasSoporte = totalPaginasSoportes + 1;
+const vistaSoporteActual = vistaResumenAreas ? totalVistasSoporte : paginaSoportesActual;
+const sliderSoportePausado = sliderPausaInteraccion || sliderPausaManual;
+
+const avanzarSliderSoporte = () => {
+  if (vistaResumenAreas) {
+    setVistaResumenAreas(false);
+    setPaginaSoportes(1);
+  } else if (paginaSoportesActual < totalPaginasSoportes) {
+    setPaginaSoportes(paginaSoportesActual + 1);
+  } else {
+    setVistaResumenAreas(true);
+  }
+  setSliderCicloKey((valor) => valor + 1);
+};
+
+const retrocederSliderSoporte = () => {
+  if (vistaResumenAreas) {
+    setVistaResumenAreas(false);
+    setPaginaSoportes(totalPaginasSoportes);
+  } else if (paginaSoportesActual > 1) {
+    setPaginaSoportes(paginaSoportesActual - 1);
+  } else {
+    setVistaResumenAreas(true);
+  }
+  setSliderCicloKey((valor) => valor + 1);
+};
+
+const irAVistaSoporte = (vista) => {
+  if (vista > totalPaginasSoportes) {
+    setVistaResumenAreas(true);
+  } else {
+    setVistaResumenAreas(false);
+    setPaginaSoportes(vista);
+  }
+  setSliderCicloKey((valor) => valor + 1);
+};
+
+useEffect(() => {
+  if (sliderSoportePausado) return undefined;
+  const timer = setTimeout(() => {
+    if (vistaResumenAreas) {
+      setVistaResumenAreas(false);
+      setPaginaSoportes(1);
+    } else if (paginaSoportesActual < totalPaginasSoportes) {
+      setPaginaSoportes(paginaSoportesActual + 1);
+    } else {
+      setVistaResumenAreas(true);
+    }
+    setSliderCicloKey((valor) => valor + 1);
+  }, 15000);
+  return () => clearTimeout(timer);
+}, [paginaSoportesActual, sliderCicloKey, sliderSoportePausado, totalPaginasSoportes, vistaResumenAreas]);
 
 const guiasPorArmadoHome = (Array.isArray(guiasSalidaHome) ? guiasSalidaHome : []).reduce((map, guia) => {
   const armadoId = Number(guia?.armado_id || 0);
@@ -534,6 +705,30 @@ const obtenerTecnicosArmadoHome = (armado) => {
 };
 
 const trabajosCursoHoyOperativos = [
+  ...(Array.isArray(casosIsmael) ? casosIsmael : []).map((caso) => {
+    const fecha = obtenerFechaIsmael(caso);
+    const timestamp = fecha ? new Date(fecha).getTime() : 0;
+    return {
+      key: `ismael-${caso.id || caso.case_code || timestamp}`,
+      centro: caso.centro || "Centro sin identificar",
+      cliente: caso.correo_remitente || "Entrada automatica de soporte",
+      tipo: "Entrada Ismael",
+      fecha,
+      fechaTexto: formatearLlegadaIsmael(caso),
+      tecnicos: [],
+      estado: "Sin revisar",
+      estadoClass: "sin-revisar",
+      destacado: true,
+      tipoClass: "home-state-ismael",
+      extraClass: "from-ismael",
+      metaIcon: "fas fa-inbox",
+      metaLabel: obtenerAntiguedadIsmael(caso),
+      solucion: String(caso.falla_especifica || caso.asunto || caso.accion_pendiente || "").trim(),
+      solucionIcon: "fas fa-exclamation-circle",
+      orden: -1,
+      timestamp: Number.isNaN(timestamp) ? 0 : timestamp
+    };
+  }),
   ...trabajosCursoHoy.map((actividad) => {
     const estado = String(actividad.estado || "Sin estado");
     return {
@@ -601,6 +796,7 @@ const trabajosCursoHoyOperativos = [
 	  })
 ].sort((a, b) => {
   if (a.orden !== b.orden) return a.orden - b.orden;
+  if (a.orden === -1) return a.timestamp - b.timestamp;
   return b.timestamp - a.timestamp;
 }).slice(0, 6);
 	  
@@ -815,6 +1011,14 @@ const trabajosCursoHoyOperativos = [
         };
         return colores[prioridad] || "gray"; // Color por defecto
     };
+
+    const seleccionarKpiSoporte = (filtro) => {
+        setFiltroSoporteHome(filtro);
+        setPrioridadSoporteHome("todos");
+        setAreaSoporteHome("todos");
+        setClienteSoporte("todos");
+        setCentroSoporteHome("todos");
+    };
     
         
     return (
@@ -829,7 +1033,7 @@ const trabajosCursoHoyOperativos = [
 	                <button
 	                    type="button"
 	                    className={`metric-card support-kpi-card support-kpi-open ${filtroSoporteHome === "todos" ? "active" : ""}`}
-	                    onClick={() => setFiltroSoporteHome("todos")}
+	                    onClick={() => seleccionarKpiSoporte("todos")}
 	                >
 	                    <span>Total fallas abiertas</span>
 	                    <h3>{totalSoportesAbiertos}</h3>
@@ -838,7 +1042,7 @@ const trabajosCursoHoyOperativos = [
 	                <button
 	                    type="button"
 	                    className={`metric-card critical support-kpi-card ${filtroSoporteHome === "pendientes" ? "active" : ""}`}
-	                    onClick={() => setFiltroSoporteHome("pendientes")}
+	                    onClick={() => seleccionarKpiSoporte("pendientes")}
 	                >
 	                    <span>Pendientes</span>
 	                    <h3>{totalSoportesPendientes}</h3>
@@ -847,7 +1051,7 @@ const trabajosCursoHoyOperativos = [
 	                <button
 	                    type="button"
 	                    className={`metric-card support-kpi-card support-kpi-warning ${filtroSoporteHome === "alertas" ? "active" : ""}`}
-	                    onClick={() => setFiltroSoporteHome("alertas")}
+	                    onClick={() => seleccionarKpiSoporte("alertas")}
 	                >
 	                    <span>Alertas</span>
 	                    <h3>{totalSoportesAlertas}</h3>
@@ -856,7 +1060,7 @@ const trabajosCursoHoyOperativos = [
 	                <button
 	                    type="button"
 	                    className={`metric-card support-kpi-card support-kpi-info ${filtroSoporteHome === "remotas" ? "active" : ""}`}
-	                    onClick={() => setFiltroSoporteHome("remotas")}
+	                    onClick={() => seleccionarKpiSoporte("remotas")}
 	                >
 	                    <span>Remotas</span>
 	                    <h3>{totalSoportesRemotos}</h3>
@@ -865,7 +1069,7 @@ const trabajosCursoHoyOperativos = [
 	                <button
 	                    type="button"
 	                    className={`metric-card support-kpi-card support-kpi-primary ${filtroSoporteHome === "terreno" ? "active" : ""}`}
-	                    onClick={() => setFiltroSoporteHome("terreno")}
+	                    onClick={() => seleccionarKpiSoporte("terreno")}
 	                >
 	                    <span>Terreno</span>
 	                    <h3>{totalSoportesTerreno}</h3>
@@ -874,7 +1078,18 @@ const trabajosCursoHoyOperativos = [
             </div>
 
             <div className="home-operational-grid">
-            <div className="home-support-priority-card">
+            <div
+                className="home-support-priority-card"
+                onMouseEnter={() => {
+                    sliderMouseDentroRef.current = true;
+                    detenerSliderPorInteraccion();
+                }}
+                onMouseLeave={() => {
+                    sliderMouseDentroRef.current = false;
+                    programarReanudacionSlider();
+                }}
+                onTouchStart={registrarInteraccionSlider}
+            >
                 <div className="support-priority-header">
                     <div>
                         <span className="support-priority-kicker">Soporte operativo</span>
@@ -883,12 +1098,30 @@ const trabajosCursoHoyOperativos = [
                     </div>
 	                    <div className="support-priority-tools">
 	                        <label className="support-priority-filter">
+	                            <span>Area</span>
+	                            <select
+	                                value={areaSoporteHome}
+	                                onChange={(e) => {
+	                                    setAreaSoporteHome(e.target.value);
+	                                    setClienteSoporte("todos");
+	                                    setCentroSoporteHome("todos");
+	                                }}
+	                            >
+	                                <option value="todos">Todas las areas</option>
+	                                {areasSoporte.map(([nombreArea, cantidad]) => (
+	                                    <option value={nombreArea} key={nombreArea}>{nombreArea} ({cantidad})</option>
+	                                ))}
+	                            </select>
+	                        </label>
+	                        <label className="support-priority-filter">
 	                            <span>Prioridad</span>
 		                            <select
 		                                value={prioridadSoporteHome}
 		                                onChange={(e) => {
 		                                    setPrioridadSoporteHome(e.target.value);
 		                                    setClienteSoporte("todos");
+		                                    setAreaSoporteHome("todos");
+		                                    setCentroSoporteHome("todos");
 		                                }}
 		                            >
 	                                <option value="todos">Todas</option>
@@ -901,16 +1134,22 @@ const trabajosCursoHoyOperativos = [
                             <button
                                 type="button"
                                 className={`support-client-card ${clienteSoporte === "todos" ? "active" : ""}`}
-                                onClick={() => setClienteSoporte("todos")}
+	                                onClick={() => {
+	                                    setClienteSoporte("todos");
+	                                    setCentroSoporteHome("todos");
+	                                }}
 	                            >
 	                                <span>Todos</span>
-	                                <strong>{soportesFiltradosPorPrioridad.length}</strong>
+	                                <strong>{soportesFiltradosPorArea.length}</strong>
 	                            </button>
                             {clientesSoporte.map(([cliente, cantidad]) => (
                                 <button
                                     type="button"
                                     className={`support-client-card ${clienteSoporte === cliente ? "active" : ""}`}
-                                    onClick={() => setClienteSoporte(cliente)}
+	                                    onClick={() => {
+	                                        setClienteSoporte(cliente);
+	                                        setCentroSoporteHome("todos");
+	                                    }}
                                     key={cliente}
                                 >
                                     <span>{cliente}</span>
@@ -918,13 +1157,93 @@ const trabajosCursoHoyOperativos = [
                                 </button>
                             ))}
                         </div>
-                        <span className="support-priority-icon" aria-label="Soporte">
-                            <i className="fas fa-headset" />
-                        </span>
                     </div>
                 </div>
 
-                {soportesPrioritariosHome.length ? (
+	                {areaSoporteHome !== "todos" && (
+	                    <div className="support-area-overview">
+	                        <div className="support-area-overview-heading">
+	                            <div>
+	                                <span>Vista territorial</span>
+	                                <strong>{areaSoporteHome}</strong>
+	                            </div>
+	                            <div className="support-area-overview-metrics">
+	                                <span><b>{soportesBaseFiltradosPorCliente.length}</b> fallas</span>
+	                                <span><b>{centrosAreaSoporte.length}</b> centros</span>
+	                            </div>
+	                        </div>
+	                        <div className="support-area-centers" aria-label={`Centros del area ${areaSoporteHome}`}>
+	                            <button
+	                                type="button"
+	                                className={`support-area-center ${centroSoporteHome === "todos" ? "active" : ""}`}
+	                                onClick={() => setCentroSoporteHome("todos")}
+	                            >
+	                                <span>Todos los centros</span>
+	                                <strong>{soportesBaseFiltradosPorCliente.length}</strong>
+	                            </button>
+	                            {centrosAreaSoporte.map(([centro, cantidad]) => (
+	                                <button
+	                                    type="button"
+	                                    className={`support-area-center ${centroSoporteHome === centro ? "active" : ""}`}
+	                                    onClick={() => setCentroSoporteHome(centro)}
+	                                    key={centro}
+	                                    title={centro}
+	                                >
+	                                    <span>{centro}</span>
+	                                    <strong>{cantidad}</strong>
+	                                </button>
+	                            ))}
+	                        </div>
+	                    </div>
+	                )}
+
+                {vistaResumenAreas ? (
+                    <div className="support-area-slider-view">
+                        <div className="support-area-slider-heading">
+                            <div>
+                                <span>Resumen territorial</span>
+                                <h6>Fallas abiertas por area</h6>
+                            </div>
+                            <div>
+                                <strong>{resumenAreasSlider.reduce((total, item) => total + item.total, 0)}</strong>
+                                <small>fallas en {resumenAreasSlider.length} areas</small>
+                            </div>
+                        </div>
+                        {resumenAreasSlider.length ? (
+                            <div className="support-area-slider-grid">
+                                {resumenAreasSlider.map((item) => (
+                                    <button
+                                        type="button"
+                                        className="support-area-slider-card"
+                                        key={item.area}
+                                        onClick={() => {
+                                            setAreaSoporteHome(item.area);
+                                            setClienteSoporte("todos");
+                                            setCentroSoporteHome("todos");
+                                            setVistaResumenAreas(false);
+                                            setPaginaSoportes(1);
+                                        }}
+                                    >
+                                        <div className="support-area-slider-card-title">
+                                            <span>{item.area}</span>
+                                            <strong>{item.total}</strong>
+                                        </div>
+                                        <small>{item.centros.length} centro{item.centros.length === 1 ? "" : "s"}</small>
+                                        <div className="support-area-slider-centers">
+                                            {item.centros.map(([centro, cantidad]) => (
+                                                <span key={`${item.area}-${centro}`} title={centro}>
+                                                    {centro} <b>{cantidad}</b>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="support-priority-empty">No hay areas con fallas para los filtros aplicados.</div>
+                        )}
+                    </div>
+                ) : soportesPrioritariosHome.length ? (
                     <ul className="support-priority-list">
 		                        {soportesPrioritariosHome.map((soporte) => {
 		                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
@@ -987,29 +1306,70 @@ const trabajosCursoHoyOperativos = [
                     </div>
                 )}
 
-                {totalSoportesFiltrados > soportesPorPagina && (
-                    <div className="support-priority-pagination">
+                <div className="support-slider-footer">
+                    <div className="support-slider-progress-track" aria-hidden="true">
+                        <span
+                            key={sliderCicloKey}
+                            className={`support-slider-progress ${sliderSoportePausado ? "paused" : ""}`}
+                        />
+                    </div>
+                    <div className="support-slider-controls">
                         <button
                             type="button"
-                            className="support-page-button"
-                            disabled={paginaSoportesActual <= 1}
-                            onClick={() => setPaginaSoportes((pagina) => Math.max(1, pagina - 1))}
+                            className="support-slider-arrow"
+                            onClick={() => {
+                                registrarInteraccionSlider();
+                                retrocederSliderSoporte();
+                            }}
+                            aria-label="Vista anterior"
                         >
-                            <i className="fas fa-chevron-left mr-1" />
-                            Anterior
+                            <i className="fas fa-chevron-left" />
                         </button>
-                        <span>Pagina {paginaSoportesActual} de {totalPaginasSoportes}</span>
+                        <div className="support-slider-dots" aria-label="Vistas de soporte">
+                            {Array.from({ length: totalVistasSoporte }, (_, index) => index + 1).map((vista) => (
+                                <button
+                                    type="button"
+                                    className={vistaSoporteActual === vista ? "active" : ""}
+                                    onClick={() => {
+                                        registrarInteraccionSlider();
+                                        irAVistaSoporte(vista);
+                                    }}
+                                    aria-label={vista === totalVistasSoporte ? "Resumen por areas" : `Pagina ${vista}`}
+                                    title={vista === totalVistasSoporte ? "Resumen por areas" : `Pagina ${vista}`}
+                                    key={vista}
+                                />
+                            ))}
+                        </div>
+                        <span className="support-slider-label">
+                            {vistaResumenAreas ? "Resumen por areas" : `Pagina ${paginaSoportesActual} de ${totalPaginasSoportes}`}
+                            {sliderPausaInteraccion ? " · Pausa por consulta" : sliderPausaManual ? " · Pausado" : " · Auto 15 s"}
+                        </span>
                         <button
                             type="button"
-                            className="support-page-button"
-                            disabled={paginaSoportesActual >= totalPaginasSoportes}
-                            onClick={() => setPaginaSoportes((pagina) => Math.min(totalPaginasSoportes, pagina + 1))}
+                            className="support-slider-toggle"
+                            onClick={() => {
+                                registrarInteraccionSlider();
+                                setSliderPausaManual((pausado) => !pausado);
+                                setSliderCicloKey((valor) => valor + 1);
+                            }}
+                            title={sliderPausaManual ? "Reanudar carrusel" : "Pausar carrusel"}
                         >
-                            Siguiente
-                            <i className="fas fa-chevron-right ml-1" />
+                            <i className={`fas ${sliderPausaManual ? "fa-play" : "fa-pause"}`} />
+                            {sliderPausaManual ? " Reanudar" : " Pausar"}
+                        </button>
+                        <button
+                            type="button"
+                            className="support-slider-arrow"
+                            onClick={() => {
+                                registrarInteraccionSlider();
+                                avanzarSliderSoporte();
+                            }}
+                            aria-label="Vista siguiente"
+                        >
+                            <i className="fas fa-chevron-right" />
                         </button>
                     </div>
-                )}
+                </div>
 	            </div>
 
 		            <div className="home-work-card">
@@ -1032,7 +1392,7 @@ const trabajosCursoHoyOperativos = [
 				                                        </div>
 				                                        <small>{trabajo.cliente}</small>
 				                                        <div className="home-work-meta">
-				                                            <span><i className="far fa-calendar-check mr-1" />{formatearFecha(trabajo.fecha)}</span>
+				                                            <span><i className="far fa-calendar-check mr-1" />{trabajo.fechaTexto || formatearFecha(trabajo.fecha)}</span>
 				                                            <span>
 				                                                <i className={`${trabajo.metaIcon || "fas fa-user-check"} mr-1`} />
 				                                                {trabajo.metaLabel || (trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente")}
@@ -1040,7 +1400,7 @@ const trabajosCursoHoyOperativos = [
 				                                        </div>
 				                                        {trabajo.solucion && (
 				                                            <div className="home-work-solution">
-				                                                <i className="fas fa-clipboard-check mr-1" />
+				                                                <i className={`${trabajo.solucionIcon || "fas fa-clipboard-check"} mr-1`} />
 				                                                {trabajo.solucion}
 				                                            </div>
 				                                        )}
