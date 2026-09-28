@@ -1456,6 +1456,25 @@ export const actualizarSoporte = async (id, soporteData) => {
     }
 };
 
+export const marcarCorreoSoporteEnviado = async (id) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const response = await axios.patch(
+        `${BASE_URL}/soporte/${id}/correo-enviado`,
+        {},
+        token ? { headers: { Authorization: `Bearer ${token}` } } : {}
+    );
+    return response.data;
+};
+
+export const obtenerHistorialCorreosSoporte = async (params = {}) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const response = await axios.get(`${BASE_URL}/soporte/correos/historial`, {
+        params,
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+    });
+    return response.data;
+};
+
 // Eliminar soporte
 export const eliminarSoporte = async (id) => {
     try {

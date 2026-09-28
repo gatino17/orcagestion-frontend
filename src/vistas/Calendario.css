@@ -1037,6 +1037,206 @@
   font-weight: 700;
 }
 
+.calendar-mail-summary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.calendar-mail-summary-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  font-weight: 700;
+}
+
+.calendar-mail-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  line-height: 1.2;
+}
+
+.calendar-mail-status strong {
+  font-size: 0.76rem;
+}
+
+.calendar-mail-status small {
+  color: #64748b;
+  font-size: 0.66rem;
+}
+
+.calendar-mail-pending strong {
+  color: #b45309;
+}
+
+.calendar-mail-sent strong {
+  color: #15803d;
+}
+
+.calendar-mail-action {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.34rem 0.62rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.calendar-mail-action:hover:not(:disabled) {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.calendar-mail-action:disabled {
+  opacity: 0.65;
+}
+
+.calendar-mail-complete {
+  color: #15803d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.calendar-mail-history-button {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 0.28rem 0.62rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.calendar-mail-history-button:hover {
+  background: #dbeafe;
+}
+
+.calendar-mail-history-modal {
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 2060;
+}
+
+.calendar-mail-history-modal .modal-content {
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+}
+
+.calendar-mail-history-header {
+  align-items: center;
+  border: 0;
+  background: linear-gradient(120deg, #0f172a 0%, #173a66 70%, #0f766e 140%);
+  color: #fff;
+  padding: 1rem 1.25rem;
+}
+
+.calendar-mail-history-header .close {
+  color: #fff;
+  opacity: 0.9;
+}
+
+.calendar-mail-history-header h5 {
+  margin: 0.1rem 0 0;
+  font-weight: 800;
+}
+
+.calendar-mail-history-kicker {
+  color: #7dd3fc;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+.calendar-mail-history-body {
+  background: #f8fafc;
+}
+
+.calendar-mail-history-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 0.7rem;
+  align-items: end;
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  border: 1px solid #dbe5f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.calendar-mail-history-filters label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #475569;
+  font-size: 0.67rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.calendar-mail-history-search {
+  grid-column: span 2;
+}
+
+.calendar-mail-history-filter-button {
+  min-height: 38px;
+  border-radius: 10px;
+  background: #0f4c81;
+  color: #fff;
+  font-weight: 800;
+}
+
+.calendar-mail-history-filter-button:hover {
+  background: #0b3a63;
+  color: #fff;
+}
+
+.calendar-mail-history-table {
+  overflow: hidden;
+  border: 1px solid #dbe5f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.calendar-mail-history-user {
+  color: #166534;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.calendar-mail-history-total {
+  margin-right: auto;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1199.98px) {
+  .calendar-mail-history-filters {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 575.98px) {
+  .calendar-mail-summary {
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+
+  .calendar-mail-history-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-mail-history-search {
+    grid-column: auto;
+  }
+}
+
 .soporte-status-pendiente {
   background: #dc2626;
   color: #ffffff;

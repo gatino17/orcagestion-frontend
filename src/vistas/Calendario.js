@@ -1,10 +1,12 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import DataTable from "react-data-table-component";
+import { io } from "socket.io-client";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { useLocation, useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 
 import {
   cargarActividades,
@@ -17,9 +19,12 @@ import {
   obtenerArmados,
   obtenerGuiasSalidaArmado,
   obtenerSoportes,
+  marcarCorreoSoporteEnviado,
+  obtenerHistorialCorreosSoporte,
   obtenerBloqueosTecnicos,
   crearBloqueoTecnico,
-  eliminarBloqueoTecnico
+  eliminarBloqueoTecnico,
+  API_BASE_URL
 } from "../api";
 import { cargarEncargados } from "../controllers/encargadosControllers";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
@@ -116,6 +121,57 @@ const parseFechaCalendario = (value) => {
   return fecha;
 };
 
+const toDateKeyValue = (value) => {
+  const d = parseFechaCalendario(value);
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const getTodayKey = () => {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(
+    hoy.getDate()
+  ).padStart(2, "0")}`;
+};
+
+const separarSoportesCalendario = (soportes) => {
+  const lista = Array.isArray(soportes) ? soportes : [];
+  const pendientesTerreno = lista
+    .filter((item) => String(item?.tipo || "").toLowerCase() === "terreno")
+    .filter((item) => {
+      const estado = String(item?.estado || "pendiente").toLowerCase();
+      return estado === "pendiente" || estado === "en_proceso";
+    })
+    .sort((a, b) => new Date(b?.fecha_soporte || 0) - new Date(a?.fecha_soporte || 0));
+
+  const todayKey = getTodayKey();
+  const cierresCorreo = lista
+    .filter((item) => ["terreno", "remoto"].includes(String(item?.tipo || "").toLowerCase()))
+    .filter((item) => ["resuelto", "finalizado"].includes(String(item?.estado || "").toLowerCase()))
+    .filter((item) => {
+      const cierreHoy = toDateKeyValue(item?.fecha_cierre || item?.updated_at || item?.fecha_soporte) === todayKey;
+      const envioHoy = toDateKeyValue(item?.fecha_envio_correo) === todayKey;
+      const correoPendiente = item?.correo_enviado === false;
+      return correoPendiente || cierreHoy || envioHoy;
+    })
+    .sort((a, b) => {
+      const pendienteA = a?.correo_enviado !== true;
+      const pendienteB = b?.correo_enviado !== true;
+      if (pendienteA !== pendienteB) return pendienteA ? -1 : 1;
+      const fechaA = new Date(a?.fecha_cierre || a?.updated_at || a?.fecha_soporte || 0).getTime();
+      const fechaB = new Date(b?.fecha_cierre || b?.updated_at || b?.fecha_soporte || 0).getTime();
+      return pendienteA ? fechaA - fechaB : fechaB - fechaA;
+    });
+
+  return { pendientesTerreno, cierresCorreo };
+};
+
+const getSocketBaseUrl = () =>
+  String(API_BASE_URL || window.location.origin).replace(/\/api\/?$/i, "") || window.location.origin;
+
 const calcularPctChecklistArmado = (armadoId) => {
   const id = Number(armadoId || 0);
   if (!id) return { done: 0, total: CHECKLIST_ARMADO_TOTAL_ITEMS, pct: 0 };
@@ -145,8 +201,22 @@ function Calendario() {
   const [encargados, setEncargados] = useState([]);
   const [centros, setCentros] = useState([]);
   const [soportesTerrenoPendientes, setSoportesTerrenoPendientes] = useState([]);
-  const [soportesResueltosHoy, setSoportesResueltosHoy] = useState([]);
+  const [soportesCierreCorreo, setSoportesCierreCorreo] = useState([]);
   const [loadingSoportesTerreno, setLoadingSoportesTerreno] = useState(false);
+  const [correoEnviandoId, setCorreoEnviandoId] = useState(null);
+  const [showHistorialCorreos, setShowHistorialCorreos] = useState(false);
+  const [historialCorreos, setHistorialCorreos] = useState([]);
+  const [historialCorreosLoading, setHistorialCorreosLoading] = useState(false);
+  const [historialCorreosTotal, setHistorialCorreosTotal] = useState(0);
+  const [historialCorreosPage, setHistorialCorreosPage] = useState(1);
+  const [historialCorreosPerPage, setHistorialCorreosPerPage] = useState(10);
+  const [historialCorreosError, setHistorialCorreosError] = useState("");
+  const [historialCorreosFiltros, setHistorialCorreosFiltros] = useState(() => {
+    const hoy = new Date();
+    const inicio = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-01`;
+    const fin = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+    return { fecha_desde: inicio, fecha_hasta: fin, cliente: "", centro: "", responsable: "", tipo: "", q: "" };
+  });
   const [armadosCalendario, setArmadosCalendario] = useState([]);
   const [guiasSalidaCalendario, setGuiasSalidaCalendario] = useState([]);
   const [loadingArmadosCalendario, setLoadingArmadosCalendario] = useState(false);
@@ -196,6 +266,15 @@ function Calendario() {
   const [toastAsignacion, setToastAsignacion] = useState("");
   const [disponibilidadOffsetDias, setDisponibilidadOffsetDias] = useState(0);
 
+  const esAdmin = useMemo(() => {
+    try {
+      const token = localStorage.getItem("token");
+      return token && String(jwtDecode(token)?.rol || "").toLowerCase() === "admin";
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
   const toDateKey = (value) => {
     const d = parseFechaCalendario(value);
     if (!d) return "";
@@ -230,6 +309,52 @@ function Calendario() {
     }
   };
 
+  const cargarSoportesCalendario = async ({ mostrarCarga = false } = {}) => {
+    if (mostrarCarga) setLoadingSoportesTerreno(true);
+    try {
+      const soportes = await obtenerSoportes();
+      const { pendientesTerreno, cierresCorreo } = separarSoportesCalendario(soportes);
+      setSoportesTerrenoPendientes(pendientesTerreno);
+      setSoportesCierreCorreo(cierresCorreo);
+    } catch (error) {
+      setSoportesTerrenoPendientes([]);
+      setSoportesCierreCorreo([]);
+    } finally {
+      if (mostrarCarga) setLoadingSoportesTerreno(false);
+    }
+  };
+
+  const cargarHistorialCorreos = async ({
+    page = historialCorreosPage,
+    perPage = historialCorreosPerPage,
+    filtros = historialCorreosFiltros
+  } = {}) => {
+    setHistorialCorreosLoading(true);
+    setHistorialCorreosError("");
+    try {
+      const data = await obtenerHistorialCorreosSoporte({
+        ...filtros,
+        page,
+        per_page: perPage
+      });
+      setHistorialCorreos(Array.isArray(data?.items) ? data.items : []);
+      setHistorialCorreosTotal(Number(data?.total || 0));
+      setHistorialCorreosPage(Number(data?.page || page));
+    } catch (error) {
+      setHistorialCorreos([]);
+      setHistorialCorreosTotal(0);
+      setHistorialCorreosError(error?.response?.data?.error || "No se pudo cargar el historial de correos.");
+    } finally {
+      setHistorialCorreosLoading(false);
+    }
+  };
+
+  const abrirHistorialCorreos = () => {
+    setShowHistorialCorreos(true);
+    setHistorialCorreosPage(1);
+    cargarHistorialCorreos({ page: 1 });
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -241,48 +366,7 @@ function Calendario() {
       setEncargados(await cargarEncargados());
       setCentros(await cargarCentrosClientes());
       await cargarUsuarios(setUsuarios);
-      try {
-        const soportes = await obtenerSoportes();
-        const listaSoportes = Array.isArray(soportes) ? soportes : [];
-        const pendientesTerreno = listaSoportes
-          .filter((item) => String(item?.tipo || "").toLowerCase() === "terreno")
-          .filter((item) => {
-            const estado = String(item?.estado || "pendiente").toLowerCase();
-            return estado === "pendiente" || estado === "en_proceso";
-          })
-          .sort((a, b) => {
-            const fa = new Date(a?.fecha_soporte || 0).getTime();
-            const fb = new Date(b?.fecha_soporte || 0).getTime();
-            return fb - fa;
-          });
-        const hoy = new Date();
-        const todayKey = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(
-          hoy.getDate()
-        ).padStart(2, "0")}`;
-        const resueltosHoy = listaSoportes
-          .filter((item) => {
-            const tipo = String(item?.tipo || "").toLowerCase();
-            return tipo === "terreno" || tipo === "remoto";
-          })
-          .filter((item) => {
-            const estado = String(item?.estado || "").toLowerCase();
-            return estado === "resuelto" || estado === "finalizado";
-          })
-          .filter((item) => {
-            const fechaRef = item?.fecha_cierre || item?.updated_at || item?.fecha_soporte;
-            return toDateKey(fechaRef) === todayKey;
-          })
-          .sort((a, b) => {
-            const fa = new Date(a?.fecha_cierre || a?.updated_at || a?.fecha_soporte || 0).getTime();
-            const fb = new Date(b?.fecha_cierre || b?.updated_at || b?.fecha_soporte || 0).getTime();
-            return fb - fa;
-          });
-        setSoportesTerrenoPendientes(pendientesTerreno);
-        setSoportesResueltosHoy(resueltosHoy);
-      } catch (error) {
-        setSoportesTerrenoPendientes([]);
-        setSoportesResueltosHoy([]);
-      }
+      await cargarSoportesCalendario();
       setLoadingSoportesTerreno(false);
       await cargarArmadosOperativosCalendario();
       try {
@@ -295,6 +379,19 @@ function Calendario() {
       setLoading(false);
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const socket = io(getSocketBaseUrl(), {
+      transports: process.env.REACT_APP_SOCKET_POLLING_ONLY === "1" ? ["polling"] : ["websocket", "polling"],
+      reconnection: true
+    });
+    const refrescar = () => cargarSoportesCalendario();
+    socket.on("soporte_updated", refrescar);
+    return () => {
+      socket.off("soporte_updated", refrescar);
+      socket.disconnect();
+    };
   }, []);
 
   const cargarBloqueos = async () => {
@@ -1757,6 +1854,27 @@ function Calendario() {
     });
   }, [armadosCalendario, guiasPorArmadoCalendario]);
 
+  const confirmarCorreoEnviado = async (soporte) => {
+    if (!soporte?.id_soporte || soporte?.correo_enviado === true) return;
+    const centro = soporte?.centro?.nombre || "este centro";
+    if (!window.confirm(`¿Confirmas que el correo de ${centro} ya fue enviado?`)) return;
+    setCorreoEnviandoId(soporte.id_soporte);
+    try {
+      await marcarCorreoSoporteEnviado(soporte.id_soporte);
+      await cargarSoportesCalendario();
+      setToastAsignacion("Correo marcado como enviado.");
+      setTimeout(() => setToastAsignacion(""), 2500);
+    } catch (error) {
+      const mensaje = error?.response?.data?.error || "No se pudo confirmar el envio del correo.";
+      window.alert(mensaje);
+    } finally {
+      setCorreoEnviandoId(null);
+    }
+  };
+
+  const correosPendientes = soportesCierreCorreo.filter((item) => item?.correo_enviado !== true).length;
+  const correosEnviadosHoy = soportesCierreCorreo.filter((item) => item?.correo_enviado === true).length;
+
   const columnasSoporteResueltosHoy = [
     {
       name: "Cierre",
@@ -1792,33 +1910,99 @@ function Calendario() {
       )
     },
     {
-      name: "Problema",
-      selector: (row) => row.problema || "",
+      name: "Solucion",
+      selector: (row) => row.solucion || "",
       sortable: true,
       grow: 1.5,
       minWidth: "150px",
       wrap: true,
       cell: (row) => (
-        <div style={{ maxWidth: "100%", display: "block" }} title={row.problema || ""}>
-          {row.problema || "-"}
+        <div style={{ maxWidth: "100%", display: "block" }} title={row.solucion || ""}>
+          {row.solucion || "-"}
         </div>
       )
     },
     {
-      name: "Estado",
-      selector: (row) => row.estado || "resuelto",
+      name: "Correo",
+      selector: (row) => (row.correo_enviado ? "enviado" : "pendiente"),
       sortable: true,
-      width: "108px",
-      cell: () => <span className="pill soporte-status-finalizado">Resuelto</span>
+      minWidth: "170px",
+      cell: (row) => row.correo_enviado === true ? (
+        <div className="calendar-mail-status calendar-mail-sent">
+          <strong><i className="fas fa-check-circle" /> Correo enviado</strong>
+          <small>{formatearFechaHoraCorreo(row.fecha_envio_correo)}</small>
+          {row.correo_enviado_por && <small>Por {row.correo_enviado_por}</small>}
+        </div>
+      ) : (
+        <div className="calendar-mail-status calendar-mail-pending">
+          <strong><i className="fas fa-envelope" /> Correo pendiente</strong>
+          <small>Requiere confirmacion</small>
+        </div>
+      )
+    },
+    {
+      name: "Accion",
+      width: "145px",
+      cell: (row) => row.correo_enviado === true ? (
+        <span className="calendar-mail-complete"><i className="fas fa-check" /> Completado</span>
+      ) : (
+        <button
+          type="button"
+          className="btn calendar-mail-action"
+          disabled={correoEnviandoId === row.id_soporte}
+          onClick={() => confirmarCorreoEnviado(row)}
+        >
+          <i className={correoEnviandoId === row.id_soporte ? "fas fa-spinner fa-spin" : "fas fa-paper-plane"} />
+          {correoEnviandoId === row.id_soporte ? " Guardando" : " Marcar enviado"}
+        </button>
+      )
+    }
+  ];
+
+  const columnasHistorialCorreos = [
+    {
+      name: "Envio",
+      selector: (row) => row.fecha_envio_correo || "",
+      sortable: true,
+      width: "150px",
+      cell: (row) => formatearFechaHoraCorreo(row.fecha_envio_correo)
+    },
+    {
+      name: "Cliente",
+      selector: (row) => row.cliente || "",
+      sortable: true,
+      minWidth: "120px",
+      cell: (row) => <span title={row.cliente || ""}>{row.cliente || "-"}</span>
+    },
+    {
+      name: "Centro",
+      selector: (row) => row.centro || "",
+      sortable: true,
+      minWidth: "140px",
+      cell: (row) => <span title={row.centro || ""}>{row.centro || "-"}</span>
     },
     {
       name: "Tipo",
       selector: (row) => row.tipo || "",
-      sortable: true,
       width: "90px",
+      cell: (row) => <span className="pill state-en-progreso">{row.tipo || "-"}</span>
+    },
+    {
+      name: "Solucion",
+      selector: (row) => row.solucion || "",
+      grow: 1.6,
+      minWidth: "210px",
+      wrap: true,
+      cell: (row) => <span title={row.solucion || row.problema || ""}>{row.solucion || row.problema || "-"}</span>
+    },
+    {
+      name: "Confirmado por",
+      selector: (row) => row.correo_enviado_por || "",
+      sortable: true,
+      minWidth: "145px",
       cell: (row) => (
-        <span className="pill state-en-progreso">
-          {String(row?.tipo || "-")}
+        <span className="calendar-mail-history-user">
+          <i className="fas fa-user-check" /> {row.correo_enviado_por || "-"}
         </span>
       )
     }
@@ -1867,6 +2051,19 @@ function Calendario() {
     const f = new Date(fecha);
     f.setMinutes(f.getMinutes() + f.getTimezoneOffset());
     return `${String(f.getDate()).padStart(2, "0")}/${String(f.getMonth() + 1).padStart(2, "0")}/${f.getFullYear()}`;
+  }
+
+  function formatearFechaHoraCorreo(fecha) {
+    if (!fecha) return "";
+    const valor = new Date(fecha);
+    if (Number.isNaN(valor.getTime())) return "";
+    return new Intl.DateTimeFormat("es-CL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(valor);
   }
 
   function formatearFechaConDia(fecha) {
@@ -2103,12 +2300,23 @@ function Calendario() {
           <div className="card soporte-pendientes-card h-100">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h6 className="mb-0">Resueltos del día (Soporte)</h6>
-                <span className="pill soporte-resuelto-hoy-badge">{soportesResueltosHoy.length} hoy</span>
+                <div>
+                  <h6 className="mb-0">Cierres de soporte</h6>
+                  <small className="text-muted">Resueltos hoy y correos pendientes.</small>
+                </div>
+                <div className="calendar-mail-summary">
+                  <span className="pill calendar-mail-summary-pending">{correosPendientes} pendientes</span>
+                  <span className="pill soporte-resuelto-hoy-badge">{correosEnviadosHoy} enviados hoy</span>
+                  {esAdmin && (
+                    <button type="button" className="calendar-mail-history-button" onClick={abrirHistorialCorreos}>
+                      <i className="fas fa-history" /> Historial
+                    </button>
+                  )}
+                </div>
               </div>
               <DataTable
                 columns={columnasSoporteResueltosHoy}
-                data={soportesResueltosHoy}
+                data={soportesCierreCorreo}
                 progressPending={loadingSoportesTerreno}
                 pagination
                 paginationPerPage={5}
@@ -2118,7 +2326,7 @@ function Calendario() {
                 striped
                 responsive
                 customStyles={soporteTerrenoTableStyles}
-                noDataComponent="No hay soportes resueltos hoy."
+                noDataComponent="No hay cierres ni correos pendientes."
               />
             </div>
           </div>
@@ -2518,6 +2726,137 @@ function Calendario() {
           </div>
         </div>
       </div>
+
+      {showHistorialCorreos && esAdmin && (
+        <div className="modal fade show calendar-mail-history-modal" tabIndex="-1" style={{ display: "block" }}>
+          <div className="modal-dialog modal-xl modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header calendar-mail-history-header">
+                <div>
+                  <span className="calendar-mail-history-kicker">CONTROL ADMINISTRATIVO</span>
+                  <h5 className="modal-title"><i className="fas fa-envelope-open-text" /> Historial de correos enviados</h5>
+                </div>
+                <button type="button" className="close" onClick={() => setShowHistorialCorreos(false)}>&times;</button>
+              </div>
+              <div className="modal-body calendar-mail-history-body">
+                <form
+                  className="calendar-mail-history-filters"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setHistorialCorreosPage(1);
+                    cargarHistorialCorreos({ page: 1 });
+                  }}
+                >
+                  <div>
+                    <label>Desde</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={historialCorreosFiltros.fecha_desde}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, fecha_desde: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Hasta</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={historialCorreosFiltros.fecha_hasta}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, fecha_hasta: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Cliente</label>
+                    <input
+                      className="form-control"
+                      placeholder="Nombre del cliente"
+                      value={historialCorreosFiltros.cliente}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, cliente: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Centro</label>
+                    <input
+                      className="form-control"
+                      placeholder="Nombre del centro"
+                      value={historialCorreosFiltros.centro}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, centro: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Confirmado por</label>
+                    <input
+                      className="form-control"
+                      placeholder="Usuario"
+                      value={historialCorreosFiltros.responsable}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, responsable: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Tipo</label>
+                    <select
+                      className="form-control"
+                      value={historialCorreosFiltros.tipo}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, tipo: e.target.value }))}
+                    >
+                      <option value="">Todos</option>
+                      <option value="remoto">Remoto</option>
+                      <option value="terreno">Terreno</option>
+                    </select>
+                  </div>
+                  <div className="calendar-mail-history-search">
+                    <label>Busqueda general</label>
+                    <input
+                      className="form-control"
+                      placeholder="Problema, solucion, cliente..."
+                      value={historialCorreosFiltros.q}
+                      onChange={(e) => setHistorialCorreosFiltros((prev) => ({ ...prev, q: e.target.value }))}
+                    />
+                  </div>
+                  <button type="submit" className="btn calendar-mail-history-filter-button">
+                    <i className="fas fa-search" /> Filtrar
+                  </button>
+                </form>
+
+                {historialCorreosError && <div className="alert alert-danger py-2">{historialCorreosError}</div>}
+                <div className="calendar-mail-history-table">
+                  <DataTable
+                    columns={columnasHistorialCorreos}
+                    data={historialCorreos}
+                    progressPending={historialCorreosLoading}
+                    pagination
+                    paginationServer
+                    paginationTotalRows={historialCorreosTotal}
+                    paginationDefaultPage={historialCorreosPage}
+                    paginationPerPage={historialCorreosPerPage}
+                    paginationRowsPerPageOptions={[5, 10, 20, 50]}
+                    onChangePage={(page) => {
+                      setHistorialCorreosPage(page);
+                      cargarHistorialCorreos({ page });
+                    }}
+                    onChangeRowsPerPage={(perPage) => {
+                      setHistorialCorreosPerPage(perPage);
+                      setHistorialCorreosPage(1);
+                      cargarHistorialCorreos({ page: 1, perPage });
+                    }}
+                    dense
+                    highlightOnHover
+                    responsive
+                    customStyles={soporteTerrenoTableStyles}
+                    noDataComponent="No hay correos enviados para los filtros seleccionados."
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <span className="calendar-mail-history-total">{historialCorreosTotal} registros encontrados</span>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setShowHistorialCorreos(false)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="modal fade show" tabIndex="-1" style={{ display: "block" }}>
