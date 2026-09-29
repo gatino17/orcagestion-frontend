@@ -1640,6 +1640,14 @@ export const obtenerFallasDispositivos = async (params = {}) => {
     return response.data;
 };
 
+export const eliminarCasoExternoSoporte = async (origen, id) => {
+    const response = await axios.delete(
+        `${BASE_URL}/soporte/casos-externos/${encodeURIComponent(origen)}/${encodeURIComponent(id)}`,
+        authHeaders()
+    );
+    return response.data;
+};
+
 export const obtenerBloqueosTecnicos = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/tecnico_bloqueos/`, { params });

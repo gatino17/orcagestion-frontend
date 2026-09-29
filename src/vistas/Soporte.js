@@ -1,13 +1,14 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from "react";
 import DataTable from "react-data-table-component";
 import { useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import {
     cargarSoportes,
     agregarSoporte,
     modificarSoporte,
     borrarSoporte
 } from "../controllers/soporteControllers";
-import { obtenerCasosIsmael, obtenerFallasDispositivos } from "../api";
+import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerFallasDispositivos } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import "./Soporte.css";
 
@@ -187,6 +188,19 @@ const obtenerNombresCambioSoporte = (soporte) => {
     return String(soporte?.equipo_cambiado || "-");
 };
 
+const obtenerEtiquetaTipoSoporte = (tipo) => {
+    const valor = String(tipo || "").trim().toLowerCase();
+    if (valor === "remoto") return "Remoto";
+    if (valor === "terreno") return "Terreno";
+    return valor || "-";
+};
+
+const obtenerClaseTipoSoporte = (tipo) => {
+    const valor = String(tipo || "").trim().toLowerCase();
+    if (valor === "remoto") return "urgent-type-chip-remote";
+    return "urgent-type-chip-terrain";
+};
+
 const Soporte = () => {
     const tableScrollRef = useRef(null);
     const dragScrollStateRef = useRef({
@@ -224,6 +238,7 @@ const Soporte = () => {
     const [estado, setEstado] = useState("pendiente");
     const [caseCode, setCaseCode] = useState("");
     const [ismaelIdOrigen, setIsmaelIdOrigen] = useState("");
+    const [externalCaseKey, setExternalCaseKey] = useState("");
     const [fechaCierre, setFechaCierre] = useState("");
     const [errorFechaCierre, setErrorFechaCierre] = useState("");
     const [editarSoporte, setEditarSoporte] = useState(null);
@@ -238,9 +253,19 @@ const Soporte = () => {
     const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
     const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
     const [ismaelSeleccionado, setIsmaelSeleccionado] = useState(null);
+    const [mostrarCorreoIsmael, setMostrarCorreoIsmael] = useState(false);
+    const [eliminandoCasoExterno, setEliminandoCasoExterno] = useState("");
     const [paginaIsmael, setPaginaIsmael] = useState(1);
     const [paginaPendientes, setPaginaPendientes] = useState(1);
     const registrosPorTarjeta = 4;
+    const esAdmin = useMemo(() => {
+        try {
+            const token = localStorage.getItem("token");
+            return token && String(jwtDecode(token)?.rol || "").trim().toLowerCase() === "admin";
+        } catch {
+            return false;
+        }
+    }, []);
 
     const refrescarSoportes = async () => {
         setLoading(true);
@@ -292,6 +317,10 @@ const Soporte = () => {
             setCentroBusqueda(formatearEtiquetaCentro(match));
         }
     }, [centroId, centros]);
+
+    useEffect(() => {
+        setMostrarCorreoIsmael(false);
+    }, [ismaelSeleccionado]);
 
     const centroSeleccionado = useMemo(
         () => centros.find((centro) => String(centro.id) === String(centroId)) || null,
@@ -501,6 +530,7 @@ const Soporte = () => {
         setEstado("pendiente");
         setCaseCode("");
         setIsmaelIdOrigen("");
+        setExternalCaseKey("");
         setFechaCierre("");
         setErrorFechaCierre("");
     };
@@ -541,8 +571,9 @@ const Soporte = () => {
             ? problemaDispositivo
             : String(row?.falla_especifica || row?.correo || row?.asunto || "").trim());
         setTipo("remoto");
-        setCaseCode(String(esDispositivo ? row?.source_key : row?.case_code || "").trim());
+        setCaseCode(esDispositivo ? "" : String(row?.case_code || "").trim());
         setIsmaelIdOrigen(esDispositivo ? "" : String(row?.id || "").trim());
+        setExternalCaseKey(esDispositivo ? String(row?.source_key || "").trim() : "");
         const fechaBase = row?.offline_since || row?.created_at || row?.hora_llegada || new Date().toISOString();
         setFechaSoporte(formatearParaInputFecha(fechaBase));
 
@@ -566,6 +597,45 @@ const Soporte = () => {
             }
         }
         setShowModal(true);
+    };
+
+    const handleEliminarCasoExterno = async (row) => {
+        if (!esAdmin) return;
+        const esDispositivo = row?.tipo_fuente === "dispositivo";
+        const origenCaso = esDispositivo ? row?.fuente : "ismael";
+        const idCaso = row?.id;
+        if (!origenCaso || idCaso === undefined || idCaso === null || idCaso === "") return;
+
+        const nombreCaso = esDispositivo
+            ? `${row?.device_name || "dispositivo"} de ${row?.centro || "centro sin identificar"}`
+            : `el mensaje ${row?.case_code || "seleccionado"}`;
+        if (!window.confirm(`¿Eliminar definitivamente ${nombreCaso}?`)) return;
+
+        const clave = `${origenCaso}:${idCaso}`;
+        setEliminandoCasoExterno(clave);
+        try {
+            await eliminarCasoExternoSoporte(origenCaso, idCaso);
+            if (esDispositivo) {
+                setFallasDispositivos((actuales) => actuales.filter(
+                    (item) => !(String(item?.fuente) === String(origenCaso) && String(item?.id) === String(idCaso))
+                ));
+            } else {
+                setCasosIsmael((actuales) => actuales.filter((item) => String(item?.id) !== String(idCaso)));
+            }
+            if (
+                ismaelSeleccionado &&
+                String(ismaelSeleccionado?.id) === String(idCaso) &&
+                (esDispositivo
+                    ? ismaelSeleccionado?.fuente === origenCaso
+                    : ismaelSeleccionado?.tipo_fuente !== "dispositivo")
+            ) {
+                setIsmaelSeleccionado(null);
+            }
+        } catch (error) {
+            alert(error?.response?.data?.error || "No se pudo eliminar el caso.");
+        } finally {
+            setEliminandoCasoExterno("");
+        }
     };
 
     const handleGuardarSoporte = async () => {
@@ -608,6 +678,7 @@ const Soporte = () => {
             estado,
             case_code: caseCode || null,
             ismael_id_origen: ismaelIdOrigen || null,
+            external_case_key: externalCaseKey || null,
             fecha_cierre: fechaCierre || null
         };
 
@@ -624,6 +695,8 @@ const Soporte = () => {
             } else {
                 await agregarSoporte(soporteData, onSuccess);
             }
+        } catch (error) {
+            alert(error?.response?.data?.error || "No se pudo guardar el soporte.");
         } finally {
             setGuardandoSoporte(false);
         }
@@ -742,6 +815,7 @@ const Soporte = () => {
         setCambioEquipo(soporte.cambio_equipo);
         setCaseCode(String(soporte.case_code || ""));
         setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
+        setExternalCaseKey("");
         const detalleCambio = parsearDetalleCambioEquipo(soporte.equipo_cambiado);
         setCantidadEquiposCambiados(detalleCambio.cantidad || "");
         setDetalleEquiposCambiadosLista(detalleCambio.detalles || []);
@@ -1022,7 +1096,7 @@ const Soporte = () => {
         { name: "Centro", selector: (row) => row.centro?.nombre || "No asignado", sortable: true, wrap: true, grow: 1.2 },
         { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, grow: 1.0 },
         { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, grow: 1.5 },
-        { name: "Tipo", selector: (row) => row.tipo, sortable: true, width: "82px" },
+        { name: "Tipo", selector: (row) => obtenerEtiquetaTipoSoporte(row.tipo), sortable: true, width: "90px" },
         {
             name: "Origen",
             selector: (row) => row.origen || "cliente",
@@ -1031,9 +1105,10 @@ const Soporte = () => {
             cell: (row) => {
                 const valor = String(row.origen || "cliente").toLowerCase();
                 const esOrca = valor === "orca";
+                const esTerceros = valor === "terceros";
                 return (
-                    <span className={`badge badge-pill ${esOrca ? "badge-info" : "badge-secondary"}`}>
-                        {esOrca ? "Orca" : "Cliente"}
+                    <span className={`badge badge-pill ${esOrca ? "badge-info" : esTerceros ? "badge-warning" : "badge-secondary"}`}>
+                        {esOrca ? "Orca" : esTerceros ? "Terceros" : "Cliente"}
                     </span>
                 );
             }
@@ -1411,6 +1486,16 @@ const Soporte = () => {
                                                 >
                                                     <i className="fas fa-plus" />
                                                 </button>
+                                                {esAdmin && (
+                                                    <button
+                                                        className="btn btn-outline-danger btn-sm ml-1"
+                                                        title="Eliminar caso"
+                                                        disabled={eliminandoCasoExterno === `${row.tipo_fuente === "dispositivo" ? row.fuente : "ismael"}:${row.id}`}
+                                                        onClick={() => handleEliminarCasoExterno(row)}
+                                                    >
+                                                        <i className={`fas ${eliminandoCasoExterno === `${row.tipo_fuente === "dispositivo" ? row.fuente : "ismael"}:${row.id}` ? "fa-spinner fa-spin" : "fa-trash"}`} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                         <small className="text-muted d-block text-truncate">
@@ -1508,13 +1593,9 @@ const Soporte = () => {
                                                 <div className="d-flex align-items-center flex-wrap">
                                                     <strong>{soporte.centro?.nombre || "Centro sin nombre"}</strong>
                                                     <span
-                                                        className={`urgent-type-chip ml-2 ${
-                                                            String(soporte.tipo || "").toLowerCase() === "remoto"
-                                                                ? "urgent-type-chip-remote"
-                                                                : "urgent-type-chip-terrain"
-                                                        }`}
+                                                        className={`urgent-type-chip ml-2 ${obtenerClaseTipoSoporte(soporte.tipo)}`}
                                                     >
-                                                        {String(soporte.tipo || "").toLowerCase() === "remoto" ? "Remoto" : "Terreno"}
+                                                        {obtenerEtiquetaTipoSoporte(soporte.tipo)}
                                                     </span>
                                                 </div>
                                                 {soporte.problema && (
@@ -1722,7 +1803,7 @@ const Soporte = () => {
 
 	                                <div className="form-row">
                                     <div className="form-group col-md-6">
-                                        <label className="text-muted small font-weight-semibold">Origen</label>
+                                        <label className="text-muted small font-weight-semibold">Origen del reporte</label>
 	                                        <select
 	                                            value={origen}
 	                                            onChange={(e) => setOrigen(e.target.value)}
@@ -1731,6 +1812,7 @@ const Soporte = () => {
 	                                        >
 	                                            <option value="cliente">Cliente</option>
 	                                            <option value="orca">Orca</option>
+	                                            <option value="terceros">Terceros</option>
 	                                        </select>
                                     </div>
                                     <div className="form-group col-md-6">
@@ -1985,7 +2067,6 @@ const Soporte = () => {
                                 <div className="row">
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Case code</small><strong>{ismaelSeleccionado.case_code || "-"}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
-                                    <div className="col-md-12 mb-2"><div className="ismael-field ismael-field-mail"><small>Correo principal</small><strong>{ismaelSeleccionado.correo || "-"}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Hora llegada</small><strong>{formatearFechaHora(ismaelSeleccionado.hora_llegada)}</strong></div></div>
                                     <div className="col-md-12 mb-2">
                                         <div className="ismael-problem-card">
@@ -1996,6 +2077,25 @@ const Soporte = () => {
                                             <div className="ismael-problem-body">
                                                 {ismaelSeleccionado.falla_especifica || "Sin falla especifica registrada."}
                                             </div>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-12 mb-2">
+                                        <div className="ismael-field ismael-field-mail">
+                                            <div className="ismael-mail-heading">
+                                                <small>Correo principal</small>
+                                                <button
+                                                    type="button"
+                                                    className="ismael-mail-toggle"
+                                                    title={mostrarCorreoIsmael ? "Ocultar correo" : "Ver correo"}
+                                                    aria-label={mostrarCorreoIsmael ? "Ocultar correo principal" : "Ver correo principal"}
+                                                    onClick={() => setMostrarCorreoIsmael((visible) => !visible)}
+                                                >
+                                                    <i className={`fas ${mostrarCorreoIsmael ? "fa-eye-slash" : "fa-eye"}`}></i>
+                                                </button>
+                                            </div>
+                                            {mostrarCorreoIsmael && (
+                                                <strong className="ismael-mail-content">{ismaelSeleccionado.correo || "Sin contenido de correo."}</strong>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="col-md-12 mb-2"><div className="ismael-field"><small>Respuesta final</small><strong>{ismaelSeleccionado.respuesta_final || "-"}</strong></div></div>

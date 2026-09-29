@@ -12,18 +12,20 @@ export const cargarSoportes = async (setSoportes) => {
 export const agregarSoporte = async (soporteData, callback) => {
     try {
         await crearSoporte(soporteData);
-        callback();
+        await callback();
     } catch (error) {
         console.error('Error al agregar soporte:', error);
+        throw error;
     }
 };
 
 export const modificarSoporte = async (id, soporteData, callback) => {
     try {
         await actualizarSoporte(id, soporteData);
-        callback();
+        await callback();
     } catch (error) {
         console.error('Error al actualizar soporte:', error);
+        throw error;
     }
 };
 

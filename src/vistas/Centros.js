@@ -6,6 +6,26 @@ import { cargarTodasRazonesSociales } from '../controllers/razonSocialController
 import './Centros.css';
 import { jwtDecode } from 'jwt-decode';
 
+const AREAS_CENTRO = [
+    'Chilo\u00e9',
+    'Puerto Montt',
+    'Melinka',
+    'Puerto Ays\u00e9n',
+    'Puerto Cisnes',
+    'Puerto Natales'
+];
+
+const normalizarAreaCentro = (valor) => String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const obtenerAreaCatalogo = (valor) => {
+    const normalizada = normalizarAreaCentro(valor);
+    return AREAS_CENTRO.find((opcion) => normalizarAreaCentro(opcion) === normalizada) || '';
+};
+
 function Centros() {
     // Estados para cada campo del formulario
     const [clientes, setClientes] = useState([]);//Mantiene un arreglo de todos los clientes. Este estado es útil para listar clientes en un formulario desplegable o para realizar operaciones que involucren a todos los clientes disponibles.
@@ -26,6 +46,7 @@ function Centros() {
     const [ubicacion, setUbicacion] = useState('');
     const [correoCentro, setCorreoCentro] = useState('');
     const [area, setArea] = useState('');
+    const [areaPersonalizadaActiva, setAreaPersonalizadaActiva] = useState(false);
     const [telefono, setTelefono] = useState('');
     const [fechaInstalacion, setFechaInstalacion] = useState('');
     const [fechaActivacion, setFechaActivacion] = useState('');
@@ -580,13 +601,22 @@ function Centros() {
 
       const handleEditarCentro = (centro) => {
         // Establece los valores del formulario con los datos del centro seleccionado
-        setClienteId(centro.cliente_id ? String(centro.cliente_id) : '');
-        setRazonSocialId(centro.razon_social_id ? String(centro.razon_social_id) : '');
+        const clienteAsignadoId = centro.cliente_id || clientes.find((cliente) =>
+          String(cliente.nombre || '').trim().toLowerCase() === String(centro.cliente || '').trim().toLowerCase()
+        )?.id_cliente;
+        const razonSocialAsignadaId = centro.razon_social_id || razonesSociales.find((razon) =>
+          String(razon.razon_social || '').trim().toLowerCase() === String(centro.razon_social || '').trim().toLowerCase()
+        )?.id_razon_social;
+        setClienteId(clienteAsignadoId ? String(clienteAsignadoId) : '');
+        setRazonSocialId(razonSocialAsignadaId ? String(razonSocialAsignadaId) : '');
         setNombre(centro.nombre);
         setNombrePonton(centro.nombre_ponton || "");
         setUbicacion(centro.ubicacion || "");
         setCorreoCentro(centro.correo_centro || "");
-        setArea(centro.area || "");
+        const areaActual = String(centro.area || '').trim();
+        const areaCatalogo = obtenerAreaCatalogo(areaActual);
+        setArea(areaCatalogo || areaActual);
+        setAreaPersonalizadaActiva(Boolean(areaActual && !areaCatalogo));
         setTelefono(centro.telefono || "");
         setFechaInstalacion(normalizarFechaInput(centro.fecha_instalacion));
         setFechaActivacion(normalizarFechaInput(centro.fecha_activacion));
@@ -640,6 +670,7 @@ function Centros() {
             setUbicacion('');
             setCorreoCentro('');
             setArea('');
+            setAreaPersonalizadaActiva(false);
             setTelefono('');
             setFechaInstalacion('');
             setFechaActivacion('');
@@ -1389,8 +1420,37 @@ function Centros() {
                                                 <input type="text" className="form-control" value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} />
                                             </div>
                                             <div className="form-group col-md-6">
-                                                <label>Area</label>
-                                                <input type="text" className="form-control" value={area} onChange={(e) => setArea(e.target.value)} />
+                                                <label>&Aacute;rea</label>
+                                                <select
+                                                    className="form-control"
+                                                    value={areaPersonalizadaActiva ? '__otra__' : area}
+                                                    onChange={(e) => {
+                                                        const valor = e.target.value;
+                                                        if (valor === '__otra__') {
+                                                            setAreaPersonalizadaActiva(true);
+                                                            setArea('');
+                                                            return;
+                                                        }
+                                                        setAreaPersonalizadaActiva(false);
+                                                        setArea(valor);
+                                                    }}
+                                                >
+                                                    <option value="">Seleccione un &aacute;rea</option>
+                                                    {AREAS_CENTRO.map((opcion) => (
+                                                        <option key={opcion} value={opcion}>{opcion}</option>
+                                                    ))}
+                                                    <option value="__otra__">Agregar otra</option>
+                                                </select>
+                                                {areaPersonalizadaActiva && (
+                                                    <input
+                                                        type="text"
+                                                        className="form-control mt-2"
+                                                        value={area}
+                                                        onChange={(e) => setArea(e.target.value)}
+                                                        placeholder={"Escriba el nombre del \u00e1rea"}
+                                                        autoFocus
+                                                    />
+                                                )}
                                             </div>
                                         </div>
 
