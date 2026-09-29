@@ -1635,6 +1635,11 @@ export const obtenerCasosIsmael = async (params = {}) => {
     }
 };
 
+export const obtenerFallasDispositivos = async (params = {}) => {
+    const response = await axios.get(`${BASE_URL}/soporte/fallas-dispositivos`, { params });
+    return response.data;
+};
+
 export const obtenerBloqueosTecnicos = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/tecnico_bloqueos/`, { params });

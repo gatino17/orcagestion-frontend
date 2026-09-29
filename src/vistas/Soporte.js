@@ -7,7 +7,7 @@ import {
     modificarSoporte,
     borrarSoporte
 } from "../controllers/soporteControllers";
-import { obtenerCasosIsmael } from "../api";
+import { obtenerCasosIsmael, obtenerFallasDispositivos } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import "./Soporte.css";
 
@@ -202,6 +202,7 @@ const Soporte = () => {
     const [centros, setCentros] = useState([]);
     const [loading, setLoading] = useState(true);
     const [casosIsmael, setCasosIsmael] = useState([]);
+    const [fallasDispositivos, setFallasDispositivos] = useState([]);
     const navigate = useNavigate();
 
     // Estados del formulario
@@ -245,10 +246,15 @@ const Soporte = () => {
         setLoading(true);
         await cargarSoportes(setSoportes);
         try {
-            const casos = await obtenerCasosIsmael({ limit: 40 });
+            const [casos, fallas] = await Promise.all([
+                obtenerCasosIsmael({ limit: 40 }),
+                obtenerFallasDispositivos({ limit: 200 })
+            ]);
             setCasosIsmael(Array.isArray(casos) ? casos : []);
+            setFallasDispositivos(Array.isArray(fallas) ? fallas : []);
         } catch {
             setCasosIsmael([]);
+            setFallasDispositivos([]);
         }
         setLoading(false);
     };
@@ -261,6 +267,22 @@ const Soporte = () => {
             setCentros(centrosData);
         };
         fetchData();
+    }, []);
+
+    useEffect(() => {
+        const intervalo = window.setInterval(async () => {
+            try {
+                const [casos, fallas] = await Promise.all([
+                    obtenerCasosIsmael({ limit: 40 }),
+                    obtenerFallasDispositivos({ limit: 200 })
+                ]);
+                setCasosIsmael(Array.isArray(casos) ? casos : []);
+                setFallasDispositivos(Array.isArray(fallas) ? fallas : []);
+            } catch (error) {
+                console.error("No se pudieron actualizar los casos externos:", error);
+            }
+        }, 15000);
+        return () => window.clearInterval(intervalo);
     }, []);
 
     useEffect(() => {
@@ -509,19 +531,34 @@ const Soporte = () => {
         setIsmaelSeleccionado(null);
         resetForm();
         setEditarSoporte(null);
-        setProblema(String(row?.falla_especifica || row?.correo || row?.asunto || "").trim());
+        const esDispositivo = row?.tipo_fuente === "dispositivo";
+        const problemaDispositivo = [
+            `${row?.device_name || row?.entity_type || "Dispositivo"} sin conexion en ${row?.centro || "centro sin identificar"}.`,
+            row?.target_ip ? `IP: ${row.target_ip}.` : "",
+            row?.check_type ? `Control: ${row.check_type}.` : ""
+        ].filter(Boolean).join(" ");
+        setProblema(esDispositivo
+            ? problemaDispositivo
+            : String(row?.falla_especifica || row?.correo || row?.asunto || "").trim());
         setTipo("remoto");
-        setCaseCode(String(row?.case_code || "").trim());
-        setIsmaelIdOrigen(String(row?.id || "").trim());
-        const fechaBase = row?.created_at || row?.hora_llegada || new Date().toISOString();
+        setCaseCode(String(esDispositivo ? row?.source_key : row?.case_code || "").trim());
+        setIsmaelIdOrigen(esDispositivo ? "" : String(row?.id || "").trim());
+        const fechaBase = row?.offline_since || row?.created_at || row?.hora_llegada || new Date().toISOString();
         setFechaSoporte(formatearParaInputFecha(fechaBase));
 
-        const centroTexto = String(row?.centro || "").trim().toLowerCase();
+        const normalizarCentro = (valor) => String(valor || "")
+            .trim()
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+        const centroTexto = normalizarCentro(row?.centro || row?.router_id);
+        const clienteTexto = normalizarCentro(row?.cliente);
         if (centroTexto) {
             const centroMatch = (Array.isArray(centros) ? centros : []).find((centro) =>
-                String(centro?.nombre || "")
-                    .trim()
-                    .toLowerCase() === centroTexto
+                normalizarCentro(centro?.nombre) === centroTexto &&
+                (!clienteTexto || normalizarCentro(centro?.cliente) === clienteTexto)
+            ) || (Array.isArray(centros) ? centros : []).find((centro) =>
+                normalizarCentro(centro?.nombre) === centroTexto
             );
             if (centroMatch) {
                 setCentroId(String(centroMatch.id));
@@ -848,12 +885,23 @@ const Soporte = () => {
     }, [soportesFiltradosBusqueda]);
 
     const casosIsmaelOrdenados = useMemo(() => {
-        return [...(Array.isArray(casosIsmael) ? casosIsmael : [])].sort((a, b) => {
-            const fa = new Date(a?.created_at || a?.updated_at || a?.hora_llegada || 0).getTime();
-            const fb = new Date(b?.created_at || b?.updated_at || b?.hora_llegada || 0).getTime();
+        const casosCorreo = (Array.isArray(casosIsmael) ? casosIsmael : []).map((caso) => ({
+            ...caso,
+            tipo_fuente: "ismael"
+        }));
+        const casosDispositivo = (Array.isArray(fallasDispositivos) ? fallasDispositivos : []).map((caso) => ({
+            ...caso,
+            tipo_fuente: "dispositivo"
+        }));
+        return [...casosDispositivo, ...casosCorreo].sort((a, b) => {
+            const recuperadoA = a?.tipo_fuente === "dispositivo" && a?.estado === "recuperado" ? 1 : 0;
+            const recuperadoB = b?.tipo_fuente === "dispositivo" && b?.estado === "recuperado" ? 1 : 0;
+            if (recuperadoA !== recuperadoB) return recuperadoA - recuperadoB;
+            const fa = new Date(a?.offline_since || a?.created_at || a?.updated_at || a?.hora_llegada || 0).getTime();
+            const fb = new Date(b?.offline_since || b?.created_at || b?.updated_at || b?.hora_llegada || 0).getTime();
             return fb - fa;
         });
-    }, [casosIsmael]);
+    }, [casosIsmael, fallasDispositivos]);
     const totalPaginasIsmael = Math.max(1, Math.ceil(casosIsmaelOrdenados.length / registrosPorTarjeta));
     const casosIsmaelPreview = useMemo(() => {
         const inicio = (paginaIsmael - 1) * registrosPorTarjeta;
@@ -1320,7 +1368,7 @@ const Soporte = () => {
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <div>
                                     <h5 className="text-uppercase text-muted mb-1">Estado de casos de hoy</h5>
-                                    <small className="text-secondary">Lectura directa tabla ismael</small>
+                                    <small className="text-secondary">Correos y monitoreo de dispositivos</small>
                                 </div>
                                 <span className="badge badge-pill badge-success" title="Resueltos del periodo">
                                     <i className="fas fa-check-circle mr-1"></i>
@@ -1332,16 +1380,21 @@ const Soporte = () => {
                                     <i className="fas fa-database mr-1"></i>
                                     Registros
                                 </span>
-                                <span className="ismael-total-chip" title="Total de registros en tabla ismael">
+                                <span className="ismael-total-chip" title="Total de casos disponibles">
                                     Total: {casosIsmaelOrdenados.length}
                                 </span>
                             </div>
                             <div className="ismael-preview-list">
                                 {casosIsmaelPreview.map((row) => (
-                                    <div key={row.id || `${row.case_code}-${row.created_at}`} className="ismael-preview-item">
+                                    <div
+                                        key={row.source_key || row.id || `${row.case_code}-${row.created_at}`}
+                                        className={`ismael-preview-item ${row.tipo_fuente === "dispositivo" ? `device-failure-item device-client-${row.fuente || "otro"}` : ""}`}
+                                    >
                                         <div className="d-flex justify-content-between align-items-center">
                                             <strong className="text-truncate mr-2">
-                                                {row.case_code || "Sin código"}
+                                                {row.tipo_fuente === "dispositivo"
+                                                    ? (row.device_name || row.entity_type || "Dispositivo")
+                                                    : (row.case_code || "Sin código")}
                                             </strong>
                                             <div className="d-flex align-items-center">
                                                 <button
@@ -1361,15 +1414,31 @@ const Soporte = () => {
                                             </div>
                                         </div>
                                         <small className="text-muted d-block text-truncate">
-                                            Centro: {row.centro || "-"}
+                                            {row.tipo_fuente === "dispositivo" ? (
+                                                <>
+                                                    <strong>{row.cliente || "Cliente"}</strong>
+                                                    {` · ${row.centro || "Centro sin identificar"}`}
+                                                </>
+                                            ) : (
+                                                `Centro: ${row.centro || "-"}`
+                                            )}
                                         </small>
-                                        <small className="text-muted d-block text-truncate">
-                                            Problema: {row.falla_especifica || row.correo || row.asunto || "-"}
-                                        </small>
+                                        {row.tipo_fuente === "dispositivo" ? (
+                                            <div className="device-failure-meta">
+                                                <span>{row.target_ip || "Sin IP"}</span>
+                                                <span className={`device-failure-state ${row.estado === "recuperado" ? "is-recovered" : "is-active"}`}>
+                                                    {row.estado === "recuperado" ? "Recuperado hoy" : "Falla activa"}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <small className="text-muted d-block text-truncate">
+                                                Problema: {row.falla_especifica || row.correo || row.asunto || "-"}
+                                            </small>
+                                        )}
                                     </div>
                                 ))}
                                 {!casosIsmaelPreview.length && (
-                                    <small className="text-muted">Sin registros en tabla ismael.</small>
+                                    <small className="text-muted">Sin casos externos disponibles.</small>
                                 )}
                             </div>
                             {casosIsmaelOrdenados.length > registrosPorTarjeta && (
@@ -1893,14 +1962,26 @@ const Soporte = () => {
                         <div className="modal-content soporte-modal shadow-lg border-0 ismael-modal">
                             <div className="modal-header ismael-modal-header">
                                 <h5>
-                                    <i className="fas fa-envelope-open-text mr-2"></i>
-                                    Detalle caso ismael
+                                    <i className={`fas ${ismaelSeleccionado.tipo_fuente === "dispositivo" ? "fa-satellite-dish" : "fa-envelope-open-text"} mr-2`}></i>
+                                    {ismaelSeleccionado.tipo_fuente === "dispositivo" ? "Detalle de falla de dispositivo" : "Detalle caso ismael"}
                                 </h5>
                                 <button className="close" onClick={() => setIsmaelSeleccionado(null)}>
                                     &times;
                                 </button>
                             </div>
                             <div className="modal-body soporte-form-body ismael-modal-body">
+                                {ismaelSeleccionado.tipo_fuente === "dispositivo" ? (
+                                <div className="row">
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Cliente</small><strong>{ismaelSeleccionado.cliente || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Dispositivo</small><strong>{ismaelSeleccionado.device_name || ismaelSeleccionado.entity_type || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>IP objetivo</small><strong>{ismaelSeleccionado.target_ip || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Tipo de control</small><strong>{ismaelSeleccionado.check_type || "-"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Estado</small><strong>{ismaelSeleccionado.estado === "recuperado" ? "Recuperado hoy" : "Falla activa"}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Fuera de linea desde</small><strong>{formatearFechaHora(ismaelSeleccionado.offline_since)}</strong></div></div>
+                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Recuperado</small><strong>{formatearFechaHora(ismaelSeleccionado.recovered_at)}</strong></div></div>
+                                </div>
+                                ) : (
                                 <div className="row">
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Case code</small><strong>{ismaelSeleccionado.case_code || "-"}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
@@ -1919,8 +2000,13 @@ const Soporte = () => {
                                     </div>
                                     <div className="col-md-12 mb-2"><div className="ismael-field"><small>Respuesta final</small><strong>{ismaelSeleccionado.respuesta_final || "-"}</strong></div></div>
                                 </div>
+                                )}
                             </div>
                             <div className="modal-footer">
+                                <button className="btn btn-success" onClick={() => abrirAtajoSoporteDesdeIsmael(ismaelSeleccionado)}>
+                                    <i className="fas fa-plus mr-1"></i>
+                                    Crear soporte
+                                </button>
                                 <button className="btn btn-secondary" onClick={() => setIsmaelSeleccionado(null)}>
                                     Cerrar
                                 </button>

@@ -568,8 +568,19 @@ const totalPaginasSoportes = Math.max(1, Math.ceil(totalSoportesFiltrados / sopo
 const paginaSoportesActual = Math.min(paginaSoportes, totalPaginasSoportes);
 const inicioSoportes = (paginaSoportesActual - 1) * soportesPorPagina;
 const soportesPrioritariosHome = soportesFiltradosPorCliente.slice(inicioSoportes, inicioSoportes + soportesPorPagina);
+const soportesTerrenoResumen = soportesPendientesAbiertos.filter((soporte) => {
+  if (String(soporte?.tipo || "").toLowerCase() !== "terreno") return false;
+  if (
+    prioridadSoporteHome !== "todos" &&
+    String(soporte?.prioridad || "media").toLowerCase() !== prioridadSoporteHome
+  ) return false;
+  if (areaSoporteHome !== "todos" && obtenerAreaSoporte(soporte) !== areaSoporteHome) return false;
+  if (clienteSoporte !== "todos" && obtenerClienteSoporte(soporte) !== clienteSoporte) return false;
+  if (centroSoporteHome !== "todos" && obtenerCentroSoporte(soporte) !== centroSoporteHome) return false;
+  return true;
+});
 const resumenAreasSlider = Object.values(
-  soportesFiltradosPorCliente.reduce((acc, soporte) => {
+  soportesTerrenoResumen.reduce((acc, soporte) => {
     const areaCentro = obtenerAreaSoporte(soporte);
     const centro = obtenerCentroSoporte(soporte);
     if (!acc[areaCentro]) acc[areaCentro] = { area: areaCentro, total: 0, centros: {} };
@@ -1202,7 +1213,7 @@ const trabajosCursoHoyOperativos = [
                         <div className="support-area-slider-heading">
                             <div>
                                 <span>Resumen territorial</span>
-                                <h6>Fallas abiertas por area</h6>
+                                <h6>Fallas abiertas por área en terreno</h6>
                             </div>
                             <div>
                                 <strong>{resumenAreasSlider.reduce((total, item) => total + item.total, 0)}</strong>
@@ -1218,6 +1229,7 @@ const trabajosCursoHoyOperativos = [
                                         key={item.area}
                                         onClick={() => {
                                             setAreaSoporteHome(item.area);
+                                            setFiltroSoporteHome("terreno");
                                             setClienteSoporte("todos");
                                             setCentroSoporteHome("todos");
                                             setVistaResumenAreas(false);
@@ -1240,7 +1252,7 @@ const trabajosCursoHoyOperativos = [
                                 ))}
                             </div>
                         ) : (
-                            <div className="support-priority-empty">No hay areas con fallas para los filtros aplicados.</div>
+                            <div className="support-priority-empty">No hay áreas con fallas de terreno para los filtros aplicados.</div>
                         )}
                     </div>
                 ) : soportesPrioritariosHome.length ? (
