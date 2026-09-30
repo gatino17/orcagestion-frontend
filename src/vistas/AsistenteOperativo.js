@@ -11,7 +11,12 @@ import {
   obtenerMovimientosRecientes,
   obtenerOrdenesRevisionEquipos,
   obtenerSoportes,
+  obtenerCasosIsmael,
+  obtenerFallasDispositivos,
+  resolverPlantillaDiagrama,
 } from "../api";
+import VistaGeneralViewer from "../components/VistaGeneralViewer";
+import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
 import "./AsistenteOperativo.css";
 
 const normalizar = (value) =>
@@ -215,13 +220,21 @@ function AsistenteOperativo() {
     centros: [],
     guias: [],
     revisiones: [],
+    casosIsmael: [],
+    fallasDispositivos: [],
   });
   const [loading, setLoading] = useState(true);
   const [consultando, setConsultando] = useState(false);
   const [consulta, setConsulta] = useState("");
   const [error, setError] = useState("");
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const [topologiaModal, setTopologiaModal] = useState(null);
+  const [segundosTopologia, setSegundosTopologia] = useState(15);
+  const [vozActiva, setVozActiva] = useState(() => localStorage.getItem("asistente_voz_activa") !== "false");
+  const [hablando, setHablando] = useState(false);
   const ultimoCodigoConsultadoRef = useRef("");
+  const fallaPendienteRef = useRef(null);
+  const diagramaPendienteRef = useRef(null);
   const [mensajes, setMensajes] = useState([
     {
       id: "intro",
@@ -239,7 +252,7 @@ function AsistenteOperativo() {
     if (!silent) setLoading(true);
     setError("");
     try {
-      const [equipos, armados, soportes, actividades, bodega, centrosResp, guias, revisiones] = await Promise.all([
+      const [equipos, armados, soportes, actividades, bodega, centrosResp, guias, revisiones, casosIsmael, fallasDispositivos] = await Promise.all([
         obtenerEquipos().catch(() => []),
         obtenerArmados().catch(() => []),
         obtenerSoportes().catch(() => []),
@@ -248,6 +261,8 @@ function AsistenteOperativo() {
         obtenerCentros({ page: 1, per_page: 0 }).catch(() => ({ centros: [] })),
         obtenerGuiasSalidaArmado().catch(() => []),
         obtenerOrdenesRevisionEquipos().catch(() => []),
+        obtenerCasosIsmael({ limit: 40 }).catch(() => []),
+        obtenerFallasDispositivos({ limit: 200 }).catch(() => []),
       ]);
 
       setDatos({
@@ -259,6 +274,8 @@ function AsistenteOperativo() {
         centros: Array.isArray(centrosResp?.centros) ? centrosResp.centros : Array.isArray(centrosResp) ? centrosResp : [],
         guias: Array.isArray(guias) ? guias : [],
         revisiones: Array.isArray(revisiones) ? revisiones : [],
+        casosIsmael: Array.isArray(casosIsmael) ? casosIsmael : [],
+        fallasDispositivos: Array.isArray(fallasDispositivos) ? fallasDispositivos : [],
       });
       setUltimaActualizacion(new Date());
     } catch (err) {
@@ -272,6 +289,26 @@ function AsistenteOperativo() {
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
+
+  useEffect(() => () => {
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  useEffect(() => {
+    if (!topologiaModal) return undefined;
+    setSegundosTopologia(15);
+    const intervalo = window.setInterval(() => {
+      setSegundosTopologia((segundos) => {
+        if (segundos <= 1) {
+          window.clearInterval(intervalo);
+          setTopologiaModal(null);
+          return 0;
+        }
+        return segundos - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(intervalo);
+  }, [topologiaModal]);
 
   useEffect(() => {
     const socket = io(getSocketBaseUrl(), {
@@ -619,6 +656,156 @@ function AsistenteOperativo() {
     };
   };
 
+  const responderCasosHoy = () => {
+    const casosIsmael = Array.isArray(datos.casosIsmael) ? datos.casosIsmael : [];
+    const fallasDispositivos = Array.isArray(datos.fallasDispositivos) ? datos.fallasDispositivos : [];
+    const hoy = new Date();
+    const describirMomento = (valor) => {
+      const fecha = parseFechaHoraBackend(valor);
+      if (!fecha) return "sin hora informada";
+      if (esMismaFecha(valor, hoy)) {
+        return `hoy a las ${fecha.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}`;
+      }
+      return `el ${formatoFechaHora(valor)}`;
+    };
+    const soportesGuardados = (Array.isArray(datos.soportes) ? datos.soportes : []).filter((soporte) => {
+      const tieneOrigenExterno = String(soporte?.ismael_id_origen || "").trim()
+        || String(soporte?.external_case_key || "").startsWith("device-fail:");
+      return tieneOrigenExterno && esMismaFecha(soporte?.created_at || soporte?.fecha_soporte, hoy);
+    });
+    const casosPendientes = [
+      ...fallasDispositivos.map((caso) => ({
+        tipo: "dispositivo",
+        fecha: caso?.offline_since || caso?.created_at,
+        estado: "Pendiente de guardar",
+        texto: `${caso?.cliente || "Cliente"}: ${caso?.device_name || caso?.entity_type || "dispositivo"} en ${caso?.centro || "centro sin identificar"}`,
+      })),
+      ...casosIsmael.map((caso) => ({
+        tipo: "ismael",
+        fecha: caso?.hora_llegada || caso?.created_at || caso?.updated_at,
+        estado: "Pendiente de guardar",
+        texto: `Ismael${caso?.case_code ? `, caso ${caso.case_code}` : ""}: ${caso?.centro || "centro sin identificar"}. ${caso?.falla_especifica || caso?.asunto || "Sin detalle informado"}`,
+      })),
+    ];
+    const casosGuardados = soportesGuardados.map((soporte) => {
+      const esIsmael = Boolean(String(soporte?.ismael_id_origen || "").trim());
+      const fuente = String(soporte?.external_case_key || "").split(":")[1] || "cliente";
+      const etiquetasFuente = {
+        aquachile: "Aquachile",
+        "caleta-bay": "Caleta Bay",
+        "salmones-aysen": "Salmones Aysen",
+      };
+      return {
+        tipo: esIsmael ? "ismael" : "dispositivo",
+        fecha: soporte?.created_at || soporte?.fecha_soporte,
+        estado: "Guardado en soporte",
+        texto: `${esIsmael ? `Ismael${soporte?.case_code ? `, caso ${soporte.case_code}` : ""}` : (etiquetasFuente[fuente] || getClienteNombre(soporte?.centro))}: ${getCentroNombre(soporte?.centro)}. ${soporte?.problema || "Sin detalle informado"}`,
+      };
+    });
+    const casos = [...casosPendientes, ...casosGuardados]
+      .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+    const resumenPendientes = casosPendientes.length === 0
+      ? "No hay casos pendientes de registrar en soporte."
+      : casosPendientes.length === 1
+        ? "Hay 1 caso pendiente de registrar en soporte."
+        : `Hay ${casosPendientes.length} casos pendientes de registrar en soporte.`;
+    const resumenGuardados = casosGuardados.length === 0
+      ? "Aun no se ha incorporado ninguno hoy."
+      : casosGuardados.length === 1
+        ? "Ademas, 1 caso ya fue incorporado hoy."
+        : `Ademas, ${casosGuardados.length} casos ya fueron incorporados hoy.`;
+
+    return {
+      titulo: "Estado de casos de hoy",
+      texto: casos.length
+        ? `${resumenPendientes} ${resumenGuardados}`
+        : "No hay casos externos registrados hoy.",
+      items: casos.slice(0, 15).map((caso) => (
+        caso.estado === "Guardado en soporte"
+          ? `Ya incorporado: ${caso.texto}`
+          : `${caso.texto}. Reportado ${describirMomento(caso.fecha)}.`
+      )),
+    };
+  };
+
+  const buscarFallaEnConsulta = (texto) => {
+    const query = normalizar(texto);
+    return (Array.isArray(datos.fallasDispositivos) ? datos.fallasDispositivos : []).find((falla) => {
+      const centro = normalizar(falla?.centro || falla?.router_id);
+      const dispositivo = normalizar(falla?.device_name || falla?.entity_type);
+      return (centro && query.includes(centro)) || (dispositivo && dispositivo.length >= 5 && query.includes(dispositivo));
+    }) || null;
+  };
+
+  const resolverUbicacionFalla = async (falla) => {
+    const centros = Array.isArray(datos.centros) ? datos.centros : [];
+    const idSite = String(falla?.id_site || "").trim();
+    const nombreCentro = normalizar(falla?.centro || falla?.router_id);
+    const nombreCliente = normalizar(falla?.cliente);
+    const centro = centros.find((item) => idSite && String(item?.id || item?.id_centro) === idSite)
+      || centros.find((item) => (
+        normalizar(getCentroNombre(item)) === nombreCentro
+        && (!nombreCliente || normalizar(getClienteNombre(item)) === nombreCliente)
+      ))
+      || centros.find((item) => normalizar(getCentroNombre(item)) === nombreCentro);
+
+    if (!centro) {
+      return {
+        titulo: "No pude ubicar el centro",
+        texto: `Identifique la falla en ${falla?.centro || "el centro"}, pero no encontre ese centro en el registro operativo.`,
+        items: [],
+      };
+    }
+
+    const centroId = centro?.id || centro?.id_centro;
+    const clienteId = centro?.cliente_id || centro?.id_cliente || centro?.cliente?.id_cliente || centro?.cliente?.id;
+    try {
+      const [respuestaDiagrama, equipos] = await Promise.all([
+        resolverPlantillaDiagrama({ centroId, clienteId }),
+        obtenerEquipos(centroId).catch(() => []),
+      ]);
+      const plantilla = respuestaDiagrama?.plantilla;
+      if (!plantilla) {
+        return {
+          titulo: `Ubicacion de la falla en ${falla?.centro || getCentroNombre(centro)}`,
+          texto: "El centro fue identificado, pero aun no tiene una plantilla operativa asignada.",
+          items: [],
+        };
+      }
+
+      const ipObjetivo = String(falla?.target_ip || "").trim();
+      const nombreDispositivo = normalizar(falla?.device_name || falla?.entity_type);
+      const equipo = (Array.isArray(equipos) ? equipos : []).find(
+        (item) => ipObjetivo && String(item?.ip || "").trim() === ipObjetivo
+      ) || (Array.isArray(equipos) ? equipos : []).find((item) => {
+        const nombreEquipo = normalizar(item?.nombre);
+        return nombreDispositivo && (nombreEquipo === nombreDispositivo || nombreEquipo.includes(nombreDispositivo) || nombreDispositivo.includes(nombreEquipo));
+      });
+      const fallaResuelta = {
+        ...falla,
+        equipo_id: equipo?.id_equipo || null,
+        equipo_nombre: equipo?.nombre || falla?.device_name || falla?.entity_type || "Dispositivo",
+      };
+      diagramaPendienteRef.current = {
+        plantilla,
+        falla: fallaResuelta,
+        centro: falla?.centro || getCentroNombre(centro),
+      };
+      return {
+        titulo: `Ubicacion de la falla en ${falla?.centro || getCentroNombre(centro)}`,
+        texto: `${fallaResuelta.equipo_nombre} aparece resaltado en rojo en el plano fisico. Quieres ver el diagrama de conexion del centro ${falla?.centro || getCentroNombre(centro)}?`,
+        items: [],
+        topologia: { plantilla, falla: fallaResuelta, vista: "general" },
+      };
+    } catch (err) {
+      return {
+        titulo: "No pude cargar la ubicacion",
+        texto: err?.response?.data?.error || "Ocurrio un problema consultando la plantilla del centro.",
+        items: [],
+      };
+    }
+  };
+
   const responderSoportesAnio = () => {
     const anioActual = new Date().getFullYear();
     const soportesAnio = datos.soportes.filter((soporte) => {
@@ -813,12 +1000,61 @@ function AsistenteOperativo() {
       };
     }
     if (codigo) return responderSerie(codigo);
+    const respuestaAfirmativa = /^(si|sii+|claro|dale|por supuesto|ok|okay|bueno|muestrame|quiero verla|ver ubicacion)(\b|$)/.test(query);
+    const respuestaNegativa = /^(no|ahora no|no gracias|despues|mas tarde)(\b|$)/.test(query);
+    if (diagramaPendienteRef.current && respuestaAfirmativa) {
+      const contexto = diagramaPendienteRef.current;
+      diagramaPendienteRef.current = null;
+      return {
+        titulo: `Diagrama de conexion de ${contexto.centro}`,
+        texto: "Mostrando el recorrido de conexion y el equipo afectado.",
+        locucion: `Te muestro el diagrama de conexión del centro ${contexto.centro}. La desconexión puede deberse a un cambio de IP, falta de energía en la cámara o a que la cámara se encuentre dañada.`,
+        items: [],
+        topologia: { plantilla: contexto.plantilla, falla: contexto.falla, vista: "logico" },
+      };
+    }
+    if (diagramaPendienteRef.current && respuestaNegativa) {
+      diagramaPendienteRef.current = null;
+      return {
+        titulo: "Entendido",
+        texto: "No mostrare el diagrama de conexion.",
+        items: [],
+      };
+    }
+    if (fallaPendienteRef.current && respuestaAfirmativa) {
+      const falla = fallaPendienteRef.current;
+      fallaPendienteRef.current = null;
+      return resolverUbicacionFalla(falla);
+    }
+    if (fallaPendienteRef.current && respuestaNegativa) {
+      fallaPendienteRef.current = null;
+      return {
+        titulo: "Entendido",
+        texto: "No mostrare la ubicacion. Puedes pedirmela nuevamente cuando la necesites.",
+        items: [],
+      };
+    }
     if (/^(hola|holi|buenas|buen dia|buenos dias|buenas tardes|buenas noches)(\b|[!,.])/.test(query)) {
       return {
         titulo: "Hola",
         texto: "En que te puedo ayudar hoy? Puedes consultarme por equipos, soportes, armados o actividades.",
         items: [],
       };
+    }
+    if ((query.includes("caso") || query.includes("estado de casos")) && query.includes("hoy")) {
+      return responderCasosHoy();
+    }
+    if (query.includes("falla")) {
+      const falla = buscarFallaEnConsulta(texto);
+      if (falla) {
+        diagramaPendienteRef.current = null;
+        fallaPendienteRef.current = falla;
+        return {
+          titulo: `Falla activa en ${falla?.centro || "el centro"}`,
+          texto: `Por supuesto. ${falla?.device_name || falla?.entity_type || "El dispositivo"} se encuentra sin conexion desde ${formatoFechaHora(falla?.offline_since || falla?.created_at)}. Quieres ver la ubicacion de la falla?`,
+          items: [],
+        };
+      }
     }
     if ((query.includes("soporte") || query.includes("falla")) && (query.includes("ano") || query.includes("este ano") || query.includes("actual"))) {
       return responderSoportesAnio();
@@ -862,6 +1098,54 @@ function AsistenteOperativo() {
     };
   };
 
+  const seleccionarVozFemenina = () => {
+    if (!("speechSynthesis" in window)) return null;
+    const nombresFemeninos = [
+      "catalina", "monica", "paulina", "laura", "helena", "sabina", "elvira",
+      "dalia", "luciana", "paloma", "mia", "sofia", "isabela", "female", "mujer",
+    ];
+    const voces = window.speechSynthesis.getVoices();
+    return voces
+      .filter((voz) => normalizar(voz.lang).startsWith("es"))
+      .map((voz) => {
+        const nombre = normalizar(voz.name);
+        let puntaje = normalizar(voz.lang) === "es-cl" ? 100 : 55;
+        if (nombresFemeninos.some((referencia) => nombre.includes(referencia))) puntaje += 45;
+        if (/natural|neural|google|microsoft/.test(nombre)) puntaje += 12;
+        return { voz, puntaje };
+      })
+      .sort((a, b) => b.puntaje - a.puntaje)[0]?.voz || null;
+  };
+
+  const hablarRespuesta = (respuesta) => {
+    if (!vozActiva || !("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") return;
+    const partes = [respuesta?.titulo, respuesta?.texto, ...(Array.isArray(respuesta?.items) ? respuesta.items.slice(0, 8) : [])]
+      .map((parte) => String(parte || "").replace(/\s*\|\s*/g, ". ").trim())
+      .filter(Boolean);
+    if (!partes.length) return;
+
+    window.speechSynthesis.cancel();
+    const locucion = new window.SpeechSynthesisUtterance(partes.join(". "));
+    const voz = seleccionarVozFemenina();
+    if (voz) locucion.voice = voz;
+    locucion.lang = voz?.lang || "es-CL";
+    locucion.rate = 0.96;
+    locucion.pitch = 1.06;
+    locucion.volume = 1;
+    locucion.onstart = () => setHablando(true);
+    locucion.onend = () => setHablando(false);
+    locucion.onerror = () => setHablando(false);
+    window.speechSynthesis.speak(locucion);
+  };
+
+  const alternarVoz = () => {
+    const nuevoEstado = !vozActiva;
+    window.speechSynthesis?.cancel();
+    setHablando(false);
+    setVozActiva(nuevoEstado);
+    localStorage.setItem("asistente_voz_activa", String(nuevoEstado));
+  };
+
   const enviarConsulta = async (textoForzado) => {
     const texto = String(textoForzado || consulta || "").trim();
     if (!texto || consultando) return;
@@ -872,14 +1156,23 @@ function AsistenteOperativo() {
     setConsultando(true);
     try {
       const respuesta = await resolverConsulta(texto);
+      const { topologia, locucion, ...respuestaChat } = respuesta;
+      if (topologia) {
+        setTopologiaModal({
+          ...topologia,
+          titulo: respuesta.titulo || "Ubicacion de la falla",
+          descripcion: respuesta.texto || "Equipo identificado en el plano fisico.",
+        });
+      }
       setMensajes((prev) => [
         ...prev,
         {
           id: `a-${idBase}`,
           tipo: "asistente",
-          ...respuesta,
+          ...respuestaChat,
         },
       ]);
+      hablarRespuesta(locucion ? { titulo: respuesta.titulo, texto: locucion, items: [] } : respuestaChat);
     } catch (err) {
       console.error("Error en consulta operativa:", err);
       setMensajes((prev) => [
@@ -892,6 +1185,10 @@ function AsistenteOperativo() {
           items: [],
         },
       ]);
+      hablarRespuesta({
+        titulo: "No pude resolver la consulta",
+        texto: "Ocurrio un problema consultando los datos. Actualiza e intenta nuevamente.",
+      });
     } finally {
       setConsultando(false);
     }
@@ -899,6 +1196,7 @@ function AsistenteOperativo() {
 
   const sugerencias = [
     "donde esta el codigo 311030052",
+    "dime los casos de hoy",
     "cuantos soportes pendientes hay",
     "armados incompletos",
     "actividades de hoy",
@@ -985,6 +1283,17 @@ function AsistenteOperativo() {
               placeholder="Pregunta por serie, soporte, armados, bodega o actividades..."
               disabled={consultando}
             />
+            <button
+              type="button"
+              className={`asistente-voice-control ${vozActiva ? "is-enabled" : "is-muted"} ${hablando ? "is-speaking" : ""}`}
+              onClick={alternarVoz}
+              aria-pressed={vozActiva}
+              title={vozActiva ? "Desactivar voz" : "Activar voz"}
+            >
+              <span className="voice-core" aria-hidden="true" />
+              <span className="voice-orbit orbit-one" aria-hidden="true" />
+              <span className="voice-orbit orbit-two" aria-hidden="true" />
+            </button>
             <button type="submit" disabled={consultando || !consulta.trim()}>
               <i className="fas fa-paper-plane" />
             </button>
@@ -1011,6 +1320,37 @@ function AsistenteOperativo() {
           </div>
         </aside>
       </div>
+
+      {topologiaModal && (
+        <div className="asistente-topology-modal" role="dialog" aria-modal="true" aria-labelledby="asistente-topology-title">
+          <div className="asistente-topology-dialog">
+            <div className="asistente-topology-header">
+              <div>
+                <small>{topologiaModal.vista === "logico" ? "Topologia operativa" : "Ubicacion operativa"}</small>
+                <h5 id="asistente-topology-title">{topologiaModal.titulo}</h5>
+                <span>{topologiaModal.descripcion}</span>
+              </div>
+              <div className="asistente-topology-timer">
+                <strong>{segundosTopologia}</strong>
+                <small>segundos</small>
+              </div>
+              <button type="button" onClick={() => setTopologiaModal(null)} aria-label="Cerrar ubicacion">
+                <i className="fas fa-times" />
+              </button>
+            </div>
+            <div className="asistente-topology-body">
+              {topologiaModal.vista === "logico" ? (
+                <DiagramaLogicoViewer plantilla={topologiaModal.plantilla} fallaActiva={topologiaModal.falla} />
+              ) : (
+                <VistaGeneralViewer plantilla={topologiaModal.plantilla} fallaActiva={topologiaModal.falla} />
+              )}
+            </div>
+            <div className="asistente-topology-progress" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

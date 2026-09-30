@@ -928,7 +928,7 @@ const Soporte = () => {
         setCambioEquipo(soporte.cambio_equipo);
         setCaseCode(String(soporte.case_code || ""));
         setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
-        setExternalCaseKey("");
+        setExternalCaseKey(String(soporte.external_case_key || ""));
         const detalleCambio = parsearDetalleCambioEquipo(soporte.equipo_cambiado);
         setCantidadEquiposCambiados(detalleCambio.cantidad || "");
         setDetalleEquiposCambiadosLista(detalleCambio.detalles || []);

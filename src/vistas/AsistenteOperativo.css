@@ -250,6 +250,127 @@
   border: 1px solid rgba(14, 165, 233, 0.18);
 }
 
+.asistente-topology-modal {
+  position: fixed;
+  z-index: 2200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(3, 15, 29, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.asistente-topology-dialog {
+  width: min(1280px, 96vw);
+  max-height: 94vh;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  border-radius: 20px;
+  background: #f7fbfd;
+  box-shadow: 0 28px 80px rgba(0, 8, 20, 0.48);
+  animation: asistenteTopologyEnter 0.28s ease-out;
+}
+
+.asistente-topology-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #d7e6ef;
+  background: linear-gradient(120deg, #f8fcff, #e5f6fc);
+}
+
+.asistente-topology-header small,
+.asistente-topology-header span {
+  display: block;
+}
+
+.asistente-topology-header > div:first-child small {
+  color: #0783b1;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.asistente-topology-header h5 {
+  margin: 0.12rem 0;
+  color: #102b46;
+  font-weight: 900;
+}
+
+.asistente-topology-header > div:first-child span {
+  color: #61798c;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.asistente-topology-timer {
+  min-width: 62px;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #b9dce9;
+  border-radius: 10px;
+  background: #fff;
+  color: #087da5;
+  text-align: center;
+}
+
+.asistente-topology-timer strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.asistente-topology-timer small {
+  margin-top: 0.12rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.asistente-topology-header > button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c8dce8;
+  border-radius: 10px;
+  background: #fff;
+  color: #526c80;
+  cursor: pointer;
+}
+
+.asistente-topology-body {
+  max-height: calc(94vh - 105px);
+  overflow: auto;
+  padding: 0.85rem;
+}
+
+.asistente-topology-progress {
+  height: 4px;
+  overflow: hidden;
+  background: #d9e8ef;
+}
+
+.asistente-topology-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, #0ea5e9, #16a34a);
+  animation: asistenteTopologyTime 15s linear forwards;
+}
+
+@keyframes asistenteTopologyEnter {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes asistenteTopologyTime {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
 .asistente-message h6 {
   margin: 0 0 0.35rem;
   font-weight: 900;
@@ -308,6 +429,100 @@
   background: linear-gradient(135deg, #0b3b8c, #0284c7);
   color: #fff;
   box-shadow: 0 14px 28px rgba(2, 132, 199, 0.28);
+  cursor: pointer;
+}
+
+.asistente-input .asistente-voice-control {
+  position: relative;
+  z-index: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.asistente-input .asistente-voice-control .voice-core {
+  position: absolute;
+  z-index: 3;
+  inset: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.96) 0 7%, rgba(125, 211, 252, 0.82) 18%, transparent 37%),
+    radial-gradient(circle at 58% 63%, #0ea5e9 0 20%, #1675d1 48%, #083b83 100%);
+  box-shadow:
+    inset -5px -7px 12px rgba(3, 30, 76, 0.42),
+    inset 4px 4px 10px rgba(224, 247, 255, 0.5),
+    0 0 12px rgba(14, 165, 233, 0.62);
+}
+
+.asistente-input .asistente-voice-control.is-muted {
+  background: transparent;
+  box-shadow: none;
+}
+
+.asistente-input .asistente-voice-control.is-muted .voice-core {
+  border-color: #d1d8de;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85) 0 7%, #cbd5df 22%, transparent 39%),
+    radial-gradient(circle at 58% 63%, #9aa8b5 0 24%, #748391 58%, #53616d 100%);
+  box-shadow: inset -5px -7px 12px rgba(49, 61, 71, 0.35), inset 4px 4px 10px rgba(255, 255, 255, 0.35);
+}
+
+.asistente-input .asistente-voice-control .voice-orbit {
+  position: absolute;
+  z-index: 2;
+  inset: 3px;
+  border: 2px solid transparent;
+  border-top-color: rgba(56, 189, 248, 0.88);
+  border-right-color: rgba(191, 239, 255, 0.48);
+  border-radius: 50%;
+  opacity: 0.68;
+  pointer-events: none;
+}
+
+.asistente-input .asistente-voice-control .orbit-two {
+  inset: 0;
+  border-top-color: transparent;
+  border-right-color: rgba(14, 165, 233, 0.36);
+  border-bottom-color: rgba(125, 211, 252, 0.76);
+  opacity: 0.5;
+}
+
+.asistente-input .asistente-voice-control.is-muted .voice-orbit {
+  border-color: transparent;
+  border-top-color: #a8b3bc;
+  opacity: 0.34;
+}
+
+.asistente-input .asistente-voice-control.is-speaking {
+  background: transparent;
+  box-shadow: none;
+}
+
+.asistente-input .asistente-voice-control.is-speaking .voice-core {
+  animation: asistenteVoicePulse 0.9s ease-in-out infinite;
+}
+
+.asistente-input .asistente-voice-control.is-speaking .orbit-one {
+  animation: asistenteVoiceSpin 1.15s linear infinite;
+}
+
+.asistente-input .asistente-voice-control.is-speaking .orbit-two {
+  animation: asistenteVoiceSpinReverse 1.8s linear infinite;
+}
+
+@keyframes asistenteVoicePulse {
+  0%, 100% { transform: scale(0.94); filter: brightness(0.96); }
+  50% { transform: scale(1.08); filter: brightness(1.2); box-shadow: 0 0 22px rgba(56, 189, 248, 0.95); }
+}
+
+@keyframes asistenteVoiceSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes asistenteVoiceSpinReverse {
+  to { transform: rotate(-360deg); }
 }
 
 .asistente-input button:disabled,
