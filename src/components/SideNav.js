@@ -25,6 +25,7 @@ const navItems = [
   { section: "REGISTROS", label: "Registro de actas", to: "/registrosdocumentos", pageKey: "registrosdocumentos", icon: "fas fa-folder-open", roles: ["admin", "operaciones"] },
   { section: "EQUIPO", label: "Usuarios", to: "/usuarios", pageKey: "usuarios", icon: "fas fa-users", roles: ["admin"] },
   { section: "EQUIPO", label: "Tecnicos", to: "/tecnicos", pageKey: "tecnicos", icon: "fas fa-address-book", roles: ["admin", "operaciones"] },
+  { section: "ADMINISTRACION", label: "Configuraciones", to: "/configuraciones", pageKey: "configuraciones", icon: "fas fa-sliders-h", roles: ["admin"] },
 ];
 
 function SideNav() {

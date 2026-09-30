@@ -1545,6 +1545,47 @@ const authHeaders = () => {
     return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 };
 
+export const obtenerPlantillasDiagramas = async () => {
+    const response = await axios.get(`${BASE_URL}/diagramas/plantillas`, authHeaders());
+    return response.data;
+};
+
+export const resolverPlantillaDiagrama = async ({ centroId, clienteId } = {}) => {
+    const params = {};
+    if (centroId) params.centro_id = centroId;
+    if (clienteId) params.cliente_id = clienteId;
+    const response = await axios.get(`${BASE_URL}/diagramas/resolver`, {
+        ...authHeaders(),
+        params
+    });
+    return response.data;
+};
+
+export const crearPlantillaDiagrama = async (formData) => {
+    const response = await axios.post(`${BASE_URL}/diagramas/plantillas`, formData, authHeaders());
+    return response.data;
+};
+
+export const duplicarPlantillaDiagrama = async (id, payload) => {
+    const response = await axios.post(`${BASE_URL}/diagramas/plantillas/${id}/duplicar`, payload, authHeaders());
+    return response.data;
+};
+
+export const actualizarPlantillaDiagrama = async (id, formData) => {
+    const response = await axios.put(`${BASE_URL}/diagramas/plantillas/${id}`, formData, authHeaders());
+    return response.data;
+};
+
+export const eliminarPlantillaDiagrama = async (id) => {
+    const response = await axios.delete(`${BASE_URL}/diagramas/plantillas/${id}`, authHeaders());
+    return response.data;
+};
+
+export const guardarContenidoPlantillaDiagrama = async (id, payload) => {
+    const response = await axios.put(`${BASE_URL}/diagramas/plantillas/${id}/contenido`, payload, authHeaders());
+    return response.data;
+};
+
 export const obtenerInventarioBodegaTomas = async (params = {}) => {
     try {
         const response = await axios.get(`${BASE_URL}/inventarios/bodega_tomas`, { params });

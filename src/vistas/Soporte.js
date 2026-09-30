@@ -8,8 +8,9 @@ import {
     modificarSoporte,
     borrarSoporte
 } from "../controllers/soporteControllers";
-import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerFallasDispositivos } from "../api";
+import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerEquipos, obtenerFallasDispositivos, resolverPlantillaDiagrama } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
+import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
 import "./Soporte.css";
 
 const CATEGORIAS_FALLA = [
@@ -128,6 +129,29 @@ const normalizarEstadoCentro = (estado) =>
         .toLowerCase()
         .replace(/\s+/g, "-");
 
+const normalizarCoincidencia = (valor) => String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const resolverCentroAlerta = (alerta, centros) => {
+    const lista = Array.isArray(centros) ? centros : [];
+    const idSite = String(alerta?.id_site || "").trim();
+    if (idSite) {
+        const porId = lista.find((centro) => String(centro.id) === idSite);
+        if (porId) return porId;
+    }
+    const nombreCentro = normalizarCoincidencia(alerta?.centro || alerta?.router_id);
+    const nombreCliente = normalizarCoincidencia(alerta?.cliente);
+    return lista.find((centro) => (
+        normalizarCoincidencia(centro.nombre) === nombreCentro
+        && (!nombreCliente || normalizarCoincidencia(centro.cliente) === nombreCliente)
+    )) || lista.find((centro) => normalizarCoincidencia(centro.nombre) === nombreCentro) || null;
+};
+
 const normalizarListaDetalles = (cantidad, detalles = []) => {
     const cant = Number(cantidad || 0);
     if (!cant || cant < 1) return [];
@@ -244,6 +268,14 @@ const Soporte = () => {
     const [editarSoporte, setEditarSoporte] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [guardandoSoporte, setGuardandoSoporte] = useState(false);
+    const [diagramaConsulta, setDiagramaConsulta] = useState({
+        abierto: false,
+        cargando: false,
+        error: "",
+        plantilla: null,
+        origen: null,
+        soporte: null
+    });
 
     // Estado para filtrar por periodo
     const [filtroPeriodo, setFiltroPeriodo] = useState("anio-actual");
@@ -253,6 +285,8 @@ const Soporte = () => {
     const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
     const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
     const [ismaelSeleccionado, setIsmaelSeleccionado] = useState(null);
+    const [topologiaFalla, setTopologiaFalla] = useState({ cargando: false, plantilla: null, falla: null, origen: null, error: "" });
+    const topologiaRequestRef = useRef(0);
     const [mostrarCorreoIsmael, setMostrarCorreoIsmael] = useState(false);
     const [eliminandoCasoExterno, setEliminandoCasoExterno] = useState("");
     const [paginaIsmael, setPaginaIsmael] = useState(1);
@@ -557,8 +591,85 @@ const Soporte = () => {
         setMostrarSugerenciasCentro(false);
     };
 
-    const abrirAtajoSoporteDesdeIsmael = (row) => {
+    const cerrarDetalleCaso = () => {
+        topologiaRequestRef.current += 1;
         setIsmaelSeleccionado(null);
+        setMostrarCorreoIsmael(false);
+        setTopologiaFalla({ cargando: false, plantilla: null, falla: null, origen: null, error: "" });
+    };
+
+    const abrirDetalleCaso = async (row) => {
+        setIsmaelSeleccionado(row);
+        setMostrarCorreoIsmael(false);
+        if (row?.tipo_fuente !== "dispositivo") {
+            setTopologiaFalla({ cargando: false, plantilla: null, falla: null, origen: null, error: "" });
+            return;
+        }
+
+        const solicitudId = topologiaRequestRef.current + 1;
+        topologiaRequestRef.current = solicitudId;
+        setTopologiaFalla({ cargando: true, plantilla: null, falla: row, origen: null, error: "" });
+        const centroAlerta = resolverCentroAlerta(row, centros);
+        const centroCliente = centroAlerta || (Array.isArray(centros) ? centros : []).find(
+            (centro) => normalizarCoincidencia(centro.cliente) === normalizarCoincidencia(row?.cliente)
+        );
+
+        if (!centroAlerta && !centroCliente?.cliente_id) {
+            setTopologiaFalla({
+                cargando: false,
+                plantilla: null,
+                falla: row,
+                origen: null,
+                error: "No fue posible identificar el centro o cliente de esta alerta."
+            });
+            return;
+        }
+
+        try {
+            const [respuestaDiagrama, equipos] = await Promise.all([
+                resolverPlantillaDiagrama({
+                    centroId: centroAlerta?.id,
+                    clienteId: centroAlerta ? undefined : centroCliente?.cliente_id
+                }),
+                centroAlerta?.id ? obtenerEquipos(centroAlerta.id).catch(() => []) : Promise.resolve([])
+            ]);
+            if (topologiaRequestRef.current !== solicitudId) return;
+            const listaEquipos = Array.isArray(equipos) ? equipos : [];
+            const ipObjetivo = String(row?.target_ip || "").trim();
+            const nombreDispositivo = normalizarCoincidencia(row?.device_name || row?.entity_type);
+            const equipo = listaEquipos.find((item) => ipObjetivo && String(item.ip || "").trim() === ipObjetivo)
+                || listaEquipos.find((item) => {
+                    const nombreEquipo = normalizarCoincidencia(item.nombre);
+                    return nombreDispositivo && (nombreEquipo === nombreDispositivo || nombreEquipo.includes(nombreDispositivo) || nombreDispositivo.includes(nombreEquipo));
+                });
+            const fallaResuelta = {
+                ...row,
+                centro_id: centroAlerta?.id || null,
+                cliente_id: centroAlerta?.cliente_id || centroCliente?.cliente_id || null,
+                equipo_id: equipo?.id_equipo || null,
+                equipo_nombre: equipo?.nombre || row?.device_name || row?.entity_type || "Dispositivo"
+            };
+            setTopologiaFalla({
+                cargando: false,
+                plantilla: respuestaDiagrama?.plantilla || null,
+                falla: fallaResuelta,
+                origen: respuestaDiagrama?.origen || null,
+                error: respuestaDiagrama?.plantilla ? "" : "No existe una plantilla activa para este centro o cliente."
+            });
+        } catch (error) {
+            if (topologiaRequestRef.current !== solicitudId) return;
+            setTopologiaFalla({
+                cargando: false,
+                plantilla: null,
+                falla: row,
+                origen: null,
+                error: error.response?.data?.error || "No se pudo cargar la topologia de esta alerta."
+            });
+        }
+    };
+
+    const abrirAtajoSoporteDesdeIsmael = (row) => {
+        cerrarDetalleCaso();
         resetForm();
         setEditarSoporte(null);
         const esDispositivo = row?.tipo_fuente === "dispositivo";
@@ -828,6 +939,44 @@ const Soporte = () => {
         }
         setFechaCierre(fechaCierreNormalizada);
         setShowModal(true);
+    };
+
+    const abrirDiagramaSoporte = async (soporte) => {
+        const centroIdSoporte = soporte?.centro?.id_centro;
+        setDiagramaConsulta({
+            abierto: true,
+            cargando: true,
+            error: "",
+            plantilla: null,
+            origen: null,
+            soporte
+        });
+
+        if (!centroIdSoporte) {
+            setDiagramaConsulta((actual) => ({
+                ...actual,
+                cargando: false,
+                error: "Este soporte no tiene un centro asociado."
+            }));
+            return;
+        }
+
+        try {
+            const respuesta = await resolverPlantillaDiagrama({ centroId: centroIdSoporte });
+            setDiagramaConsulta((actual) => ({
+                ...actual,
+                cargando: false,
+                plantilla: respuesta?.plantilla || null,
+                origen: respuesta?.origen || null,
+                error: respuesta?.plantilla ? "" : "No existe una plantilla activa para este centro o cliente."
+            }));
+        } catch (error) {
+            setDiagramaConsulta((actual) => ({
+                ...actual,
+                cargando: false,
+                error: error.response?.data?.error || "No se pudo cargar el diagrama."
+            }));
+        }
     };
 
     const formatearFecha = (fecha) => {
@@ -1225,6 +1374,9 @@ const Soporte = () => {
             name: "Acciones",
             cell: (row) => (
                 <div className="d-flex">
+                    <button className="btn btn-outline-info btn-sm mr-2" onClick={() => abrirDiagramaSoporte(row)} title="Ver diagrama">
+                        <i className="fas fa-project-diagram"></i>
+                    </button>
                     <button className="btn btn-warning btn-sm mr-2" onClick={() => handleEditarSoporte(row)}>
                         <i className="fas fa-edit"></i>
                     </button>
@@ -1475,7 +1627,7 @@ const Soporte = () => {
                                                 <button
                                                     className="btn btn-outline-primary btn-sm mr-1"
                                                     title="Ver detalle"
-                                                    onClick={() => setIsmaelSeleccionado(row)}
+                                                    onClick={() => abrirDetalleCaso(row)}
                                                 >
                                                     <i className="fas fa-eye" />
                                                 </button>
@@ -1719,9 +1871,17 @@ const Soporte = () => {
                         <div className="modal-content soporte-modal shadow-lg border-0">
                             <div className="modal-header">
                                 <h5>{editarSoporte ? "Editar Soporte" : "Crear Soporte"}</h5>
-                                <button className="close" onClick={() => setShowModal(false)}>
-                                    &times;
-                                </button>
+                                <div className="d-flex align-items-center">
+                                    {editarSoporte && (
+                                        <button type="button" className="btn btn-outline-info btn-sm mr-3" onClick={() => abrirDiagramaSoporte(editarSoporte)}>
+                                            <i className="fas fa-project-diagram mr-1"></i>
+                                            Ver diagrama
+                                        </button>
+                                    )}
+                                    <button className="close" onClick={() => setShowModal(false)}>
+                                        &times;
+                                    </button>
+                                </div>
                             </div>
                             <div className="modal-body soporte-form-body">
                                 <div className="form-group">
@@ -2038,21 +2198,70 @@ const Soporte = () => {
                 </div>
             )}
 
+            {diagramaConsulta.abierto && (
+                <div className="modal show soporte-diagram-modal" style={{ display: "block" }} role="dialog" aria-modal="true">
+                    <div className="modal-dialog modal-xl modal-dialog-centered">
+                        <div className="modal-content soporte-diagram-content shadow-lg border-0">
+                            <div className="modal-header soporte-diagram-header">
+                                <div>
+                                    <small>Diagrama operativo</small>
+                                    <h5>{diagramaConsulta.plantilla?.nombre || diagramaConsulta.soporte?.centro?.nombre || "Centro"}</h5>
+                                    <span>
+                                        {diagramaConsulta.soporte?.centro?.cliente || "Cliente"} · {diagramaConsulta.soporte?.centro?.nombre || "Centro"}
+                                    </span>
+                                </div>
+                                <button className="close" onClick={() => setDiagramaConsulta((actual) => ({ ...actual, abierto: false }))} aria-label="Cerrar">
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="modal-body soporte-diagram-body">
+                                {diagramaConsulta.cargando ? (
+                                    <div className="soporte-diagram-status">
+                                        <i className="fas fa-spinner fa-spin"></i>
+                                        <strong>Cargando diagrama...</strong>
+                                    </div>
+                                ) : diagramaConsulta.error ? (
+                                    <div className="soporte-diagram-status error">
+                                        <i className="fas fa-project-diagram"></i>
+                                        <strong>{diagramaConsulta.error}</strong>
+                                        <span>Asigna una plantilla desde la pagina Configuraciones.</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="soporte-diagram-meta">
+                                            <span><i className="fas fa-eye"></i> Solo lectura</span>
+                                            <span className={`scope-${diagramaConsulta.origen || "general"}`}>
+                                                Plantilla de {diagramaConsulta.origen === "centro" ? "centro" : diagramaConsulta.origen === "cliente" ? "cliente" : "uso general"}
+                                            </span>
+                                        </div>
+                                        <DiagramaLogicoViewer plantilla={diagramaConsulta.plantilla} />
+                                    </>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => setDiagramaConsulta((actual) => ({ ...actual, abierto: false }))}>Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {ismaelSeleccionado && (
                 <div className="modal show" style={{ display: "block" }}>
-                    <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div className={`modal-dialog ${ismaelSeleccionado.tipo_fuente === "dispositivo" ? "modal-xl" : "modal-lg"} modal-dialog-scrollable`}>
                         <div className="modal-content soporte-modal shadow-lg border-0 ismael-modal">
                             <div className="modal-header ismael-modal-header">
                                 <h5>
                                     <i className={`fas ${ismaelSeleccionado.tipo_fuente === "dispositivo" ? "fa-satellite-dish" : "fa-envelope-open-text"} mr-2`}></i>
                                     {ismaelSeleccionado.tipo_fuente === "dispositivo" ? "Detalle de falla de dispositivo" : "Detalle caso ismael"}
                                 </h5>
-                                <button className="close" onClick={() => setIsmaelSeleccionado(null)}>
+                                <button className="close" onClick={cerrarDetalleCaso}>
                                     &times;
                                 </button>
                             </div>
                             <div className="modal-body soporte-form-body ismael-modal-body">
                                 {ismaelSeleccionado.tipo_fuente === "dispositivo" ? (
+                                <>
                                 <div className="row">
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Cliente</small><strong>{ismaelSeleccionado.cliente || "-"}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
@@ -2063,6 +2272,34 @@ const Soporte = () => {
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Fuera de linea desde</small><strong>{formatearFechaHora(ismaelSeleccionado.offline_since)}</strong></div></div>
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Recuperado</small><strong>{formatearFechaHora(ismaelSeleccionado.recovered_at)}</strong></div></div>
                                 </div>
+                                <section className="device-topology-section">
+                                    <div className="device-topology-heading">
+                                        <div>
+                                            <small>Topologia asociada</small>
+                                            <h6>Ubicacion de la falla activa</h6>
+                                        </div>
+                                        {!topologiaFalla.cargando && topologiaFalla.plantilla && (
+                                            <span className="device-topology-scope">
+                                                Plantilla de {topologiaFalla.origen === "centro" ? "centro" : topologiaFalla.origen === "cliente" ? "cliente" : "uso general"}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {topologiaFalla.cargando ? (
+                                        <div className="device-topology-state"><i className="fas fa-spinner fa-spin" /><strong>Cargando topologia...</strong></div>
+                                    ) : topologiaFalla.error ? (
+                                        <div className="device-topology-state warning"><i className="fas fa-exclamation-triangle" /><strong>{topologiaFalla.error}</strong></div>
+                                    ) : topologiaFalla.plantilla ? (
+                                        <>
+                                            <div className="device-fault-banner">
+                                                <span><i className="fas fa-circle-exclamation" /> Falla activa</span>
+                                                <strong>{topologiaFalla.falla?.equipo_nombre || ismaelSeleccionado.device_name || "Dispositivo"}</strong>
+                                                <small>{ismaelSeleccionado.target_ip || "Sin IP informada"}</small>
+                                            </div>
+                                            <DiagramaLogicoViewer plantilla={topologiaFalla.plantilla} fallaActiva={topologiaFalla.falla} />
+                                        </>
+                                    ) : null}
+                                </section>
+                                </>
                                 ) : (
                                 <div className="row">
                                     <div className="col-md-6 mb-2"><div className="ismael-field"><small>Case code</small><strong>{ismaelSeleccionado.case_code || "-"}</strong></div></div>
@@ -2107,7 +2344,7 @@ const Soporte = () => {
                                     <i className="fas fa-plus mr-1"></i>
                                     Crear soporte
                                 </button>
-                                <button className="btn btn-secondary" onClick={() => setIsmaelSeleccionado(null)}>
+                                <button className="btn btn-secondary" onClick={cerrarDetalleCaso}>
                                     Cerrar
                                 </button>
                             </div>

@@ -409,6 +409,111 @@
     border-top: 1px solid #e2e8f0;
 }
 
+.device-topology-section {
+    padding: 0.85rem;
+    margin-top: 0.75rem;
+    border: 1px solid #d7e5ee;
+    border-radius: 15px;
+    background: #ffffff;
+}
+
+.device-topology-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.7rem;
+}
+
+.device-topology-heading small {
+    color: #0b88b5;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.device-topology-heading h6 {
+    margin: 0.12rem 0 0;
+    color: #112c45;
+    font-weight: 900;
+}
+
+.device-topology-scope {
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #09658d;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.device-topology-state {
+    min-height: 190px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.55rem;
+    border: 1px dashed #b9cedc;
+    border-radius: 13px;
+    background: #f8fbfd;
+    color: #557086;
+    text-align: center;
+}
+
+.device-topology-state > i {
+    color: #169bc5;
+    font-size: 1.6rem;
+}
+
+.device-topology-state.warning > i {
+    color: #e69a14;
+}
+
+.device-fault-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.7rem;
+    margin-bottom: 0.65rem;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    background: #fff1f2;
+    color: #7f1d1d;
+}
+
+.device-fault-banner > span {
+    padding: 0.22rem 0.45rem;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.device-fault-banner > strong {
+    font-size: 0.84rem;
+}
+
+.device-fault-banner > small {
+    margin-left: auto;
+    color: #9f3340;
+    font-weight: 800;
+}
+
+@media (max-width: 700px) {
+    .device-topology-heading,
+    .device-fault-banner {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .device-fault-banner > small {
+        margin-left: 0;
+    }
+}
+
 .ismael-problem-card {
     border: 1px solid #fde68a;
     background: linear-gradient(180deg, #fffbeb 0%, #fefce8 100%);
@@ -645,4 +750,124 @@
 .table-drag-scroll .rdt_TableHead,
 .table-drag-scroll .rdt_TableBody {
     min-width: 1680px;
+}
+
+.soporte-diagram-modal {
+    z-index: 1800;
+    padding: 1rem;
+    overflow-y: auto;
+    background: rgba(3, 15, 29, 0.72);
+    backdrop-filter: blur(4px);
+}
+
+.soporte-diagram-modal .modal-dialog {
+    max-width: 1220px;
+}
+
+.soporte-diagram-content {
+    overflow: hidden;
+    border-radius: 18px;
+}
+
+.soporte-diagram-header {
+    align-items: flex-start;
+    border-bottom: 1px solid #dbe7ef;
+    background: linear-gradient(120deg, #f8fcff, #e8f7fc);
+}
+
+.soporte-diagram-header small,
+.soporte-diagram-header span {
+    display: block;
+}
+
+.soporte-diagram-header small {
+    color: #0783b1;
+    font-size: 0.7rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.soporte-diagram-header h5 {
+    margin: 0.18rem 0;
+    color: #102b46;
+    font-weight: 900;
+}
+
+.soporte-diagram-header span {
+    color: #637b8f;
+    font-size: 0.78rem;
+}
+
+.soporte-diagram-body {
+    padding: 1rem;
+    background: #f5f9fc;
+}
+
+.soporte-diagram-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    margin-bottom: 0.7rem;
+}
+
+.soporte-diagram-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.38rem 0.65rem;
+    border-radius: 999px;
+    background: #e6eef5;
+    color: #526a7e;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.soporte-diagram-meta .scope-centro {
+    background: #dcfce7;
+    color: #157347;
+}
+
+.soporte-diagram-meta .scope-cliente {
+    background: #dff4ff;
+    color: #09648c;
+}
+
+.soporte-diagram-status {
+    min-height: 350px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.6rem;
+    border: 1px dashed #b8cedd;
+    border-radius: 16px;
+    background: #fff;
+    color: #537086;
+    text-align: center;
+}
+
+.soporte-diagram-status > i {
+    color: #119fc8;
+    font-size: 2rem;
+}
+
+.soporte-diagram-status.error > i {
+    color: #e49a17;
+}
+
+.soporte-diagram-status span {
+    color: #7a8d9d;
+    font-size: 0.8rem;
+}
+
+@media (max-width: 700px) {
+    .soporte-diagram-modal {
+        padding: 0.4rem;
+    }
+
+    .soporte-diagram-meta {
+        align-items: flex-start;
+        flex-direction: column;
+    }
 }

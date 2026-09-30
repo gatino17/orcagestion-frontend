@@ -33,6 +33,7 @@ import Tecnicos from "./vistas/Tecnicos";
 import RegistrosDocumentos from './vistas/RegistrosDocumentos';
 import ArmadoTecnico from "./vistas/ArmadoTecnico";
 import AsistenteOperativo from "./vistas/AsistenteOperativo";
+import Configuraciones from "./vistas/Configuraciones";
 
 const PAGE_ROUTE_MAP = {
     inicio: "/",
@@ -55,7 +56,8 @@ const PAGE_ROUTE_MAP = {
     registrosdocumentos: "/registrosdocumentos",
     asistente_operativo: "/asistente-operativo",
     usuarios: "/usuarios",
-    tecnicos: "/tecnicos"
+    tecnicos: "/tecnicos",
+    configuraciones: "/configuraciones"
 };
 
 const PAGE_PRIORITY = [
@@ -77,7 +79,8 @@ const PAGE_PRIORITY = [
     "asistente_operativo",
     "tecnicos",
     "usuarios",
-    "rendiciones"
+    "rendiciones",
+    "configuraciones"
 ];
 
 const getDefaultAuthenticatedPath = () => {
@@ -400,6 +403,14 @@ function App() {
                             element={
                               <PrivateRoute requiredPage="asistente_operativo" allowedRoles={['admin']} enforceAllowedRoles>
                                     <AsistenteOperativo />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/configuraciones"
+                            element={
+                              <PrivateRoute requiredPage="configuraciones" allowedRoles={['admin']} enforceAllowedRoles>
+                                    <Configuraciones />
                                 </PrivateRoute>
                             }
                         />
