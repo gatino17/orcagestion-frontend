@@ -11,6 +11,7 @@ import {
 import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerEquipos, obtenerFallasDispositivos, resolverPlantillaDiagrama } from "../api";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
+import VistaGeneralViewer from "../components/VistaGeneralViewer";
 import "./Soporte.css";
 
 const CATEGORIAS_FALLA = [
@@ -284,6 +285,7 @@ const Soporte = () => {
     const [filtroNombre, setFiltroNombre] = useState("");
     const [fechaInicioBusqueda, setFechaInicioBusqueda] = useState("");
     const [fechaFinBusqueda, setFechaFinBusqueda] = useState("");
+    const [mostrarCambiosEquipo, setMostrarCambiosEquipo] = useState(false);
     const [ismaelSeleccionado, setIsmaelSeleccionado] = useState(null);
     const [topologiaFalla, setTopologiaFalla] = useState({ cargando: false, plantilla: null, falla: null, origen: null, error: "" });
     const topologiaRequestRef = useRef(0);
@@ -1242,9 +1244,9 @@ const Soporte = () => {
             width: "46px",
             sortFunction: (rowA, rowB) => rowA.rowNumber - rowB.rowNumber
         },
-        { name: "Centro", selector: (row) => row.centro?.nombre || "No asignado", sortable: true, wrap: true, grow: 1.2 },
-        { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, grow: 1.0 },
-        { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, grow: 1.5 },
+        { name: "Centro", selector: (row) => row.centro?.nombre || "No asignado", sortable: true, wrap: true, minWidth: "145px" },
+        { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, minWidth: "135px" },
+        { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, minWidth: "270px" },
         { name: "Tipo", selector: (row) => obtenerEtiquetaTipoSoporte(row.tipo), sortable: true, width: "90px" },
         {
             name: "Origen",
@@ -1317,7 +1319,7 @@ const Soporte = () => {
             width: "128px"
         },
         { name: "Cierre", selector: (row) => (row.fecha_cierre ? formatearFecha(row.fecha_cierre) : "-"), sortable: true, width: "100px" },
-        { name: "Solucion", selector: (row) => row.solucion || "-", sortable: true, wrap: true },
+        { name: "Solucion", selector: (row) => row.solucion || "-", sortable: true, wrap: true, minWidth: "235px" },
         {
             name: "Categoria",
             selector: (row) => row.categoria_falla || "-",
@@ -1335,10 +1337,12 @@ const Soporte = () => {
                         </span>
                     ) : null}
                 </div>
-            )
+            ),
+            minWidth: "140px"
         },
-        { name: "Subcategoria", selector: (row) => row.subcategoria_falla || "-", sortable: true, wrap: true },
+        { name: "Subcategoria", selector: (row) => row.subcategoria_falla || "-", sortable: true, wrap: true, minWidth: "155px" },
         {
+            id: "cambioEquipo",
             name: "Cambio equipo",
             selector: (row) => row.cambio_equipo,
             sortable: true,
@@ -1353,6 +1357,7 @@ const Soporte = () => {
             )
         },
         {
+            id: "equipoCambiado",
             name: "Equipo cambiado",
             selector: (row) => obtenerNombresCambioSoporte(row),
             sortable: true,
@@ -1373,23 +1378,23 @@ const Soporte = () => {
         {
             name: "Acciones",
             cell: (row) => (
-                <div className="d-flex">
-                    <button className="btn btn-outline-info btn-sm mr-2" onClick={() => abrirDiagramaSoporte(row)} title="Ver diagrama">
+                <div className="soporte-table-actions">
+                    <button className="btn btn-outline-info btn-sm" onClick={() => abrirDiagramaSoporte(row)} title="Ver diagrama">
                         <i className="fas fa-project-diagram"></i>
                     </button>
-                    <button className="btn btn-warning btn-sm mr-2" onClick={() => handleEditarSoporte(row)}>
+                    <button className="btn btn-warning btn-sm" onClick={() => handleEditarSoporte(row)} title="Editar soporte">
                         <i className="fas fa-edit"></i>
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleEliminarSoporte(row.id_soporte)}>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleEliminarSoporte(row.id_soporte)} title="Eliminar soporte">
                         <i className="fas fa-trash-alt"></i>
                     </button>
                 </div>
             ),
             ignoreRowClick: true,
-            // react-data-table maneja el overflow; evitar pasar props no soportadas a DOM
-            allowOverflow: false
+            allowOverflow: true,
+            width: "164px"
         }
-    ];
+    ].filter((columna) => mostrarCambiosEquipo || !["cambioEquipo", "equipoCambiado"].includes(columna.id));
 
     const dataTableStyles = {
         table: {
@@ -1828,17 +1833,28 @@ const Soporte = () => {
                         </div>
                         <div className="col-lg-3 mt-3 mt-lg-0">
                             <small className="text-muted text-uppercase d-block mb-1">Rango hasta</small>
-                            <input
-                                type="date"
-                                className="form-control"
-                                value={fechaFinBusqueda}
-                                onChange={(e) => setFechaFinBusqueda(e.target.value)}
-                            />
+                            <div className="soporte-range-actions">
+                                <input
+                                    type="date"
+                                    className="form-control"
+                                    value={fechaFinBusqueda}
+                                    onChange={(e) => setFechaFinBusqueda(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    className={`btn ${mostrarCambiosEquipo ? "btn-primary" : "btn-outline-primary"}`}
+                                    onClick={() => setMostrarCambiosEquipo((valor) => !valor)}
+                                    title={mostrarCambiosEquipo ? "Ocultar columnas de cambio de equipo" : "Ver cambios de equipo"}
+                                >
+                                    <i className={`fas ${mostrarCambiosEquipo ? "fa-eye-slash" : "fa-exchange-alt"}`}></i>
+                                    <span>{mostrarCambiosEquipo ? "Ocultar cambios" : "Ver cambios"}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 	                    <div
 	                        ref={tableScrollRef}
-	                        className="table-drag-scroll"
+	                        className={`table-drag-scroll ${mostrarCambiosEquipo ? "show-equipment-changes" : ""}`}
 	                        onPointerDown={handleTablePointerDown}
 	                        onPointerMove={handleTablePointerMove}
 		                        onPointerUp={finalizarArrastreTabla}
@@ -2262,15 +2278,44 @@ const Soporte = () => {
                             <div className="modal-body soporte-form-body ismael-modal-body">
                                 {ismaelSeleccionado.tipo_fuente === "dispositivo" ? (
                                 <>
-                                <div className="row">
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Cliente</small><strong>{ismaelSeleccionado.cliente || "-"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Dispositivo</small><strong>{ismaelSeleccionado.device_name || ismaelSeleccionado.entity_type || "-"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>IP objetivo</small><strong>{ismaelSeleccionado.target_ip || "-"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Tipo de control</small><strong>{ismaelSeleccionado.check_type || "-"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Estado</small><strong>{ismaelSeleccionado.estado === "recuperado" ? "Recuperado hoy" : "Falla activa"}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Fuera de linea desde</small><strong>{formatearFechaHora(ismaelSeleccionado.offline_since)}</strong></div></div>
-                                    <div className="col-md-6 mb-2"><div className="ismael-field"><small>Recuperado</small><strong>{formatearFechaHora(ismaelSeleccionado.recovered_at)}</strong></div></div>
+                                <div className="device-detail-summary">
+                                    <div className="device-detail-item">
+                                        <i className="fas fa-building"></i>
+                                        <span><small>Cliente</small><strong>{ismaelSeleccionado.cliente || "-"}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item">
+                                        <i className="fas fa-map-marker-alt"></i>
+                                        <span><small>Centro</small><strong>{ismaelSeleccionado.centro || "-"}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item">
+                                        <i className="fas fa-microchip"></i>
+                                        <span><small>Dispositivo</small><strong>{ismaelSeleccionado.device_name || ismaelSeleccionado.entity_type || "-"}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item">
+                                        <i className="fas fa-network-wired"></i>
+                                        <span><small>IP objetivo</small><strong>{ismaelSeleccionado.target_ip || "-"}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item secondary">
+                                        <i className="fas fa-wave-square"></i>
+                                        <span><small>Control</small><strong>{ismaelSeleccionado.check_type || "-"}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item secondary">
+                                        <i className="fas fa-signal"></i>
+                                        <span>
+                                            <small>Estado</small>
+                                            <strong className={`device-detail-status ${ismaelSeleccionado.estado === "recuperado" ? "recovered" : "active"}`}>
+                                                {ismaelSeleccionado.estado === "recuperado" ? "Recuperado" : "Falla activa"}
+                                            </strong>
+                                        </span>
+                                    </div>
+                                    <div className="device-detail-item secondary">
+                                        <i className="far fa-clock"></i>
+                                        <span><small>Fuera de linea</small><strong>{formatearFechaHora(ismaelSeleccionado.offline_since)}</strong></span>
+                                    </div>
+                                    <div className="device-detail-item secondary">
+                                        <i className="fas fa-check-circle"></i>
+                                        <span><small>Recuperado</small><strong>{formatearFechaHora(ismaelSeleccionado.recovered_at)}</strong></span>
+                                    </div>
                                 </div>
                                 <section className="device-topology-section">
                                     <div className="device-topology-heading">
@@ -2295,7 +2340,20 @@ const Soporte = () => {
                                                 <strong>{topologiaFalla.falla?.equipo_nombre || ismaelSeleccionado.device_name || "Dispositivo"}</strong>
                                                 <small>{ismaelSeleccionado.target_ip || "Sin IP informada"}</small>
                                             </div>
-                                            <DiagramaLogicoViewer plantilla={topologiaFalla.plantilla} fallaActiva={topologiaFalla.falla} />
+                                            <div className="device-topology-view">
+                                                <div className="device-topology-view-title">
+                                                    <span><i className="fas fa-ship" /> Vista general del ponton</span>
+                                                    <small>Ubicacion fisica</small>
+                                                </div>
+                                                <VistaGeneralViewer plantilla={topologiaFalla.plantilla} fallaActiva={topologiaFalla.falla} />
+                                            </div>
+                                            <div className="device-topology-view">
+                                                <div className="device-topology-view-title">
+                                                    <span><i className="fas fa-project-diagram" /> Diagrama logico</span>
+                                                    <small>Conexion entre equipos</small>
+                                                </div>
+                                                <DiagramaLogicoViewer plantilla={topologiaFalla.plantilla} fallaActiva={topologiaFalla.falla} />
+                                            </div>
                                         </>
                                     ) : null}
                                 </section>

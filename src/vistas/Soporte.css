@@ -417,6 +417,92 @@
     background: #ffffff;
 }
 
+.device-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid #d6e3ed;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 16px rgba(20, 56, 82, 0.06);
+}
+
+.device-detail-item {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.62rem 0.72rem;
+    border-right: 1px solid #e2ebf1;
+    border-bottom: 1px solid #e2ebf1;
+}
+
+.device-detail-item:nth-child(4n) {
+    border-right: 0;
+}
+
+.device-detail-item:nth-child(n + 5) {
+    border-bottom: 0;
+    background: #f7fafc;
+}
+
+.device-detail-item > i {
+    width: 27px;
+    height: 27px;
+    flex: 0 0 27px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #e5f5fb;
+    color: #087fa9;
+    font-size: 0.72rem;
+}
+
+.device-detail-item.secondary > i {
+    background: #edf2f6;
+    color: #60788b;
+}
+
+.device-detail-item > span {
+    min-width: 0;
+    display: grid;
+    gap: 0.08rem;
+}
+
+.device-detail-item small {
+    color: #73899a;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.055em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.device-detail-item strong {
+    overflow: hidden;
+    color: #142f47;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.device-detail-status {
+    width: fit-content;
+    padding: 0.14rem 0.42rem;
+    border-radius: 999px;
+}
+
+.device-detail-status.active {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.device-detail-status.recovered {
+    background: #dcfce7;
+    color: #15803d;
+}
+
 .device-topology-heading {
     display: flex;
     align-items: center;
@@ -502,6 +588,35 @@
     font-weight: 800;
 }
 
+.device-topology-view + .device-topology-view {
+    margin-top: 1rem;
+}
+
+.device-topology-view-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0 0.15rem 0.42rem;
+    color: #173b58;
+}
+
+.device-topology-view-title > span {
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+.device-topology-view-title > span i {
+    margin-right: 0.35rem;
+    color: #0798c8;
+}
+
+.device-topology-view-title > small {
+    color: #6b8092;
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
 @media (max-width: 700px) {
     .device-topology-heading,
     .device-fault-banner {
@@ -511,6 +626,25 @@
 
     .device-fault-banner > small {
         margin-left: 0;
+    }
+
+    .device-detail-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .device-detail-item,
+    .device-detail-item:nth-child(4n),
+    .device-detail-item:nth-child(n + 5) {
+        border-right: 1px solid #e2ebf1;
+        border-bottom: 1px solid #e2ebf1;
+    }
+
+    .device-detail-item:nth-child(2n) {
+        border-right: 0;
+    }
+
+    .device-detail-item:nth-last-child(-n + 2) {
+        border-bottom: 0;
     }
 }
 
@@ -733,6 +867,35 @@
     overscroll-behavior-x: contain;
 }
 
+.soporte-range-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.soporte-range-actions .form-control {
+    min-width: 0;
+}
+
+.soporte-range-actions .btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.38rem;
+    white-space: nowrap;
+}
+
+.data-table-card {
+    margin-right: -0.45rem;
+    margin-left: -0.45rem;
+}
+
+.data-table-card > .card-body {
+    padding-right: 1rem;
+    padding-left: 1rem;
+}
+
 .table-drag-scroll.dragging {
     cursor: grabbing;
 }
@@ -743,13 +906,49 @@
 }
 
 .table-drag-scroll .rdt_Table {
-    min-width: 1680px;
+    min-width: 1840px;
 }
 
 .table-drag-scroll .rdt_TableWrapper,
 .table-drag-scroll .rdt_TableHead,
 .table-drag-scroll .rdt_TableBody {
-    min-width: 1680px;
+    min-width: 1840px;
+}
+
+.table-drag-scroll.show-equipment-changes .rdt_Table,
+.table-drag-scroll.show-equipment-changes .rdt_TableWrapper,
+.table-drag-scroll.show-equipment-changes .rdt_TableHead,
+.table-drag-scroll.show-equipment-changes .rdt_TableBody {
+    min-width: 2180px;
+}
+
+.table-drag-scroll .rdt_TableWrapper {
+    overflow-x: visible;
+}
+
+.soporte-table-actions {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+}
+
+.soporte-table-actions .btn {
+    width: 36px;
+    min-width: 36px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+@media (max-width: 1100px) {
+    .soporte-range-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
 }
 
 .soporte-diagram-modal {
