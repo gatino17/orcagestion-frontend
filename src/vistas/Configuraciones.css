@@ -596,8 +596,8 @@
   padding: 0;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.24), 0 3px 8px rgba(1, 12, 26, 0.42);
+  background: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.26), 0 3px 8px rgba(1, 12, 26, 0.42);
 }
 
 .config-map-marker.overview-dot i,
@@ -649,7 +649,7 @@
 }
 
 @keyframes configOverviewDotPulse {
-  50% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0.18), 0 3px 8px rgba(1, 12, 26, 0.42); }
+  50% { box-shadow: 0 0 0 7px rgba(14, 165, 233, 0.2), 0 3px 8px rgba(1, 12, 26, 0.42); }
 }
 
 @keyframes configMarkerPulse {
@@ -1103,6 +1103,15 @@
   filter: drop-shadow(0 0 3px rgba(56, 210, 242, 0.72));
 }
 
+.config-connections-layer.general-connections .connection-line {
+  stroke-dasharray: 5 3;
+  animation: configGeneralConnectionFlow 1.4s linear infinite;
+}
+
+@keyframes configGeneralConnectionFlow {
+  to { stroke-dashoffset: -16; }
+}
+
 .config-logical-node {
   position: absolute;
   z-index: 2;
@@ -1334,8 +1343,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  min-width: 44px;
-  min-height: 36px;
+  min-width: 28px;
+  min-height: 24px;
   padding: 0.35rem;
   border: 2px solid var(--zone-color, #0ea5e9);
   border-radius: 10px;

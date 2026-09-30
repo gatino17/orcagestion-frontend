@@ -375,6 +375,7 @@ function Configuraciones() {
   const [rectanguloSeleccion, setRectanguloSeleccion] = useState(null);
   const [seleccionandoAreaImportacion, setSeleccionandoAreaImportacion] = useState(false);
   const [rectanguloImportacion, setRectanguloImportacion] = useState(null);
+  const [mostrarConexionesVista, setMostrarConexionesVista] = useState(false);
   const contenedorVistaGeneralRef = useRef(null);
   const desplazamientoLienzoRef = useRef(null);
   const seleccionLienzoRef = useRef(null);
@@ -401,6 +402,18 @@ function Configuraciones() {
     () => plantillas.find((item) => String(item.id) === String(seleccionadaId)) || plantillas[0] || null,
     [plantillas, seleccionadaId]
   );
+
+  const conexionesVistaGeneral = useMemo(() => {
+    const idsMarcadores = new Set(marcadores.map((item) => item.id));
+    return conexionesLogicas
+      .map((conexion) => ({
+        ...conexion,
+        id: `general-${conexion.id}`,
+        origen: `logico-${conexion.origen}`.slice(0, 80),
+        destino: `logico-${conexion.destino}`.slice(0, 80),
+      }))
+      .filter((conexion) => idsMarcadores.has(conexion.origen) && idsMarcadores.has(conexion.destino));
+  }, [conexionesLogicas, marcadores]);
 
   const centrosFiltrados = useMemo(() => {
     if (!formulario.cliente_id) return [];
@@ -463,6 +476,7 @@ function Configuraciones() {
     setRectanguloSeleccion(null);
     setSeleccionandoAreaImportacion(false);
     setRectanguloImportacion(null);
+    setMostrarConexionesVista(false);
     setZoomLienzo(1);
     setDimensionesImagen(null);
     const contenidoLogico = leerDiagramaLogico(seleccionada?.diagrama_logico_json);
@@ -878,8 +892,8 @@ function Configuraciones() {
       if (zona.id !== zonaId) return zona;
       const izquierda = zona.x - (zona.ancho / 2);
       const superior = zona.y - (zona.alto / 2);
-      const ancho = Math.min(100 - izquierda, Math.max(5, cursorX - izquierda));
-      const alto = Math.min(100 - superior, Math.max(5, cursorY - superior));
+      const ancho = Math.min(100 - izquierda, Math.max(2, cursorX - izquierda));
+      const alto = Math.min(100 - superior, Math.max(2, cursorY - superior));
       return {
         ...zona,
         x: Number((izquierda + (ancho / 2)).toFixed(3)),
@@ -978,8 +992,8 @@ function Configuraciones() {
       opacidad: grupo.opacidad ?? ZONA_INICIAL.opacidad,
       x: Number(convertirX(grupo.x).toFixed(3)),
       y: Number(convertirY(grupo.y).toFixed(3)),
-      ancho: Number(Math.max(5, zonaDestino.ancho * escalaInterior * (grupo.ancho / 100)).toFixed(3)),
-      alto: Number(Math.max(5, zonaDestino.alto * escalaInterior * (grupo.alto / 100)).toFixed(3)),
+      ancho: Number(Math.max(2, zonaDestino.ancho * escalaInterior * (grupo.ancho / 100)).toFixed(3)),
+      alto: Number(Math.max(2, zonaDestino.alto * escalaInterior * (grupo.alto / 100)).toFixed(3)),
     }));
 
     setMarcadores((actuales) => {
@@ -1109,6 +1123,7 @@ function Configuraciones() {
     setRectanguloSeleccion(null);
     setSeleccionandoAreaImportacion(false);
     setRectanguloImportacion(null);
+    setMostrarConexionesVista(false);
   };
 
   const guardarVistaGeneral = async () => {
@@ -1134,6 +1149,7 @@ function Configuraciones() {
       setRectanguloSeleccion(null);
       setSeleccionandoAreaImportacion(false);
       setRectanguloImportacion(null);
+      setMostrarConexionesVista(false);
     } catch (err) {
       alert(err?.response?.data?.error || "No se pudo guardar la vista general.");
     } finally {
@@ -1514,6 +1530,16 @@ function Configuraciones() {
                             >
                               <i className="fas fa-file-import" /> {seleccionandoAreaImportacion ? "Dibuja con botón derecho" : "Importar en área"}
                             </button>
+                            {conexionesVistaGeneral.length > 0 && (
+                              <button
+                                type="button"
+                                className={mostrarConexionesVista ? "active" : ""}
+                                onClick={() => setMostrarConexionesVista((actual) => !actual)}
+                                title={mostrarConexionesVista ? "Ocultar conexiones importadas" : "Mostrar conexiones importadas"}
+                              >
+                                <i className="fas fa-project-diagram" /> {mostrarConexionesVista ? "Ocultar conexiones" : "Ver conexiones"}
+                              </button>
+                            )}
                             <button type="button" className="secondary" onClick={cancelarEditor} disabled={guardandoLienzo}>Cancelar</button>
                             <button type="button" className="save" onClick={guardarVistaGeneral} disabled={guardandoLienzo}>
                               <i className={`fas ${guardandoLienzo ? "fa-spinner fa-spin" : "fa-save"}`} /> {guardandoLienzo ? "Guardando" : "Guardar"}
@@ -1600,6 +1626,22 @@ function Configuraciones() {
                         >
                           <strong>Importar aquí</strong>
                         </span>
+                      )}
+                      {mostrarConexionesVista && conexionesVistaGeneral.length > 0 && (
+                        <svg className="config-connections-layer general-connections" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                          {conexionesVistaGeneral.map((conexion) => {
+                            const origen = marcadores.find((item) => item.id === conexion.origen);
+                            const destino = marcadores.find((item) => item.id === conexion.destino);
+                            if (!origen || !destino) return null;
+                            const ruta = rutaCurvaConexion(origen, destino, conexion, conexionesVistaGeneral, marcadores);
+                            return (
+                              <g key={conexion.id}>
+                                <path className="connection-underlay" d={ruta} vectorEffect="non-scaling-stroke" />
+                                <path className="connection-line" d={ruta} stroke={conexion.color || "#38d2f2"} vectorEffect="non-scaling-stroke" />
+                              </g>
+                            );
+                          })}
+                        </svg>
                       )}
                       {zonas.map((zona) => (
                         <button
@@ -2153,11 +2195,11 @@ function Configuraciones() {
                   </div>
                   <div className="config-field">
                     <label>Ancho: {zonaFormulario.ancho}%</label>
-                    <input type="range" min="5" max="80" step="1" value={zonaFormulario.ancho} onChange={(e) => setZonaFormulario((actual) => ({ ...actual, ancho: Number(e.target.value) }))} />
+                    <input type="range" min="2" max="80" step="0.5" value={zonaFormulario.ancho} onChange={(e) => setZonaFormulario((actual) => ({ ...actual, ancho: Number(e.target.value) }))} />
                   </div>
                   <div className="config-field">
                     <label>Alto: {zonaFormulario.alto}%</label>
-                    <input type="range" min="5" max="80" step="1" value={zonaFormulario.alto} onChange={(e) => setZonaFormulario((actual) => ({ ...actual, alto: Number(e.target.value) }))} />
+                    <input type="range" min="2" max="80" step="0.5" value={zonaFormulario.alto} onChange={(e) => setZonaFormulario((actual) => ({ ...actual, alto: Number(e.target.value) }))} />
                   </div>
                   <div className="config-field full">
                     <label>Transparencia: {Math.round((1 - zonaFormulario.opacidad) * 100)}%</label>
