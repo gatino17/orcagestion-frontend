@@ -501,20 +501,21 @@
 }
 
 .asistente-input .asistente-voice-control.is-speaking .voice-core {
-  animation: asistenteVoicePulse 0.9s ease-in-out infinite;
+  transform: scale(var(--voice-scale, 1));
+  filter: brightness(var(--voice-brightness, 1));
+  box-shadow:
+    inset -5px -7px 12px rgba(3, 30, 76, 0.42),
+    inset 4px 4px 10px rgba(224, 247, 255, 0.5),
+    0 0 var(--voice-glow, 18px) rgba(56, 189, 248, 0.95);
+  transition: transform 110ms ease-out, filter 110ms ease-out, box-shadow 110ms ease-out;
 }
 
 .asistente-input .asistente-voice-control.is-speaking .orbit-one {
-  animation: asistenteVoiceSpin 1.15s linear infinite;
+  animation: asistenteVoiceSpin var(--voice-spin-duration, 1.15s) linear infinite;
 }
 
 .asistente-input .asistente-voice-control.is-speaking .orbit-two {
-  animation: asistenteVoiceSpinReverse 1.8s linear infinite;
-}
-
-@keyframes asistenteVoicePulse {
-  0%, 100% { transform: scale(0.94); filter: brightness(0.96); }
-  50% { transform: scale(1.08); filter: brightness(1.2); box-shadow: 0 0 22px rgba(56, 189, 248, 0.95); }
+  animation: asistenteVoiceSpinReverse var(--voice-reverse-duration, 1.8s) linear infinite;
 }
 
 @keyframes asistenteVoiceSpin {

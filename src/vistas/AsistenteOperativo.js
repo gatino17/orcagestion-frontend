@@ -232,6 +232,8 @@ function AsistenteOperativo() {
   const [segundosTopologia, setSegundosTopologia] = useState(15);
   const [vozActiva, setVozActiva] = useState(() => localStorage.getItem("asistente_voz_activa") !== "false");
   const [hablando, setHablando] = useState(false);
+  const [energiaVoz, setEnergiaVoz] = useState(0);
+  const pulsoVozRef = useRef(null);
   const ultimoCodigoConsultadoRef = useRef("");
   const fallaPendienteRef = useRef(null);
   const diagramaPendienteRef = useRef(null);
@@ -292,6 +294,7 @@ function AsistenteOperativo() {
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel();
+    window.clearInterval(pulsoVozRef.current);
   }, []);
 
   useEffect(() => {
@@ -1117,6 +1120,25 @@ function AsistenteOperativo() {
       .sort((a, b) => b.puntaje - a.puntaje)[0]?.voz || null;
   };
 
+  const detenerPulsoVoz = () => {
+    window.clearInterval(pulsoVozRef.current);
+    pulsoVozRef.current = null;
+    setHablando(false);
+    setEnergiaVoz(0);
+  };
+
+  const iniciarPulsoVoz = () => {
+    window.clearInterval(pulsoVozRef.current);
+    setHablando(true);
+    setEnergiaVoz(0.52);
+    pulsoVozRef.current = window.setInterval(() => {
+      setEnergiaVoz((energiaAnterior) => {
+        const objetivo = 0.2 + Math.random() * 0.8;
+        return Math.min(1, (energiaAnterior * 0.28) + (objetivo * 0.72));
+      });
+    }, 120);
+  };
+
   const hablarRespuesta = (respuesta) => {
     if (!vozActiva || !("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") return;
     const partes = [respuesta?.titulo, respuesta?.texto, ...(Array.isArray(respuesta?.items) ? respuesta.items.slice(0, 8) : [])]
@@ -1132,16 +1154,19 @@ function AsistenteOperativo() {
     locucion.rate = 0.96;
     locucion.pitch = 1.06;
     locucion.volume = 1;
-    locucion.onstart = () => setHablando(true);
-    locucion.onend = () => setHablando(false);
-    locucion.onerror = () => setHablando(false);
+    locucion.onstart = iniciarPulsoVoz;
+    locucion.onboundary = (event) => {
+      if (event.name === "word") setEnergiaVoz(0.72 + Math.random() * 0.28);
+    };
+    locucion.onend = detenerPulsoVoz;
+    locucion.onerror = detenerPulsoVoz;
     window.speechSynthesis.speak(locucion);
   };
 
   const alternarVoz = () => {
     const nuevoEstado = !vozActiva;
     window.speechSynthesis?.cancel();
-    setHablando(false);
+    detenerPulsoVoz();
     setVozActiva(nuevoEstado);
     localStorage.setItem("asistente_voz_activa", String(nuevoEstado));
   };
@@ -1286,6 +1311,13 @@ function AsistenteOperativo() {
             <button
               type="button"
               className={`asistente-voice-control ${vozActiva ? "is-enabled" : "is-muted"} ${hablando ? "is-speaking" : ""}`}
+              style={{
+                "--voice-scale": (0.94 + energiaVoz * 0.16).toFixed(3),
+                "--voice-brightness": (0.98 + energiaVoz * 0.28).toFixed(2),
+                "--voice-glow": `${12 + Math.round(energiaVoz * 18)}px`,
+                "--voice-spin-duration": `${(1.4 - energiaVoz * 0.68).toFixed(2)}s`,
+                "--voice-reverse-duration": `${(2.15 - energiaVoz * 0.85).toFixed(2)}s`,
+              }}
               onClick={alternarVoz}
               aria-pressed={vozActiva}
               title={vozActiva ? "Desactivar voz" : "Activar voz"}
