@@ -1535,6 +1535,14 @@
   min-height: 540px;
 }
 
+.config-manager-grid.detail-hidden {
+  min-height: 0;
+}
+
+.config-manager-grid.detail-hidden .config-detail-heading {
+  margin-bottom: 0;
+}
+
 .config-template-list {
   padding: 1rem;
   border-right: 1px solid #dce8f0;
@@ -1730,6 +1738,19 @@
   border-color: #fecaca;
   color: #dc3545;
 }
+
+.config-detail-actions button.view {
+  border-color: #9edff0;
+  background: #effbfe;
+  color: #087da0;
+}
+
+.config-detail-actions button.view.active {
+  border-color: #1689b5;
+  background: #0f73b7;
+  color: #fff;
+}
+
 
 .config-view-tabs {
   display: flex;
@@ -2121,6 +2142,7 @@
   .config-template-detail {
     overflow-x: auto;
   }
+
 
   .config-modal-footer .config-primary-button {
     width: auto;

@@ -346,6 +346,7 @@ function Configuraciones() {
   const [catalogoEquipos, setCatalogoEquipos] = useState([]);
   const [seleccionadaId, setSeleccionadaId] = useState(null);
   const [vistaActiva, setVistaActiva] = useState("general");
+  const [detalleVisible, setDetalleVisible] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -455,6 +456,10 @@ function Configuraciones() {
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  useEffect(() => {
+    setDetalleVisible(false);
+  }, [seleccionadaId]);
 
   useEffect(() => {
     if (!modoEditor) return undefined;
@@ -1407,7 +1412,7 @@ function Configuraciones() {
             </button>
           </div>
         ) : (
-          <div className="config-manager-grid">
+          <div className={`config-manager-grid ${detalleVisible ? "detail-open" : "detail-hidden"}`}>
             <aside className="config-template-list">
               <div className="config-list-heading">
                 <span>Plantillas registradas <strong>{plantillas.length}</strong></span>
@@ -1421,6 +1426,7 @@ function Configuraciones() {
                   onClick={() => {
                     setSeleccionadaId(plantilla.id);
                     setVistaActiva("general");
+                    setDetalleVisible(false);
                   }}
                 >
                   <span className="config-template-icon"><i className="fas fa-project-diagram" /></span>
@@ -1446,11 +1452,22 @@ function Configuraciones() {
                     <small>Asignada a {obtenerAsignacion(seleccionada)} - Actualizada {formatearFecha(seleccionada.updated_at)}</small>
                   </div>
                   <div className="config-detail-actions">
+                    <button
+                      type="button"
+                      className={detalleVisible ? "view active" : "view"}
+                      onClick={() => setDetalleVisible((actual) => !actual)}
+                      title={detalleVisible ? "Ocultar detalle" : "Ver detalle"}
+                      aria-label={detalleVisible ? "Ocultar detalle de la plantilla" : "Ver detalle de la plantilla"}
+                    >
+                      <i className={`fas ${detalleVisible ? "fa-eye-slash" : "fa-eye"}`} />
+                    </button>
                     <button type="button" onClick={() => abrirEdicion(seleccionada)} title="Editar plantilla"><i className="fas fa-pen" /></button>
                     <button type="button" className="danger" onClick={() => borrarPlantilla(seleccionada)} title="Eliminar plantilla"><i className="fas fa-trash" /></button>
                   </div>
                 </div>
 
+                {detalleVisible ? (
+                  <>
                 <div className="config-view-tabs" role="tablist">
                   <button type="button" className={vistaActiva === "general" ? "active" : ""} onClick={() => setVistaActiva("general")}>
                     <i className="fas fa-ship" /> Vista general del ponton
@@ -1963,6 +1980,8 @@ function Configuraciones() {
                     )}
                   </div>
                 )}
+                  </>
+                ) : null}
               </article>
             )}
           </div>
