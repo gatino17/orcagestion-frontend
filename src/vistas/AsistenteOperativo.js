@@ -70,6 +70,11 @@ const formatoFechaHora = (value) => {
   return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
 };
 
+const formatoFechaHoraNarrada = (value) => {
+  const fechaHora = formatoFechaHora(value);
+  return fechaHora.replace(/\s+(\d{2}:\d{2})$/, " a las $1");
+};
+
 const getSocketBaseUrl = () => {
   if (!API_BASE_URL) return window.location.origin;
   return String(API_BASE_URL).replace(/\/api\/?$/, "") || window.location.origin;
@@ -472,8 +477,24 @@ function AsistenteOperativo() {
         titulo: `No encontre el codigo ${codigo}`,
         texto: "No aparece en equipos instalados, bodega ni historial global reciente por numero de serie.",
         items: ["Revisa si el numero esta completo o si corresponde a un codigo interno distinto a la serie."],
+        locucion: `No encontré el código ${codigo}. Revisa si el número está completo o si corresponde a otro identificador.`,
       };
     }
+
+    const locucionUbicacion = (() => {
+      if (estaEnBodega) {
+        const ubicacion = ubicacionActual?.ubicacion || "Bodega central";
+        const area = getAreaRevisionLegible(ubicacionActual?.revision_area || revisionActiva?.area);
+        return area
+          ? `Ese código actualmente se encuentra en ${ubicacion}, en revisión en el área ${area}. Te dejaré los detalles en el chat.`
+          : `Ese código actualmente se encuentra en ${ubicacion}. Te dejaré los detalles en el chat.`;
+      }
+      if (instalado.length) {
+        const centro = centroPorId.get(Number(ubicacionActual?.centro_id || 0));
+        return `Ese código actualmente se encuentra instalado en el centro ${getCentroNombre(centro)}, cliente ${getClienteNombre(centro)}. Te dejaré los detalles en el chat.`;
+      }
+      return `Encontré registros históricos para ese código. Te dejaré los detalles en el chat.`;
+    })();
 
     return {
       titulo: `Ubicacion actual del codigo ${codigo}`,
@@ -491,6 +512,7 @@ function AsistenteOperativo() {
           ? "Encontre este codigo instalado en un centro."
           : "Encontre registros historicos para este codigo.",
       items,
+      locucion: locucionUbicacion,
     };
   };
 
@@ -640,8 +662,8 @@ function AsistenteOperativo() {
 
     if (filtro === "alertas") {
       return {
-        titulo: "Soportes en proceso",
-        texto: `Hay ${alertasLista.length} soportes en proceso.`,
+        titulo: "Soportes en seguimiento",
+        texto: `Hay ${alertasLista.length} soportes en seguimiento.`,
         items: Object.entries(porCliente)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 8)
@@ -971,11 +993,49 @@ function AsistenteOperativo() {
     };
   };
 
-  const responderEquipos = () => {
+  const responderEquipos = (filtro = "resumen") => {
     const instalados = datos.equipos.filter((e) => String(e?.numero_serie || "").trim() && normalizar(e?.estado_registro) !== "no_aplica");
     const bodega = datos.bodega.filter((e) => normalizar(e?.estado_asignacion || "en_bodega") === "en_bodega");
     const asignadosTecnico = datos.bodega.filter((e) => normalizar(e?.estado_asignacion) === "asignado_tecnico");
-    const revision = datos.bodega.filter((e) => normalizar(e?.ubicacion).includes("revision") || normalizar(e?.estado_equipo).includes("revision"));
+    const revision = bodega.filter((equipo) => {
+      const idEquipo = Number(equipo?.id_bodega_equipo || equipo?.id || 0);
+      return revisionPorEquipoBodega.has(idEquipo);
+    });
+
+    const describirEquipoBodega = (equipo) => {
+      const idEquipo = Number(equipo?.id_bodega_equipo || equipo?.id || 0);
+      const revisionActiva = revisionPorEquipoBodega.get(idEquipo);
+      const nombre = equipo?.equipo_nombre || equipo?.nombre || "Equipo";
+      const codigo = equipo?.codigo ? `codigo ${equipo.codigo}` : "codigo sin informar";
+      const serie = equipo?.numero_serie ? `serie ${equipo.numero_serie}` : "serie sin informar";
+      if (revisionActiva) {
+        const area = getAreaRevisionLegible(revisionActiva.area) || "sin informar";
+        return `${nombre}, ${codigo}, ${serie}: en revision, area ${area}.`;
+      }
+      const estado = getEstadoLegible(equipo?.estado_equipo || "Operativo");
+      return `${nombre}, ${codigo}, ${serie}: disponible en ${equipo?.ubicacion || "Bodega central"}, estado ${estado}.`;
+    };
+
+    if (filtro === "bodega") {
+      const disponibles = bodega.length - revision.length;
+      return {
+        titulo: "Equipos en bodega",
+        texto: bodega.length
+          ? `Hay ${bodega.length} equipos en bodega: ${disponibles} disponibles y ${revision.length} en revision.`
+          : "Actualmente no hay equipos registrados en bodega.",
+        items: bodega.map(describirEquipoBodega),
+      };
+    }
+
+    if (filtro === "revision") {
+      return {
+        titulo: "Equipos en revision",
+        texto: revision.length
+          ? `Hay ${revision.length} equipos de bodega actualmente en revision.`
+          : "Actualmente no hay equipos de bodega en revision.",
+        items: revision.map(describirEquipoBodega),
+      };
+    }
 
     return {
       titulo: "Resumen de equipos",
@@ -1011,7 +1071,7 @@ function AsistenteOperativo() {
       return {
         titulo: `Diagrama de conexion de ${contexto.centro}`,
         texto: "Mostrando el recorrido de conexion y el equipo afectado.",
-        locucion: `Te muestro el diagrama de conexión del centro ${contexto.centro}. La desconexión puede deberse a un cambio de IP, falta de energía en la cámara o a que la cámara se encuentre dañada.`,
+        locucion: `Te muestro el diagrama de conexión del centro ${contexto.centro}. La desconexión puede deberse a un cambio de IP, falta de energía en la cámara o a que la cámara se encuentre dañada. ¿Quieres ejecutar alguna acción de asignación a Ismael, Danilo o Jorge para que lo revisen?`,
         items: [],
         topologia: { plantilla: contexto.plantilla, falla: contexto.falla, vista: "logico" },
       };
@@ -1054,7 +1114,7 @@ function AsistenteOperativo() {
         fallaPendienteRef.current = falla;
         return {
           titulo: `Falla activa en ${falla?.centro || "el centro"}`,
-          texto: `Por supuesto. ${falla?.device_name || falla?.entity_type || "El dispositivo"} se encuentra sin conexion desde ${formatoFechaHora(falla?.offline_since || falla?.created_at)}. Quieres ver la ubicacion de la falla?`,
+          texto: `Por supuesto. ${falla?.device_name || falla?.entity_type || "El dispositivo"} se encuentra sin conexion desde ${formatoFechaHoraNarrada(falla?.offline_since || falla?.created_at)}. Quieres ver la ubicacion de la falla?`,
           items: [],
         };
       }
@@ -1068,7 +1128,7 @@ function AsistenteOperativo() {
     if (query.includes("terreno")) {
       return responderSoportes("terreno");
     }
-    if (query.includes("alerta") || query.includes("en proceso")) {
+    if (query.includes("alerta") || query.includes("en proceso") || query.includes("seguimiento")) {
       return responderSoportes("alertas");
     }
     if (query.includes("pendiente")) {
@@ -1086,7 +1146,13 @@ function AsistenteOperativo() {
     if (query.includes("actividad") || query.includes("trabajo") || query.includes("hoy") || query.includes("semana") || query.includes("calendario")) {
       return responderActividades(query.includes("semana") ? "semana" : "hoy");
     }
-    if (query.includes("equipo") || query.includes("instalado") || query.includes("bodega") || query.includes("revision")) {
+    if (query.includes("bodega")) {
+      return responderEquipos("bodega");
+    }
+    if (query.includes("revision")) {
+      return responderEquipos("revision");
+    }
+    if (query.includes("equipo") || query.includes("instalado")) {
       return responderEquipos();
     }
 
@@ -1197,7 +1263,7 @@ function AsistenteOperativo() {
           ...respuestaChat,
         },
       ]);
-      hablarRespuesta(locucion ? { titulo: respuesta.titulo, texto: locucion, items: [] } : respuestaChat);
+      hablarRespuesta(locucion ? { texto: locucion, items: [] } : respuestaChat);
     } catch (err) {
       console.error("Error en consulta operativa:", err);
       setMensajes((prev) => [
@@ -1241,7 +1307,10 @@ function AsistenteOperativo() {
             <div className="asistente-kpi red">
               <span>Soportes abiertos</span>
               <strong>{resumen.soportesAbiertos}</strong>
-              <small>Pendientes {resumen.soportesPendientes} | En proceso {resumen.soportesEnProceso}</small>
+              <div className="asistente-kpi-statuses">
+                <small className="pending">Pendientes {resumen.soportesPendientes}</small>
+                <small className="tracking">En seguimiento {resumen.soportesEnProceso}</small>
+              </div>
             </div>
             <div className="asistente-kpi blue">
               <span>Armados activos</span>

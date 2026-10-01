@@ -127,6 +127,35 @@
   color: rgba(255, 255, 255, 0.78);
 }
 
+.asistente-kpi-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+  margin-top: 0.42rem;
+}
+
+.asistente-kpis.compact .asistente-kpi .asistente-kpi-statuses small {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.48rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.asistente-kpis.compact .asistente-kpi .asistente-kpi-statuses .pending {
+  color: #fff;
+  background: #dc2626;
+  border-color: #fca5a5;
+}
+
+.asistente-kpis.compact .asistente-kpi .asistente-kpi-statuses .tracking {
+  color: #713f12;
+  background: #facc15;
+  border-color: #fde68a;
+}
+
 .asistente-kpi strong {
   display: block;
   margin: 0.2rem 0;
