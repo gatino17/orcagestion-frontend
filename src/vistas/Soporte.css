@@ -241,6 +241,16 @@
     background: linear-gradient(135deg, rgba(254, 249, 195, 0.65), rgba(255, 251, 235, 0.9));
 }
 
+.ismael-claim-date {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0.2rem 0;
+    color: #80591b;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
 .ismael-preview-item.device-failure-item {
     border-color: #fb923c;
     background: linear-gradient(135deg, rgba(255, 237, 213, 0.95), rgba(255, 247, 237, 0.98));

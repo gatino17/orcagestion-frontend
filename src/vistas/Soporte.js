@@ -687,8 +687,10 @@ const Soporte = () => {
         setCaseCode(esDispositivo ? "" : String(row?.case_code || "").trim());
         setIsmaelIdOrigen(esDispositivo ? "" : String(row?.id || "").trim());
         setExternalCaseKey(esDispositivo ? String(row?.source_key || "").trim() : "");
-        const fechaBase = row?.offline_since || row?.created_at || row?.hora_llegada || new Date().toISOString();
-        setFechaSoporte(formatearParaInputFecha(fechaBase));
+        const fechaBase = esDispositivo
+            ? row?.offline_since || row?.created_at || new Date().toISOString()
+            : row?.hora_llegada || row?.created_at || new Date().toISOString();
+        setFechaSoporte(formatearParaInputFecha(esDispositivo ? fechaBase : new Date(fechaBase)));
 
         const normalizarCentro = (valor) => String(valor || "")
             .trim()
@@ -1673,9 +1675,17 @@ const Soporte = () => {
                                                 </span>
                                             </div>
                                         ) : (
+                                            <>
+                                            <small className="ismael-claim-date">
+                                                <i className="far fa-clock" aria-hidden="true" />
+                                                <span>
+                                                    {row.hora_llegada ? "Reclamo" : "Registro"}: {formatearFechaHora(row.hora_llegada || row.created_at).replace(/\s+(\d{2}:\d{2})$/, " a las $1")}
+                                                </span>
+                                            </small>
                                             <small className="text-muted d-block text-truncate">
                                                 Problema: {row.falla_especifica || row.correo || row.asunto || "-"}
                                             </small>
+                                            </>
                                         )}
                                     </div>
                                 ))}
