@@ -376,6 +376,9 @@ function Configuraciones() {
   const [rectanguloSeleccion, setRectanguloSeleccion] = useState(null);
   const [seleccionandoAreaImportacion, setSeleccionandoAreaImportacion] = useState(false);
   const [rectanguloImportacion, setRectanguloImportacion] = useState(null);
+  const [importacionModalAbierto, setImportacionModalAbierto] = useState(false);
+  const [seleccionImportacion, setSeleccionImportacion] = useState({ nodos: [], grupos: [] });
+  const importacionModalRef = useRef(null);
   const [mostrarConexionesVista, setMostrarConexionesVista] = useState(false);
   const contenedorVistaGeneralRef = useRef(null);
   const desplazamientoLienzoRef = useRef(null);
@@ -403,6 +406,25 @@ function Configuraciones() {
     () => plantillas.find((item) => String(item.id) === String(seleccionadaId)) || plantillas[0] || null,
     [plantillas, seleccionadaId]
   );
+
+  const elementosImportacion = useMemo(() => [
+    ...nodosLogicos.map((nodo) => ({
+      id: nodo.id,
+      nombre: nodo.nombre,
+      tipo: "nodos",
+      icono: iconoMarcador(nodo.tipo),
+      ubicado: marcadores.some((marcador) => marcador.id === `logico-${nodo.id}`.slice(0, 80)),
+    })),
+    ...gruposLogicos.map((grupo) => ({
+      id: grupo.id,
+      nombre: grupo.nombre,
+      tipo: "grupos",
+      icono: "fas fa-vector-square",
+      ubicado: zonas.some((zona) => zona.id === `logico-${grupo.id}`.slice(0, 80)),
+    })),
+  ], [nodosLogicos, gruposLogicos, marcadores, zonas]);
+
+  const totalSeleccionImportacion = seleccionImportacion.nodos.length + seleccionImportacion.grupos.length;
 
   const conexionesVistaGeneral = useMemo(() => {
     const idsMarcadores = new Set(marcadores.map((item) => item.id));
@@ -462,6 +484,37 @@ function Configuraciones() {
   }, [seleccionadaId]);
 
   useEffect(() => {
+    if (!importacionModalAbierto) return undefined;
+    const focoAnterior = document.activeElement;
+    const modal = importacionModalRef.current;
+    modal?.querySelector("button")?.focus();
+    const manejarTeclado = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setImportacionModalAbierto(false);
+      }
+      if (event.key === "Tab") {
+        const controles = modal?.querySelectorAll("button:not(:disabled), input:not(:disabled)");
+        if (!controles?.length) return;
+        const primero = controles[0];
+        const ultimo = controles[controles.length - 1];
+        if (event.shiftKey && document.activeElement === primero) {
+          event.preventDefault();
+          ultimo.focus();
+        } else if (!event.shiftKey && document.activeElement === ultimo) {
+          event.preventDefault();
+          primero.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", manejarTeclado);
+    return () => {
+      document.removeEventListener("keydown", manejarTeclado);
+      if (focoAnterior?.isConnected) focoAnterior.focus();
+    };
+  }, [importacionModalAbierto]);
+
+  useEffect(() => {
     if (!modoEditor) return undefined;
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -481,6 +534,8 @@ function Configuraciones() {
     setRectanguloSeleccion(null);
     setSeleccionandoAreaImportacion(false);
     setRectanguloImportacion(null);
+    setImportacionModalAbierto(false);
+    setSeleccionImportacion({ nodos: [], grupos: [] });
     setMostrarConexionesVista(false);
     setZoomLienzo(1);
     setDimensionesImagen(null);
@@ -953,8 +1008,10 @@ function Configuraciones() {
   };
 
   const importarDiagramaEnVistaGeneral = (zonaDestino) => {
-    if (nodosLogicos.length === 0 && gruposLogicos.length === 0) {
-      window.alert("El diagrama logico no tiene equipos ni zonas para importar.");
+    const nodosElegidos = nodosLogicos.filter((nodo) => seleccionImportacion.nodos.includes(nodo.id));
+    const gruposElegidos = gruposLogicos.filter((grupo) => seleccionImportacion.grupos.includes(grupo.id));
+    if (nodosElegidos.length === 0 && gruposElegidos.length === 0) {
+      window.alert("Selecciona al menos un equipo o una zona para importar.");
       return;
     }
     if (!zonaDestino) {
@@ -973,7 +1030,7 @@ function Configuraciones() {
       + (zonaDestino.alto * (margen + (escalaInterior * (Number(y) / 100))))
     );
 
-    const marcadoresImportados = nodosLogicos.map((nodo) => {
+    const marcadoresImportados = nodosElegidos.map((nodo) => {
       const grupoContenedor = obtenerGrupoContenedorNodo(nodo);
       return {
         ...MARCADOR_INICIAL,
@@ -989,7 +1046,7 @@ function Configuraciones() {
         y: Number(convertirY(nodo.y).toFixed(3)),
       };
     });
-    const zonasImportadas = gruposLogicos.map((grupo) => ({
+    const zonasImportadas = gruposElegidos.map((grupo) => ({
       ...ZONA_INICIAL,
       id: `logico-${grupo.id}`.slice(0, 80),
       nombre: grupo.nombre,
@@ -1024,13 +1081,36 @@ function Configuraciones() {
   };
 
   const iniciarModoAreaImportacion = () => {
-    setSeleccionandoAreaImportacion((actual) => !actual);
+    seleccionarElementosImportacion("nuevos");
+    setImportacionModalAbierto(true);
+    setSeleccionandoAreaImportacion(false);
     setRectanguloImportacion(null);
     areaImportacionRef.current = null;
     setColocandoMarcador(false);
     setColocandoZona(false);
     setMarcadorParaUbicarId("");
     setMarcadoresSeleccionados([]);
+  };
+
+  const seleccionarElementosImportacion = (modo) => {
+    const elegidos = elementosImportacion.filter((elemento) => modo === "todos" || (modo === "nuevos" && !elemento.ubicado));
+    setSeleccionImportacion({
+      nodos: elegidos.filter((elemento) => elemento.tipo === "nodos").map((elemento) => elemento.id),
+      grupos: elegidos.filter((elemento) => elemento.tipo === "grupos").map((elemento) => elemento.id),
+    });
+  };
+
+  const alternarElementoImportacion = (tipo, id) => {
+    setSeleccionImportacion((actual) => ({
+      ...actual,
+      [tipo]: actual[tipo].includes(id) ? actual[tipo].filter((elementoId) => elementoId !== id) : [...actual[tipo], id],
+    }));
+  };
+
+  const confirmarSeleccionImportacion = () => {
+    if (!totalSeleccionImportacion) return;
+    setImportacionModalAbierto(false);
+    setSeleccionandoAreaImportacion(true);
   };
 
   const iniciarAreaImportacion = (event) => {
@@ -1128,6 +1208,7 @@ function Configuraciones() {
     setRectanguloSeleccion(null);
     setSeleccionandoAreaImportacion(false);
     setRectanguloImportacion(null);
+    setImportacionModalAbierto(false);
     setMostrarConexionesVista(false);
   };
 
@@ -1154,6 +1235,7 @@ function Configuraciones() {
       setRectanguloSeleccion(null);
       setSeleccionandoAreaImportacion(false);
       setRectanguloImportacion(null);
+      setImportacionModalAbierto(false);
       setMostrarConexionesVista(false);
     } catch (err) {
       alert(err?.response?.data?.error || "No se pudo guardar la vista general.");
@@ -1499,6 +1581,7 @@ function Configuraciones() {
                         </small>
                         {modoEditor && seleccionandoAreaImportacion && (
                           <span className="config-import-zone-status selected">
+                            <strong>{seleccionImportacion.nodos.length} equipos y {seleccionImportacion.grupos.length} zonas.</strong>
                             <i className="fas fa-vector-square" /> Mantén presionado el botón derecho y dibuja el área de importación sobre el plano.
                           </span>
                         )}
@@ -1545,7 +1628,7 @@ function Configuraciones() {
                               disabled={nodosLogicos.length === 0 && gruposLogicos.length === 0}
                               title="Dibujar el área donde se importará el diagrama lógico"
                             >
-                              <i className="fas fa-file-import" /> {seleccionandoAreaImportacion ? "Dibuja con botón derecho" : "Importar en área"}
+                              <i className="fas fa-file-import" /> {seleccionandoAreaImportacion ? "Cambiar seleccion" : "Importar en área"}
                             </button>
                             {conexionesVistaGeneral.length > 0 && (
                               <button
@@ -1987,6 +2070,55 @@ function Configuraciones() {
           </div>
         )}
       </section>
+
+      {importacionModalAbierto && (
+        <div className="config-modal-backdrop marker" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setImportacionModalAbierto(false);
+        }}>
+          <div ref={importacionModalRef} className="config-modal config-import-modal" role="dialog" aria-modal="true" aria-labelledby="config-import-title">
+            <div className="config-modal-header">
+              <div>
+                <span className="config-section-label">Diagrama logico al plano</span>
+                <h3 id="config-import-title">Seleccionar elementos para importar</h3>
+              </div>
+              <button type="button" onClick={() => setImportacionModalAbierto(false)} aria-label="Cerrar seleccion de importacion"><i className="fas fa-times" /></button>
+            </div>
+            <div className="config-modal-body">
+              <p className="config-import-help">Elige los equipos y las zonas que deseas llevar al plano. Los ya ubicados solo se recolocan si los seleccionas.</p>
+              <div className="config-import-presets">
+                <button type="button" onClick={() => seleccionarElementosImportacion("nuevos")}><i className="fas fa-plus" /> Solo nuevos</button>
+                <button type="button" onClick={() => seleccionarElementosImportacion("todos")}><i className="fas fa-check-double" /> Todos</button>
+                <button type="button" onClick={() => seleccionarElementosImportacion("ninguno")}>Desmarcar todos</button>
+                <span>{totalSeleccionImportacion} seleccionados</span>
+              </div>
+              <div className="config-import-options">
+                {[{ tipo: "nodos", titulo: "Equipos" }, { tipo: "grupos", titulo: "Zonas" }].map(({ tipo, titulo }) => {
+                  const elementos = elementosImportacion.filter((elemento) => elemento.tipo === tipo);
+                  if (!elementos.length) return null;
+                  return (
+                    <fieldset key={tipo}>
+                      <legend>{titulo} <span>{elementos.length}</span></legend>
+                      <div className="config-import-grid">
+                        {elementos.map((elemento) => (
+                          <label key={`${tipo}-${elemento.id}`} className={`config-import-option ${seleccionImportacion[tipo].includes(elemento.id) ? "selected" : ""}`}>
+                            <input type="checkbox" checked={seleccionImportacion[tipo].includes(elemento.id)} onChange={() => alternarElementoImportacion(tipo, elemento.id)} />
+                            <i className={elemento.icono} aria-hidden="true" />
+                            <span><strong>{elemento.nombre}</strong><small>{elemento.ubicado ? "Ya ubicado en el plano" : "Nuevo en el plano"}</small></span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="config-modal-footer">
+              <button type="button" className="config-secondary-button" onClick={() => setImportacionModalAbierto(false)}>Cancelar</button>
+              <button type="button" className="config-primary-button" disabled={!totalSeleccionImportacion} onClick={confirmarSeleccionImportacion}><i className="fas fa-vector-square" /> Elegir area en el plano</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalAbierto && (
         <div className="config-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && cerrarModal()}>

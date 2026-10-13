@@ -1904,6 +1904,137 @@
   padding: 1.2rem;
 }
 
+.config-import-modal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.config-import-modal .config-modal-header,
+.config-import-modal .config-modal-footer {
+  flex: 0 0 auto;
+}
+
+.config-import-modal .config-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.config-import-help {
+  margin: 0 0 0.9rem;
+  color: #53697d;
+  font-size: 0.85rem;
+}
+
+.config-import-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.config-import-presets button {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #bdd2df;
+  border-radius: 9px;
+  background: #f4f9fc;
+  color: #245b7c;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.config-import-presets > span {
+  margin-left: auto;
+  color: #0c6794;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.config-import-options fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+  border: 0;
+}
+
+.config-import-options legend {
+  margin-bottom: 0.5rem;
+  color: #29465d;
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.config-import-options legend span {
+  margin-left: 0.3rem;
+  color: #75879a;
+  font-weight: 600;
+}
+
+.config-import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.config-import-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.7rem;
+  border: 1px solid #dce7ee;
+  border-radius: 11px;
+  background: #f9fbfd;
+  cursor: pointer;
+}
+
+.config-import-option.selected {
+  border-color: #4ecbe5;
+  background: #edfaff;
+}
+
+.config-import-option input {
+  flex: 0 0 auto;
+  accent-color: #0f67ae;
+}
+
+.config-import-option > i {
+  width: 22px;
+  flex: 0 0 auto;
+  color: #0f67ae;
+  text-align: center;
+}
+
+.config-import-option > span {
+  min-width: 0;
+}
+
+.config-import-option strong,
+.config-import-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.config-import-option strong {
+  color: #183047;
+  font-size: 0.8rem;
+}
+
+.config-import-option small {
+  margin-top: 0.12rem;
+  color: #75879a;
+  font-size: 0.69rem;
+}
+
+.config-import-modal button:focus-visible,
+.config-import-option:focus-within {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
 .config-create-mode {
   padding: 0.85rem;
   margin-bottom: 1rem;
@@ -2107,6 +2238,14 @@
   .config-hero-summary {
     width: 100%;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .config-import-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-import-modal .config-modal-footer {
+    flex-wrap: wrap;
   }
 
   .config-hero-summary > div {
