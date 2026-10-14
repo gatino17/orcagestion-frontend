@@ -16,7 +16,7 @@ test("rechaza fechas invalidas y horas inexistentes durante el cambio de horario
 test("el formulario conserva solo los campos del ingreso simplificado y la fecha sin hora", () => {
     const formulario = crearFormularioTicketISO({ numero_ticket: "ISO-001", asunto_procedimiento: "Revision del procedimiento",
         problema: "Falta actualizar", estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega" });
-    expect(formulario).toEqual({ numero_ticket: "ISO-001", asunto_procedimiento: "Revision del procedimiento", problema: "Falta actualizar",
+    expect(formulario).toEqual({ numero_ticket: "ISO-001", problema: "Falta actualizar",
         estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega",
         fecha_cierre: "", responsable: "", observaciones: "" });
     expect(formatearFechaTicketISO("2026-07-14")).toBe("14/07/2026");

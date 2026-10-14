@@ -493,6 +493,13 @@
     color: #96690e;
 }
 
+.ticketiso-icon-button.delete,
+.ticketiso-button.danger {
+    border-color: #f2b9bd;
+    background: #fff1f2;
+    color: #bc2636;
+}
+
 .ticketiso-page button:disabled,
 .ticketiso-dialog button:disabled {
     opacity: 0.55;

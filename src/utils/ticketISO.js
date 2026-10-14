@@ -54,7 +54,6 @@ export const formatearFechaHoraTicketISO = (valor) => {
 export const crearFormularioTicketISO = (ticket) => ({
     numero_ticket: ticket?.numero_ticket || "",
     fecha_recepcion: fechaTicketISOParaInput(ticket ? ticket.fecha_recepcion : new Date()),
-    asunto_procedimiento: ticket?.asunto_procedimiento || "",
     origen: ticket?.origen || "",
     categoria_procedimiento: ticket?.categoria_procedimiento || "",
     problema: ticket?.problema || "",

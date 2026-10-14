@@ -1,11 +1,11 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { actualizarTicketISO, crearTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarTicketISO, crearTicketISO, eliminarTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
 import TicketISO from "./TicketISO";
 
 jest.mock("../api", () => ({
-    actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
+    actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), eliminarTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
     obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(),
 }));
 jest.mock("react-chartjs-2", () => ({ Chart: ({ data, options, ...props }) => <canvas {...props} /> }));
@@ -19,20 +19,68 @@ const ticket = {
 };
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    localStorage.clear();
     HTMLDialogElement.prototype.showModal = jest.fn(function () { this.setAttribute("open", ""); });
     HTMLDialogElement.prototype.close = jest.fn(function () { this.removeAttribute("open"); });
     obtenerTicketsISO.mockResolvedValue([]);
     obtenerCatalogosTicketISO.mockResolvedValue({ proximo_numero: "ISO-2026-001", responsables: [{ id: 2, nombre: "Jorge" }] });
     obtenerTicketISO.mockResolvedValue(ticket);
     crearTicketISO.mockResolvedValue(ticket);
-    actualizarTicketISO.mockResolvedValue({ ...ticket, asunto_procedimiento: "Procedimiento actualizado" });
+    actualizarTicketISO.mockResolvedValue({ ...ticket, problema: "Problema actualizado" });
+    eliminarTicketISO.mockResolvedValue({ message: "Ticket eliminado correctamente." });
 });
 
 const iniciar = async () => {
     render(<TicketISO />);
     await waitFor(() => expect(screen.getByRole("button", { name: /Nuevo ticket/ })).toBeEnabled());
 };
+
+const iniciarComoAdmin = async () => {
+    localStorage.setItem("token", `e30.${btoa(JSON.stringify({ rol: "admin" }))}.test`);
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    await iniciar();
+};
+
+test.each([null, "invalido", "encargado_tickets"])("no muestra Eliminar sin rol admin (%s)", async (rol) => {
+    if (rol) localStorage.setItem("token", rol === "invalido" ? rol : `e30.${btoa(JSON.stringify({ rol }))}.test`);
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    await iniciar();
+    expect(screen.getByRole("button", { name: "Editar ticket ISO-001" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Eliminar ticket ISO-001" })).not.toBeInTheDocument();
+});
+
+test("admin cancela la eliminacion sin borrar el ticket", async () => {
+    await iniciarComoAdmin();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar ticket ISO-001" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Esta accion no se puede deshacer");
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(eliminarTicketISO).not.toHaveBeenCalled();
+    expect(screen.getByRole("cell", { name: "ISO-001" })).toBeInTheDocument();
+});
+
+test("admin confirma la eliminacion y el ticket desaparece de la tabla y del resumen", async () => {
+    await iniciarComoAdmin();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar ticket ISO-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion" }));
+    expect(await screen.findByText("Ticket eliminado correctamente.")).toBeInTheDocument();
+    expect(eliminarTicketISO).toHaveBeenCalledTimes(1);
+    expect(eliminarTicketISO).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole("cell", { name: "ISO-001" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resumen mensual" }));
+    fireEvent.change(screen.getByLabelText("Mes a consultar"), { target: { value: "2026-10" } });
+    expect(screen.getByLabelText("Recibidos en el mes: 0")).toBeInTheDocument();
+});
+
+test("si el servidor rechaza la eliminacion conserva el ticket y muestra el error", async () => {
+    eliminarTicketISO.mockRejectedValue({ response: { data: { error: "Solo el admin puede eliminar tickets ISO." } } });
+    await iniciarComoAdmin();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar ticket ISO-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Solo el admin puede eliminar tickets ISO.");
+    expect(screen.getByRole("cell", { name: "ISO-001" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar eliminacion" })).toBeEnabled();
+});
 
 test("la navegacion conserva Tickets y Resumen mensual sin la pestana Soluciones", async () => {
     await iniciar();
@@ -47,22 +95,23 @@ const llenarNuevo = (manual = true) => {
     fireEvent.click(screen.getByRole("button", { name: /Nuevo ticket/ }));
     if (manual) fireEvent.change(screen.getByLabelText("Numero de ticket"), { target: { value: " iso-001 " } });
     fireEvent.change(screen.getByLabelText("Fecha de recepcion *"), { target: { value: "2026-10-14" } });
-    fireEvent.change(screen.getByLabelText("Asunto del procedimiento *"), { target: { value: "Revision del procedimiento" } });
     fireEvent.change(screen.getByLabelText("Descripcion del problema *"), { target: { value: "Falta actualizar el documento" } });
     fireEvent.change(screen.getByLabelText("Origen *"), { target: { value: "ticket_iso" } });
     fireEvent.change(screen.getByLabelText("Categoria de procedimiento *"), { target: { value: "soporte_posventa" } });
 };
 
-test("registra un numero manual y muestra el asunto en la tabla", async () => {
+test("registra un numero manual sin asunto y muestra el problema en la tabla", async () => {
     await iniciar();
     llenarNuevo();
     fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
     await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({
-        numero_ticket: "ISO-001", numero_automatico: false, fecha_recepcion: "2026-10-14", asunto_procedimiento: "Revision del procedimiento",
+        numero_ticket: "ISO-001", numero_automatico: false, fecha_recepcion: "2026-10-14", problema: "Falta actualizar el documento",
         estado: "pendiente", origen: "ticket_iso", categoria_procedimiento: "soporte_posventa",
     })));
     expect(await screen.findByRole("cell", { name: /ISO-001/ })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "Revision del procedimiento" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Falta actualizar el documento" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Asunto del procedimiento" })).not.toBeInTheDocument();
+    expect(crearTicketISO.mock.calls[0][0]).not.toHaveProperty("asunto_procedimiento");
 });
 
 test("edita un registro cargando primero sus datos guardados", async () => {
@@ -75,9 +124,11 @@ test("edita un registro cargando primero sus datos guardados", async () => {
     expect(screen.getByLabelText("Categoria de procedimiento *")).toHaveValue("soporte_posventa");
     expect(screen.getByLabelText("Responsable")).toHaveValue("Jorge");
     expect(screen.getByLabelText("Observaciones")).toHaveValue("Pendiente validar documento");
-    fireEvent.change(screen.getByLabelText("Asunto del procedimiento *"), { target: { value: "Procedimiento actualizado" } });
+    expect(screen.queryByLabelText("Asunto del procedimiento *")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Descripcion del problema *"), { target: { value: "Problema actualizado" } });
     fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
-    await waitFor(() => expect(actualizarTicketISO).toHaveBeenCalledWith(1, expect.objectContaining({ asunto_procedimiento: "Procedimiento actualizado" })));
+    await waitFor(() => expect(actualizarTicketISO).toHaveBeenCalledWith(1, expect.objectContaining({ problema: "Problema actualizado" })));
+    expect(actualizarTicketISO.mock.calls[0][1]).not.toHaveProperty("asunto_procedimiento");
     expect(await screen.findByText("Ticket actualizado correctamente.")).toBeInTheDocument();
     expect(crearTicketISO).not.toHaveBeenCalled();
 });
@@ -99,10 +150,11 @@ test("el detalle consulta el ticket y muestra sus datos", async () => {
     expect(obtenerTicketISO).toHaveBeenCalledWith(1);
 });
 
-test("el ingreso tiene diez campos, fecha sin hora y origen al lado del estado rojo", async () => {
+test("el ingreso tiene nueve campos sin asunto, fecha sin hora y origen al lado del estado rojo", async () => {
     await iniciar();
     llenarNuevo();
-    expect(screen.getByRole("dialog").querySelectorAll("input, select, textarea")).toHaveLength(10);
+    expect(screen.getByRole("dialog").querySelectorAll("input, select, textarea")).toHaveLength(9);
+    expect(screen.queryByLabelText("Asunto del procedimiento *")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Fecha de recepcion *")).toHaveAttribute("type", "date");
     expect(screen.getByLabelText("Estado *")).toHaveClass("pendiente");
     expect(screen.getByLabelText("Estado *").parentElement.nextElementSibling).toContainElement(screen.getByLabelText("Origen *"));

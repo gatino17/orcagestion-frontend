@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { actualizarTicketISO, crearTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarTicketISO, crearTicketISO, eliminarTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { jwtDecode } from "jwt-decode";
 import { CATEGORIAS_TICKET_ISO, ORIGENES_TICKET_ISO, crearFormularioTicketISO, fechaTicketISOParaInput, formatearFechaTicketISO, formatearFechaHoraTicketISO, normalizarBusquedaTicketISO, sugerirNumeroTicketISO } from "../utils/ticketISO";
 import ResumenMensualTicketISO from "../components/ResumenMensualTicketISO";
 import "./TicketISO.css";
@@ -53,6 +54,12 @@ const ModalTicketISO = ({ titulo, onCerrar, guardando, children }) => {
 };
 
 function TicketISO() {
+    const esAdmin = useMemo(() => {
+        try {
+            const token = localStorage.getItem("token");
+            return !!token && String(jwtDecode(token)?.rol || "").trim().toLowerCase() === "admin";
+        } catch { return false; }
+    }, []);
     const [seccion, setSeccion] = useState("tickets");
     const [mes, setMes] = useState(obtenerMesActual);
     const [tickets, setTickets] = useState([]);
@@ -93,7 +100,7 @@ function TicketISO() {
     const filtrados = useMemo(() => {
         const texto = normalizarBusquedaTicketISO(busqueda);
         return tickets.filter((ticket) => (!estadoFiltro || ticket.estado === estadoFiltro)
-            && (!texto || normalizarBusquedaTicketISO([ticket.numero_ticket, ticket.asunto_procedimiento,
+            && (!texto || normalizarBusquedaTicketISO([ticket.numero_ticket,
                 ticket.problema, ticket.responsable, ticket.observaciones, ORIGENES_TICKET_ISO[ticket.origen], CATEGORIAS_TICKET_ISO[ticket.categoria_procedimiento]].filter(Boolean).join(" ")).includes(texto)));
     }, [tickets, busqueda, estadoFiltro]);
     const paginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
@@ -160,6 +167,26 @@ function TicketISO() {
         } catch (err) { setErrorFormulario(err.response?.data?.error || "No se pudo guardar el ticket. Intenta nuevamente."); }
         finally { setGuardando(false); }
     };
+    const confirmarEliminacion = (ticket) => {
+        if (!esAdmin || guardando) return;
+        solicitudTicketRef.current += 1;
+        setDetalle(ticket);
+        setErrorFormulario("");
+        setModal("eliminar");
+    };
+    const eliminarTicket = async () => {
+        if (!esAdmin || guardando || !detalle) return;
+        setGuardando(true);
+        setErrorFormulario("");
+        try {
+            await eliminarTicketISO(detalle.id_ticket);
+            setTickets((actuales) => actuales.filter((ticket) => ticket.id_ticket !== detalle.id_ticket));
+            setMensaje("Ticket eliminado correctamente.");
+            setModal(null);
+        } catch (err) {
+            setErrorFormulario(err.response?.data?.error || "No se pudo eliminar el ticket. Intenta nuevamente.");
+        } finally { setGuardando(false); }
+    };
     const periodo = mes ? new Intl.DateTimeFormat("es-CL", {
         timeZone: "America/Santiago", month: "long", year: "numeric",
     }).format(new Date(`${mes}-01T12:00:00-03:00`)) : "Selecciona un mes";
@@ -198,29 +225,28 @@ function TicketISO() {
                             </div>
                         </div>
                         <div className="ticketiso-filters">
-                            <div><label htmlFor="ticketiso-search">Buscar ticket</label><input id="ticketiso-search" type="search" placeholder="Numero, asunto, responsable, observaciones, origen o categoria" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
+                            <div><label htmlFor="ticketiso-search">Buscar ticket</label><input id="ticketiso-search" type="search" placeholder="Numero, problema, responsable, observaciones, origen o categoria" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
                             <div><label htmlFor="ticketiso-filter-status">Estado</label><select id="ticketiso-filter-status" value={estadoFiltro} onChange={(event) => { setEstadoFiltro(event.target.value); setPagina(1); }}><option value="">Todos los estados</option>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                         </div>
                         <div className="ticketiso-table-scroll">
                             <table className="ticketiso-table ticketiso-records">
                                 <caption className="sr-only">Tickets ISO registrados</caption>
-                                <thead><tr>{["Ticket", "Recepcion", "Categoria de procedimiento", "Asunto del procedimiento", "Descripcion del problema", "Estado", "Origen", "Responsable", "Fecha de cierre", "Acciones"].map((nombre) => <th key={nombre} scope="col">{nombre}</th>)}</tr></thead>
+                                <thead><tr>{["Ticket", "Recepcion", "Categoria de procedimiento", "Descripcion del problema", "Estado", "Origen", "Responsable", "Fecha de cierre", "Acciones"].map((nombre) => <th key={nombre} scope="col">{nombre}</th>)}</tr></thead>
                                 <tbody>
-                                    {cargando ? <tr><td colSpan={10} className="ticketiso-table-empty"><i className="fas fa-spinner fa-spin" /> Cargando tickets...</td></tr> : visibles.map((ticket) => (
+                                    {cargando ? <tr><td colSpan={9} className="ticketiso-table-empty"><i className="fas fa-spinner fa-spin" /> Cargando tickets...</td></tr> : visibles.map((ticket) => (
                                         <tr key={ticket.id_ticket}>
                                             <td><strong>{ticket.numero_ticket}</strong></td>
                                             <td>{formatearFechaTicketISO(ticket.fecha_recepcion)}</td>
                                             <td>{CATEGORIAS_TICKET_ISO[ticket.categoria_procedimiento] || "Sin categoria registrada"}</td>
-                                            <td><strong>{ticket.asunto_procedimiento || "Sin asunto registrado"}</strong></td>
                                             <td><span className="ticketiso-problem-preview" title={ticket.problema}>{ticket.problema}</span></td>
                                             <td><EstadoTicket estado={ticket.estado} /></td>
                                             <td>{ORIGENES_TICKET_ISO[ticket.origen] || "Sin origen registrado"}</td>
                                             <td>{ticket.responsable || "Sin asignar"}</td>
                                             <td>{formatearFechaTicketISO(ticket.fecha_cierre)}{ticket.fecha_cierre && ticket.estado !== "resuelto" && <small>Prevista</small>}</td>
-                                            <td><div className="ticketiso-row-actions"><button type="button" className="ticketiso-icon-button" onClick={() => abrirTicket(ticket)} title="Ver detalle" aria-label={`Ver ticket ${ticket.numero_ticket}`}><i className="fas fa-eye" /></button><button type="button" className="ticketiso-icon-button edit" onClick={() => abrirTicket(ticket, "formulario")} title="Editar ticket" aria-label={`Editar ticket ${ticket.numero_ticket}`}><i className="fas fa-pen" /></button></div></td>
+                                            <td><div className="ticketiso-row-actions"><button type="button" className="ticketiso-icon-button" onClick={() => abrirTicket(ticket)} title="Ver detalle" aria-label={`Ver ticket ${ticket.numero_ticket}`}><i className="fas fa-eye" /></button><button type="button" className="ticketiso-icon-button edit" onClick={() => abrirTicket(ticket, "formulario")} title="Editar ticket" aria-label={`Editar ticket ${ticket.numero_ticket}`}><i className="fas fa-pen" /></button>{esAdmin && <button type="button" className="ticketiso-icon-button delete" onClick={() => confirmarEliminacion(ticket)} title="Eliminar ticket" aria-label={`Eliminar ticket ${ticket.numero_ticket}`}><i className="fas fa-trash-alt" /></button>}</div></td>
                                         </tr>
                                     ))}
-                                    {!cargando && !visibles.length && <tr><td colSpan={10} className="ticketiso-table-empty"><EstadoInicial icono="fas fa-envelope-open-text" titulo={error ? "No se pudieron cargar los tickets" : tickets.length ? "Sin resultados para estos filtros" : "Aun no hay tickets registrados"} descripcion={error ? "Usa Actualizar para volver a cargar la informacion." : tickets.length ? "Prueba otro asunto o estado." : "Presiona Nuevo ticket para registrar el primer reclamo recibido."} /></td></tr>}
+                                    {!cargando && !visibles.length && <tr><td colSpan={9} className="ticketiso-table-empty"><EstadoInicial icono="fas fa-envelope-open-text" titulo={error ? "No se pudieron cargar los tickets" : tickets.length ? "Sin resultados para estos filtros" : "Aun no hay tickets registrados"} descripcion={error ? "Usa Actualizar para volver a cargar la informacion." : tickets.length ? "Prueba otro texto o estado." : "Presiona Nuevo ticket para registrar el primer reclamo recibido."} /></td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -246,8 +272,14 @@ function TicketISO() {
                 <div><strong>Registro y seguimiento de Ticket ISO</strong><p>Consulta los tickets, compara sus totales mensuales y revisa el indicador de cierre en Resumen mensual.</p></div>
             </aside>
 
-            {modal && <ModalTicketISO key={modal} titulo={modal === "detalle" ? "Detalle del ticket" : editandoId ? "Editar ticket" : "Nuevo ticket"} onCerrar={cerrarModal} guardando={guardando}>
-                {modal === "formulario" ? <form className="ticketiso-form" onSubmit={guardarTicket}>
+            {modal && <ModalTicketISO key={modal} titulo={modal === "eliminar" ? "Eliminar ticket" : modal === "detalle" ? "Detalle del ticket" : editandoId ? "Editar ticket" : "Nuevo ticket"} onCerrar={cerrarModal} guardando={guardando}>
+                {modal === "eliminar" ? <>
+                    <div className="ticketiso-modal-body">
+                        {errorFormulario && <div className="ticketiso-alert error" role="alert">{errorFormulario}</div>}
+                        <p>Eliminar el ticket <strong>{detalle?.numero_ticket}</strong>? Esta accion no se puede deshacer y lo retirara de los resumenes e indicadores.</p>
+                    </div>
+                    <div className="ticketiso-modal-footer"><button type="button" className="ticketiso-button secondary" disabled={guardando} onClick={cerrarModal}>Cancelar</button><button type="button" className="ticketiso-button danger" disabled={guardando} onClick={eliminarTicket}><i className={`fas ${guardando ? "fa-spinner fa-spin" : "fa-trash-alt"}`} /> {guardando ? "Eliminando..." : "Confirmar eliminacion"}</button></div>
+                </> : modal === "formulario" ? <form className="ticketiso-form" onSubmit={guardarTicket}>
                     <div className="ticketiso-modal-body">
                         {errorFormulario && <div className="ticketiso-alert error" role="alert">{errorFormulario}</div>}
                         {cargandoTicket && <p role="status"><i className="fas fa-spinner fa-spin" /> Cargando ticket...</p>}
@@ -255,7 +287,6 @@ function TicketISO() {
                             <div className="ticketiso-field"><label htmlFor="ticketiso-number">Numero de ticket</label><input id="ticketiso-number" name="numero_ticket" value={formulario.numero_ticket} onChange={cambiarCampo} maxLength={120} /><small>{editandoId ? "Puedes cambiarlo o dejarlo vacio para mantener el numero actual." : "Numero automatico. Puedes borrarlo y escribir uno manual."}</small></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-received">Fecha de recepcion *</label><input id="ticketiso-received" type="date" name="fecha_recepcion" value={formulario.fecha_recepcion} onChange={cambiarCampo} required /></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-category">Categoria de procedimiento *</label><select id="ticketiso-category" name="categoria_procedimiento" value={formulario.categoria_procedimiento} onChange={cambiarCampo} required><option value="">Selecciona una categoria</option>{Object.entries(CATEGORIAS_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-                            <div className="ticketiso-field full"><label htmlFor="ticketiso-subject">Asunto del procedimiento *</label><input id="ticketiso-subject" name="asunto_procedimiento" value={formulario.asunto_procedimiento} onChange={cambiarCampo} required maxLength={250} placeholder="Indica el asunto del procedimiento." /></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-problem">Descripcion del problema *</label><textarea id="ticketiso-problem" name="problema" value={formulario.problema} onChange={cambiarCampo} required maxLength={10000} rows={3} placeholder="Describe el reclamo recibido por correo." /></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-state">Estado *</label><select id="ticketiso-state" className={`ticketiso-state-select ${formulario.estado}`} name="estado" value={formulario.estado} onChange={cambiarCampo}>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-origin">Origen *</label><select id="ticketiso-origin" name="origen" value={formulario.origen} onChange={cambiarCampo} required><option value="">Selecciona un origen</option>{Object.entries(ORIGENES_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
@@ -277,7 +308,6 @@ function TicketISO() {
                                 ["Recepcion", formatearFechaTicketISO(detalle.fecha_recepcion)], [detalle.estado === "resuelto" ? "Fecha de cierre" : "Fecha de cierre prevista", formatearFechaTicketISO(detalle.fecha_cierre)],
                                 ["Responsable", detalle.responsable || "Sin asignar"],
                             ].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong></div>)}
-                            <div className="full"><small>Asunto del procedimiento</small><p>{detalle.asunto_procedimiento || "Sin asunto registrado"}</p></div>
                             <div className="full"><small>Descripcion del problema</small><p>{detalle.problema}</p></div>
                             <div className="full"><small>Observaciones</small><p>{detalle.observaciones || "Sin observaciones registradas."}</p></div>
                             {detalle.solucion && <div className="full"><small>Solucion aplicada</small><p>{detalle.solucion}</p></div>}

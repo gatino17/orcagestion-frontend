@@ -1570,6 +1570,11 @@ export const actualizarTicketISO = async (id, payload) => {
     return response.data.ticket;
 };
 
+export const eliminarTicketISO = async (id) => {
+    const response = await axios.delete(`${BASE_URL}/ticket-iso/${id}`, authHeaders());
+    return response.data;
+};
+
 export const obtenerPlantillasDiagramas = async () => {
     const response = await axios.get(`${BASE_URL}/diagramas/plantillas`, authHeaders());
     return response.data;
