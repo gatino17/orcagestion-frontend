@@ -1429,7 +1429,7 @@ export const descargarDocumentoMantencionActas = async (id) => {
 // Crear soporte
 export const crearSoporte = async (soporteData) => {
     try {
-        const response = await axios.post(`${BASE_URL}/soporte/`, soporteData);
+        const response = await axios.post(`${BASE_URL}/soporte/`, soporteData, authHeaders());
         return response.data;
     } catch (error) {
         throw error;
@@ -1439,7 +1439,7 @@ export const crearSoporte = async (soporteData) => {
 // Obtener soportes
 export const obtenerSoportes = async () => {
     try {
-        const response = await axios.get(`${BASE_URL}/soporte/`);
+        const response = await axios.get(`${BASE_URL}/soporte/`, authHeaders());
         return response.data;
     } catch (error) {
         throw error;

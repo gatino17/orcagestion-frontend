@@ -251,6 +251,21 @@
     font-weight: 600;
 }
 
+.soporte-creador {
+    display: block;
+    margin-top: 0.4rem;
+    color: #64748b;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.soporte-creador strong {
+    display: block;
+    color: #29465d;
+    font-weight: 600;
+}
+
 .ismael-preview-item.device-failure-item {
     border-color: #fb923c;
     background: linear-gradient(135deg, rgba(255, 237, 213, 0.95), rgba(255, 247, 237, 0.98));

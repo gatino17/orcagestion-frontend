@@ -502,14 +502,15 @@ const Soporte = () => {
                     soporte.categoria_falla,
                     soporte.subcategoria_falla,
                     soporte.tipo,
-                    soporte.solucion
+                    soporte.solucion,
+                    esAdmin ? soporte.creado_por_nombre : null
                 ]
                     .filter(Boolean)
                     .join(" ")
             );
             return candidato.includes(nombreBusqueda);
         });
-    }, [soportesFiltrados, filtroNombre, fechaInicioBusqueda, fechaFinBusqueda]);
+    }, [soportesFiltrados, filtroNombre, fechaInicioBusqueda, fechaFinBusqueda, esAdmin]);
 
     // Métricas
     const totalSoportesGeneral = soportes.length;
@@ -1313,12 +1314,18 @@ const Soporte = () => {
             cell: (row) => (
                 <div>
                     {renderEstado(row.estado)}
+                    {esAdmin && !!String(row.creado_por_nombre || "").trim() && (
+                        <small className="soporte-creador">
+                            <i className="fas fa-user" aria-hidden="true" /> Creado por:
+                            <strong>{row.creado_por_nombre}</strong>
+                        </small>
+                    )}
                     {!!String(row.case_code || "").trim() && (
                         <small className="d-block text-muted mt-1">Case: {row.case_code}</small>
                     )}
                 </div>
             ),
-            width: "128px"
+            width: esAdmin ? "165px" : "128px"
         },
         { name: "Cierre", selector: (row) => (row.fecha_cierre ? formatearFecha(row.fecha_cierre) : "-"), sortable: true, width: "100px" },
         { name: "Solucion", selector: (row) => row.solucion || "-", sortable: true, wrap: true, minWidth: "235px" },
@@ -1827,7 +1834,9 @@ const Soporte = () => {
                             <input
                                 type="text"
                                 className="form-control"
-                                placeholder="Centro, cliente, problema, case code o categoria"
+                                placeholder={esAdmin
+                                    ? "Centro, cliente, problema, case code, categoria o creador"
+                                    : "Centro, cliente, problema, case code o categoria"}
                                 value={filtroNombre}
                                 onChange={(e) => setFiltroNombre(e.target.value)}
                             />
