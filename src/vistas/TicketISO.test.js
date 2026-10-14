@@ -97,7 +97,7 @@ test("el ingreso tiene diez campos, fecha sin hora y origen al lado del estado r
     expect(screen.getByLabelText("Fecha de recepcion *")).toHaveAttribute("type", "date");
     expect(screen.getByLabelText("Estado *")).toHaveClass("pendiente");
     expect(screen.getByLabelText("Estado *").parentElement.nextElementSibling).toContainElement(screen.getByLabelText("Origen *"));
-    expect(screen.getByLabelText("Fecha de cierre")).toBeDisabled();
+    expect(screen.getByLabelText("Fecha de cierre")).toBeEnabled();
     expect(screen.queryByLabelText("Cliente *")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Centro *")).not.toBeInTheDocument();
 });
@@ -201,5 +201,19 @@ test("reabrir un ticket limpia el cierre y un cierre anterior al ingreso se rech
     expect(crearTicketISO).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Estado *"), { target: { value: "en_seguimiento" } });
     expect(screen.getByLabelText("Fecha de cierre")).toHaveValue("");
-    expect(screen.getByLabelText("Fecha de cierre")).toBeDisabled();
+    expect(screen.getByLabelText("Fecha de cierre")).toBeEnabled();
+});
+
+test("permite guardar una fecha prevista estando pendiente y conservarla en seguimiento", async () => {
+    crearTicketISO.mockResolvedValue({ ...ticket, estado: "en_seguimiento", fecha_cierre: "2026-10-20T15:00:00Z" });
+    await iniciar();
+    llenarNuevo();
+    expect(screen.getByLabelText("Fecha de cierre")).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Fecha de cierre"), { target: { value: "2026-10-20" } });
+    fireEvent.change(screen.getByLabelText("Estado *"), { target: { value: "en_seguimiento" } });
+    expect(screen.getByLabelText("Fecha de cierre")).toHaveValue("2026-10-20");
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    expect(await screen.findByText("Ticket registrado correctamente.")).toBeInTheDocument();
+    expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({ estado: "en_seguimiento", fecha_cierre: "2026-10-20" }));
+    expect(screen.getByText("Prevista")).toBeInTheDocument();
 });

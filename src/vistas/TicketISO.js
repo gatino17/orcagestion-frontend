@@ -111,7 +111,7 @@ function TicketISO() {
         const { name, value } = event.target;
         if (name === "numero_ticket") setNumeroManual(true);
         setFormulario((actual) => ({ ...actual, [name]: value,
-            ...(name === "estado" ? { fecha_cierre: value === "resuelto" ? (actual.fecha_cierre || fechaTicketISOParaInput(new Date())) : "" } : {}),
+            ...(name === "estado" ? { fecha_cierre: value === "resuelto" ? (actual.fecha_cierre || fechaTicketISOParaInput(new Date())) : actual.estado === "resuelto" ? "" : actual.fecha_cierre } : {}),
         }));
         setErrorFormulario("");
     };
@@ -145,7 +145,7 @@ function TicketISO() {
             payload = { ...formulario, numero_ticket: formulario.numero_ticket.trim().toUpperCase(),
                 numero_automatico: !editandoId && (!numeroManual || !formulario.numero_ticket.trim()),
                 responsable_id: formulario.responsable_id ? Number(formulario.responsable_id) : null,
-                fecha_cierre: formulario.estado === "resuelto" ? formulario.fecha_cierre : null,
+                fecha_cierre: formulario.fecha_cierre || null,
             };
             if (formulario.estado === "resuelto" && !payload.fecha_cierre) throw new Error("Indica una fecha de cierre.");
             if (payload.fecha_cierre && payload.fecha_cierre < payload.fecha_recepcion) throw new Error("El cierre no puede ser anterior a la recepcion del ticket.");
@@ -218,7 +218,7 @@ function TicketISO() {
                                             <td><EstadoTicket estado={ticket.estado} /></td>
                                             <td>{ORIGENES_TICKET_ISO[ticket.origen] || "Sin origen registrado"}</td>
                                             <td>{ticket.responsable || "Sin asignar"}</td>
-                                            <td>{formatearFechaTicketISO(ticket.fecha_cierre)}</td>
+                                            <td>{formatearFechaTicketISO(ticket.fecha_cierre)}{ticket.fecha_cierre && ticket.estado !== "resuelto" && <small>Prevista</small>}</td>
                                             <td><div className="ticketiso-row-actions"><button type="button" className="ticketiso-icon-button" onClick={() => abrirTicket(ticket)} title="Ver detalle" aria-label={`Ver ticket ${ticket.numero_ticket}`}><i className="fas fa-eye" /></button><button type="button" className="ticketiso-icon-button edit" onClick={() => abrirTicket(ticket, "formulario")} title="Editar ticket" aria-label={`Editar ticket ${ticket.numero_ticket}`}><i className="fas fa-pen" /></button></div></td>
                                         </tr>
                                     ))}
@@ -272,7 +272,7 @@ function TicketISO() {
                             <div className="ticketiso-field"><label htmlFor="ticketiso-state">Estado *</label><select id="ticketiso-state" className={`ticketiso-state-select ${formulario.estado}`} name="estado" value={formulario.estado} onChange={cambiarCampo}>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-origin">Origen *</label><select id="ticketiso-origin" name="origen" value={formulario.origen} onChange={cambiarCampo} required><option value="">Selecciona un origen</option>{Object.entries(ORIGENES_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-owner">Responsable</label><select id="ticketiso-owner" name="responsable_id" value={formulario.responsable_id} onChange={cambiarCampo}><option value="">Sin asignar</option>{(catalogos?.responsables || []).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}{formulario.responsable_id && !(catalogos?.responsables || []).some((item) => String(item.id) === formulario.responsable_id) && <option value={formulario.responsable_id}>{detalle?.responsable || "Responsable registrado"}</option>}</select></div>
-                            <div className="ticketiso-field"><label htmlFor="ticketiso-closed">Fecha de cierre{formulario.estado === "resuelto" ? " *" : ""}</label><input id="ticketiso-closed" type="date" name="fecha_cierre" value={formulario.fecha_cierre} onChange={cambiarCampo} disabled={formulario.estado !== "resuelto"} required={formulario.estado === "resuelto"} min={formulario.fecha_recepcion} /><small>Se habilita al marcar el ticket como resuelto.</small></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-closed">Fecha de cierre{formulario.estado === "resuelto" ? " *" : ""}</label><input id="ticketiso-closed" type="date" name="fecha_cierre" value={formulario.fecha_cierre} onChange={cambiarCampo} required={formulario.estado === "resuelto"} min={formulario.fecha_recepcion} /><small>{formulario.estado === "resuelto" ? "Fecha real de cierre del ticket." : "Opcional: indica una fecha prevista de cierre, sin cambiar el estado."}</small></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-notes">Observaciones</label><textarea id="ticketiso-notes" name="observaciones" value={formulario.observaciones} onChange={cambiarCampo} maxLength={10000} rows={3} placeholder="Comentarios, acciones realizadas o notas de seguimiento." /></div>
                         </fieldset>
                     </div>
@@ -286,7 +286,7 @@ function TicketISO() {
                                 ["Numero de ticket", detalle.numero_ticket], ["Estado", <EstadoTicket estado={detalle.estado} />],
                                 ["Origen", ORIGENES_TICKET_ISO[detalle.origen] || "Sin origen registrado"],
                                 ["Categoria de procedimiento", CATEGORIAS_TICKET_ISO[detalle.categoria_procedimiento] || "Sin categoria registrada"],
-                                ["Recepcion", formatearFechaTicketISO(detalle.fecha_recepcion)], ["Fecha de cierre", formatearFechaTicketISO(detalle.fecha_cierre)],
+                                ["Recepcion", formatearFechaTicketISO(detalle.fecha_recepcion)], [detalle.estado === "resuelto" ? "Fecha de cierre" : "Fecha de cierre prevista", formatearFechaTicketISO(detalle.fecha_cierre)],
                                 ["Responsable", detalle.responsable || "Sin asignar"],
                             ].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong></div>)}
                             <div className="full"><small>Asunto del procedimiento</small><p>{detalle.asunto_procedimiento || "Sin asunto registrado"}</p></div>
