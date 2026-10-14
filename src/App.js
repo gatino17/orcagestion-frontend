@@ -14,6 +14,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import Login from "./vistas/Login";
 import Home from "./vistas/Home";
 import Soporte from "./vistas/Soporte";
+import TicketISO from "./vistas/TicketISO";
 import SoporteDetalle from "./vistas/SoporteDetalle";
 import MantencionPreventiva from "./vistas/MantencionPreventiva";
 import InformesCentros from "./vistas/InformesCentros";
@@ -39,6 +40,7 @@ const PAGE_ROUTE_MAP = {
     inicio: "/",
     consulta_centro: "/consulta-centro",
     soporte: "/soporte",
+    ticket_iso: "/ticket-iso",
     soporte_detalle: "/soporte/detalle",
     mantencion_preventiva: "/mantencion-preventiva",
     informes_centros: "/informes-centros",
@@ -68,6 +70,7 @@ const PAGE_PRIORITY = [
     "calendario",
     "datos_ip",
     "soporte",
+    "ticket_iso",
     "informes_centros",
     "bodega_retiros",
     "inventario_bodega",
@@ -256,6 +259,14 @@ function App() {
                             element={
                               <PrivateRoute requiredPage="soporte_detalle" allowedRoles={['admin', 'soporte', 'operaciones']}>
                                     <SoporteDetalle />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/ticket-iso"
+                            element={
+                                <PrivateRoute requiredPage="ticket_iso" allowedRoles={['admin']}>
+                                    <TicketISO />
                                 </PrivateRoute>
                             }
                         />

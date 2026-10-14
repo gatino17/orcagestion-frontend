@@ -1,0 +1,724 @@
+.ticketiso-page {
+    --ticketiso-navy: #0b284a;
+    --ticketiso-blue: #0f67ae;
+    --ticketiso-line: #d9e6ef;
+    color: #183047;
+    padding-bottom: 1.5rem;
+}
+
+.ticketiso-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem 1.4rem;
+    border-radius: 18px;
+    color: #fff;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        radial-gradient(ellipse at 90% 15%, rgba(20, 184, 208, 0.32), transparent 45%),
+        linear-gradient(125deg, #081b30, #103d70 70%, #0b6b88);
+    background-size: 32px 100%, auto, auto;
+    box-shadow: 0 14px 30px rgba(15, 42, 73, 0.13);
+}
+
+.ticketiso-eyebrow,
+.ticketiso-section-label {
+    color: #7fe0ee;
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.ticketiso-hero h2 {
+    margin: 0.2rem 0;
+    font-size: 1.8rem;
+    font-weight: 800;
+}
+
+.ticketiso-hero p {
+    max-width: 650px;
+    margin: 0;
+    color: #d6e7f3;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.ticketiso-stage {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #e9f9ff;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.ticketiso-navigation {
+    display: flex;
+    gap: 0.45rem;
+    margin: 1rem 0;
+    padding: 0.35rem;
+    border: 1px solid var(--ticketiso-line);
+    border-radius: 13px;
+    background: #eaf1f6;
+}
+
+.ticketiso-navigation button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0.55rem 1rem;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #5c7185;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ticketiso-navigation button.active {
+    background: #fff;
+    color: var(--ticketiso-blue);
+    box-shadow: 0 3px 10px rgba(30, 65, 95, 0.1);
+}
+
+.ticketiso-navigation button:focus-visible,
+.ticketiso-month input:focus-visible {
+    outline: 2px solid #0ea5e9;
+    outline-offset: 2px;
+}
+
+.ticketiso-panel {
+    padding: 1.1rem;
+    border: 1px solid var(--ticketiso-line);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 10px 25px rgba(15, 42, 73, 0.05);
+}
+
+.ticketiso-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.ticketiso-section-label {
+    color: #57809a;
+}
+
+.ticketiso-panel-heading h3 {
+    margin: 0.25rem 0 0;
+    color: var(--ticketiso-navy);
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.ticketiso-panel-note {
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    background: #edf6fc;
+    color: #316b8e;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.ticketiso-table-scroll {
+    overflow-x: auto;
+    border: 1px solid #e1eaf1;
+    border-radius: 12px;
+}
+
+.ticketiso-table {
+    width: 100%;
+    min-width: 650px;
+    border-collapse: collapse;
+}
+
+.ticketiso-table th {
+    padding: 0.75rem;
+    border-bottom: 1px solid #dce8f0;
+    background: #f2f7fb;
+    color: #45637c;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ticketiso-table td {
+    padding: 0;
+}
+
+.ticketiso-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 250px;
+    padding: 2rem 1.2rem;
+    border-radius: 12px;
+    background:
+        radial-gradient(ellipse at 50% 0, rgba(215, 237, 248, 0.4), transparent 65%),
+        #fbfdff;
+    text-align: center;
+}
+
+.ticketiso-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 55px;
+    height: 55px;
+    margin-bottom: 0.85rem;
+    border: 1px solid #cfe5f3;
+    border-radius: 16px;
+    background: #e8f4fb;
+    color: var(--ticketiso-blue);
+    font-size: 1.25rem;
+}
+
+.ticketiso-empty h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.ticketiso-empty p {
+    max-width: 520px;
+    margin: 0;
+    color: #6e8295;
+    font-size: 0.82rem;
+    line-height: 1.65;
+}
+
+.ticketiso-month label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.ticketiso-month input {
+    min-height: 38px;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid #cddce6;
+    border-radius: 9px;
+    background: #fff;
+    color: #29465d;
+    font-size: 0.8rem;
+}
+
+.ticketiso-period {
+    margin-bottom: 0.7rem;
+    color: #64748b;
+    font-size: 0.82rem;
+    text-transform: capitalize;
+}
+
+.ticketiso-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+}
+
+.ticketiso-metric {
+    padding: 0.85rem;
+    border: 1px solid var(--ticketiso-line);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fff, #f7fafc);
+}
+
+.ticketiso-metric > span {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.ticketiso-metric i {
+    margin-right: 0.2rem;
+}
+
+.ticketiso-metric strong {
+    display: block;
+    margin: 0.3rem 0;
+    font-size: 1.7rem;
+    line-height: 1;
+}
+
+.ticketiso-metric small {
+    display: block;
+    color: #8092a2;
+    font-size: 0.66rem;
+}
+
+.ticketiso-metric.blue strong { color: #0f67ae; }
+.ticketiso-metric.red strong { color: #dc3545; }
+.ticketiso-metric.amber strong { color: #b57609; }
+.ticketiso-metric.green strong { color: #18996c; }
+
+.ticketiso-chart-panel {
+    padding: 1rem;
+    border: 1px solid var(--ticketiso-line);
+    border-radius: 14px;
+    background: linear-gradient(160deg, #f5faff, #fff 45%);
+}
+
+.ticketiso-chart-note {
+    color: #64748b;
+    font-size: 0.76rem;
+    line-height: 1.6;
+    margin: 0 0 0.9rem;
+}
+
+.ticketiso-chart-canvas {
+    position: relative;
+    height: 340px;
+    min-width: 0;
+    margin-bottom: 1rem;
+}
+
+.ticketiso-chart-message {
+    padding: 2rem 0.5rem;
+    color: #64748b;
+    text-align: center;
+}
+
+.ticketiso-summary-table th,
+.ticketiso-summary-table td {
+    padding: 0.55rem 0.75rem;
+    text-align: center;
+    border-bottom: 1px solid #e5edf4;
+    font-size: 0.75rem;
+}
+
+.ticketiso-summary-table th:first-child { text-align: left; }
+.ticketiso-summary-table tbody th { background: transparent; }
+.ticketiso-summary-table tr.selected { background: #eaf5fd; }
+.ticketiso-summary-table .pendiente { color: #bd2b3c; font-weight: 700; }
+.ticketiso-summary-table .seguimiento { color: #92620c; font-weight: 700; }
+.ticketiso-summary-table .resuelto { color: #15704a; font-weight: 700; }
+.ticketiso-summary-table tfoot { color: #183047; background: #f2f7fb; font-weight: 800; }
+.ticketiso-summary-table button {
+    padding: 0.25rem;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ticketiso-blue);
+    font-weight: 700;
+    cursor: pointer;
+}
+.ticketiso-summary-table button:focus-visible { outline: 2px solid #0ea5e9; outline-offset: 2px; }
+
+.ticketiso-next-step {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
+    margin-top: 1rem;
+    border: 1px solid #e9d9b5;
+    border-radius: 13px;
+    background: linear-gradient(110deg, #fff9ec, #fffcf5);
+}
+
+.ticketiso-next-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: #f7e6bf;
+    color: #8c651a;
+}
+
+.ticketiso-next-step strong {
+    color: #795822;
+    font-size: 0.78rem;
+}
+
+.ticketiso-next-step p {
+    margin: 0.15rem 0 0;
+    color: #958065;
+    font-size: 0.73rem;
+    line-height: 1.5;
+}
+
+.ticketiso-toolbar-actions,
+.ticketiso-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.ticketiso-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #cddce6;
+    border-radius: 9px;
+    background: #fff;
+    color: #315c7c;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ticketiso-button.primary {
+    border-color: var(--ticketiso-blue);
+    background: var(--ticketiso-blue);
+    color: #fff;
+}
+
+.ticketiso-icon-button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border: 1px solid #c9deec;
+    border-radius: 9px;
+    background: #f1f8fd;
+    color: #0f67ae;
+    cursor: pointer;
+}
+
+.ticketiso-icon-button.edit {
+    border-color: #e9d6a5;
+    background: #fff7e5;
+    color: #96690e;
+}
+
+.ticketiso-page button:disabled,
+.ticketiso-dialog button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ticketiso-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.75rem 0.9rem;
+    margin: 0.8rem 0;
+    border: 1px solid #b9dfce;
+    border-radius: 11px;
+    color: #166b46;
+    background: #eefaf4;
+    font-size: 0.8rem;
+}
+
+.ticketiso-alert.error {
+    border-color: #f1c6c6;
+    color: #a23131;
+    background: #fff3f3;
+}
+
+.ticketiso-alert button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.ticketiso-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.ticketiso-filters label,
+.ticketiso-field label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #526b80;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.ticketiso-filters input,
+.ticketiso-filters select,
+.ticketiso-field input,
+.ticketiso-field select,
+.ticketiso-field textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #cddce6;
+    border-radius: 9px;
+    background: #fff;
+    color: #29465d;
+    font-size: 0.82rem;
+}
+
+.ticketiso-field textarea {
+    resize: vertical;
+}
+
+.ticketiso-field input[readonly] {
+    border-color: #deebf2;
+    background: #f3f8fb;
+    color: #57768d;
+}
+
+.ticketiso-field small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #8092a2;
+    font-size: 0.68rem;
+}
+
+.ticketiso-table.ticketiso-records {
+    min-width: 1200px;
+}
+
+.ticketiso-records th,
+.ticketiso-records td {
+    text-align: left;
+}
+
+.ticketiso-table.ticketiso-records td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e8eff4;
+    color: #3f5a70;
+    font-size: 0.77rem;
+    vertical-align: middle;
+}
+
+.ticketiso-records td strong,
+.ticketiso-records td small {
+    display: block;
+}
+
+.ticketiso-records td small {
+    margin-top: 0.2rem;
+    color: #7b8fa0;
+    font-size: 0.69rem;
+}
+
+.ticketiso-records .ticketiso-problem-preview {
+    display: -webkit-box;
+    max-width: 240px;
+    min-width: 140px;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+}
+
+.ticketiso-records th:last-child,
+.ticketiso-records td:last-child:not([colspan]) {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: #fff;
+    box-shadow: -3px 0 8px rgba(30, 65, 95, 0.06);
+}
+
+.ticketiso-table.ticketiso-records .ticketiso-table-empty {
+    padding: 0;
+    text-align: center;
+}
+
+.ticketiso-status,
+.ticketiso-priority {
+    display: inline-flex;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ticketiso-status.pendiente,
+.ticketiso-priority.alta { color: #b7313b; background: #fee6e9; }
+.ticketiso-field .ticketiso-state-select.pendiente { color: #b7313b; background: #fee6e9; border-color: #efacb4; font-weight: 700; }
+.ticketiso-field .ticketiso-state-select.en_seguimiento { color: #805913; background: #fff0bf; }
+.ticketiso-field .ticketiso-state-select.resuelto { color: #15704a; background: #ddf8e9; }
+.ticketiso-status.en_seguimiento,
+.ticketiso-priority.media { color: #805913; background: #fff0bf; }
+.ticketiso-status.resuelto,
+.ticketiso-priority.baja { color: #15704a; background: #ddf8e9; }
+
+.ticketiso-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    padding-top: 1rem;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.ticketiso-pagination label {
+    margin: 0;
+}
+
+.ticketiso-pagination select {
+    margin-left: 0.4rem;
+    padding: 0.35rem;
+    border: 1px solid #cddce6;
+    border-radius: 8px;
+    background: #fff;
+    color: #29465d;
+}
+
+.ticketiso-pagination > div {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.ticketiso-dialog {
+    width: min(800px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    margin: auto;
+    padding: 0;
+    border: 1px solid #d9e6ef;
+    border-radius: 18px;
+    background: #fff;
+    color: #183047;
+    box-shadow: 0 25px 70px rgba(8, 28, 48, 0.3);
+    overflow: hidden;
+}
+
+.ticketiso-dialog[open],
+.ticketiso-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ticketiso-dialog::backdrop {
+    background: rgba(5, 18, 33, 0.65);
+    backdrop-filter: blur(3px);
+}
+
+.ticketiso-modal-heading,
+.ticketiso-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex: 0 0 auto;
+    padding: 1rem 1.2rem;
+    background: #f5f9fc;
+}
+
+.ticketiso-modal-heading {
+    border-bottom: 1px solid #d9e6ef;
+}
+
+.ticketiso-modal-heading h3 {
+    margin: 0.2rem 0 0;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.ticketiso-form {
+    flex: 1 1 auto;
+}
+
+.ticketiso-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 1.2rem;
+    overflow-y: auto;
+}
+
+.ticketiso-modal-footer {
+    justify-content: flex-end;
+    border-top: 1px solid #d9e6ef;
+}
+
+.ticketiso-form-grid,
+.ticketiso-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.ticketiso-form-grid .full,
+.ticketiso-detail-grid .full {
+    grid-column: 1 / -1;
+}
+
+.ticketiso-detail-grid > div {
+    padding: 0.75rem;
+    border: 1px solid #e1eaf1;
+    border-radius: 10px;
+    background: #fbfdff;
+    overflow-wrap: anywhere;
+}
+
+.ticketiso-detail-grid small {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: #758b9d;
+    font-size: 0.68rem;
+}
+
+.ticketiso-detail-grid strong {
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.ticketiso-detail-grid p {
+    margin: 0;
+    color: #3f5a70;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.ticketiso-button:focus-visible,
+.ticketiso-icon-button:focus-visible,
+.ticketiso-filters :focus-visible,
+.ticketiso-field :focus-visible {
+    outline: 2px solid #0ea5e9;
+    outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+    .ticketiso-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+    .ticketiso-chart-panel { padding: 0.7rem; }
+    .ticketiso-chart-canvas { height: 290px; }
+    .ticketiso-table.ticketiso-summary-table { min-width: 570px; }
+    .ticketiso-hero { align-items: flex-start; flex-direction: column; padding: 1rem; }
+    .ticketiso-navigation { flex-wrap: wrap; }
+    .ticketiso-navigation button { flex: 1 1 auto; padding: 0.5rem 0.6rem; font-size: 0.73rem; }
+    .ticketiso-panel { padding: 0.8rem; }
+    .ticketiso-empty { padding: 1.5rem 1rem; }
+    .ticketiso-table { min-width: 0; }
+    .ticketiso-table th { white-space: normal; font-size: 0.65rem; padding: 0.5rem 0.3rem; }
+    .ticketiso-next-step { align-items: flex-start; }
+    .ticketiso-filters { grid-template-columns: 1fr; }
+    .ticketiso-form-grid, .ticketiso-detail-grid { grid-template-columns: 1fr; }
+    .ticketiso-modal-body, .ticketiso-modal-heading, .ticketiso-modal-footer { padding: 0.9rem; }
+    .ticketiso-dialog { width: calc(100vw - 1rem); max-height: calc(100vh - 1rem); }
+}

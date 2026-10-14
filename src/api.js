@@ -1545,6 +1545,31 @@ const authHeaders = () => {
     return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 };
 
+export const obtenerTicketsISO = async () => {
+    const response = await axios.get(`${BASE_URL}/ticket-iso/`, authHeaders());
+    return response.data.tickets;
+};
+
+export const obtenerCatalogosTicketISO = async () => {
+    const response = await axios.get(`${BASE_URL}/ticket-iso/catalogos`, authHeaders());
+    return response.data;
+};
+
+export const obtenerTicketISO = async (id) => {
+    const response = await axios.get(`${BASE_URL}/ticket-iso/${id}`, authHeaders());
+    return response.data.ticket;
+};
+
+export const crearTicketISO = async (payload) => {
+    const response = await axios.post(`${BASE_URL}/ticket-iso/`, payload, authHeaders());
+    return response.data.ticket;
+};
+
+export const actualizarTicketISO = async (id, payload) => {
+    const response = await axios.put(`${BASE_URL}/ticket-iso/${id}`, payload, authHeaders());
+    return response.data.ticket;
+};
+
 export const obtenerPlantillasDiagramas = async () => {
     const response = await axios.get(`${BASE_URL}/diagramas/plantillas`, authHeaders());
     return response.data;

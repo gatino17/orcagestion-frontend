@@ -7,6 +7,7 @@ const navItems = [
   { section: "GENERAL", label: "Inicio", to: "/", pageKey: "inicio", icon: "fas fa-home", roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"] },
   { section: "GENERAL", label: "Consulta de centros", to: "/consulta-centro", pageKey: "consulta_centro", icon: "fas fa-search", roles: ["admin", "tecnico", "operaciones", "soporte", "finanzas"] },
   { section: "OPERACIONES", label: "Soporte", to: "/soporte", pageKey: "soporte", icon: "fas fa-headset", roles: ["admin", "soporte", "operaciones"] },
+  { section: "OPERACIONES", label: "Ticket ISO", to: "/ticket-iso", pageKey: "ticket_iso", icon: "fas fa-ticket-alt", roles: ["admin"] },
   { section: "OPERACIONES", label: "Detalle de soporte", to: "/soporte/detalle", pageKey: "soporte_detalle", icon: "fas fa-clipboard-list", roles: ["admin", "soporte", "operaciones"] },
   { section: "OPERACIONES", label: "Mantencion preventiva", to: "/mantencion-preventiva", pageKey: "mantencion_preventiva", icon: "fas fa-clipboard-check", roles: ["admin", "soporte", "operaciones"] },
   { section: "OPERACIONES", label: "Informes centros", to: "/informes-centros", pageKey: "informes_centros", icon: "fas fa-chart-bar", roles: ["admin", "soporte", "operaciones"] },
