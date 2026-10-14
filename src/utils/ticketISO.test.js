@@ -1,4 +1,4 @@
-import { agruparEstadoTicketISO, crearFormularioTicketISO, fechaHoraTicketISOParaAPI, fechaHoraTicketISOParaInput, formatearFechaTicketISO, resumirTicketsISO, sugerirNumeroTicketISO } from "./ticketISO";
+import { agruparEstadoTicketISO, calcularIndicadorTrimestralTicketISO, clasificarIndicadorTicketISO, crearFormularioTicketISO, fechaHoraTicketISOParaAPI, fechaHoraTicketISOParaInput, formatearFechaTicketISO, resumirTicketsISO, sugerirNumeroTicketISO } from "./ticketISO";
 
 test("interpreta fechas de Chile en verano e invierno y conserva la hora al editar", () => {
     expect(fechaHoraTicketISOParaAPI("2026-01-14T09:30")).toBe("2026-01-14T12:30:00.000Z");
@@ -18,7 +18,7 @@ test("el formulario conserva solo los campos del ingreso simplificado y la fecha
         problema: "Falta actualizar", estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega" });
     expect(formulario).toEqual({ numero_ticket: "ISO-001", asunto_procedimiento: "Revision del procedimiento", problema: "Falta actualizar",
         estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega",
-        fecha_cierre: "", responsable_id: "", observaciones: "" });
+        fecha_cierre: "", responsable: "", observaciones: "" });
     expect(formatearFechaTicketISO("2026-07-14")).toBe("14/07/2026");
     expect(crearFormularioTicketISO().numero_ticket).toBe("");
     expect(formatearFechaTicketISO(undefined)).toBe("-");
@@ -26,9 +26,9 @@ test("el formulario conserva solo los campos del ingreso simplificado y la fecha
 });
 
 test("el formulario conserva fecha de cierre, responsable y observaciones al editar", () => {
-    expect(crearFormularioTicketISO({ fecha_recepcion: "2026-10-14", estado: "resuelto", responsable_id: 3,
+    expect(crearFormularioTicketISO({ fecha_recepcion: "2026-10-14", estado: "resuelto", responsable_id: 3, responsable: "Responsable externo",
         observaciones: "Procedimiento actualizado", fecha_cierre: "2026-10-15T01:30:00Z" }))
-        .toMatchObject({ fecha_cierre: "2026-10-14", responsable_id: "3", observaciones: "Procedimiento actualizado" });
+        .toMatchObject({ fecha_cierre: "2026-10-14", responsable: "Responsable externo", observaciones: "Procedimiento actualizado" });
 });
 
 test("sugiere un valor ISO real aunque el backend no entregue el proximo numero", () => {
@@ -75,4 +75,64 @@ test("los estados equivalentes se agrupan y los desconocidos no se ocultan del t
     expect(agruparEstadoTicketISO("resuelta")).toBe("resuelto");
     expect(resumirTicketsISO([{ fecha_recepcion: "2026-01-01", estado: "otro" }], "2026").totales).toMatchObject({ total: 1, sin_estado: 1 });
     expect(resumirTicketsISO([], "2026").totales.total).toBe(0);
+});
+
+test("el indicador reproduce la formula del ejemplo sin valores inventados", () => {
+    const tickets = [
+        ...Array.from({ length: 8 }, () => ({ fecha_recepcion: "2026-06-20", estado: "resuelto", fecha_cierre: "2026-07-20" })),
+        ...Array.from({ length: 2 }, () => ({ fecha_recepcion: "2026-07-25", estado: "resuelto", fecha_cierre: "2026-09-29" })),
+        { fecha_recepcion: "2026-09-30", estado: "pendiente", fecha_cierre: "2026-10-20" },
+    ];
+    const indicador = calcularIndicadorTrimestralTicketISO(tickets, "2026-09", new Date("2026-10-14T12:00:00Z"));
+    expect(indicador).toMatchObject({ trimestre: 3, inicio: "2026-07-01", fin: "2026-09-30", corte: "2026-09-30",
+        abiertosInicio: 8, recibidos: 3, cerrados: 10, base: 11, incompletos: 0, clasificacion: "bueno", fase: "finalizado" });
+    expect(indicador.porcentaje).toBeCloseTo(90.9091, 4);
+});
+
+test("el indicador respeta limites del trimestre y no considera cierres previstos", () => {
+    const indicador = calcularIndicadorTrimestralTicketISO([
+        { fecha_recepcion: "2026-06-01", estado: "resuelto", fecha_cierre: "2026-06-30" },
+        { fecha_recepcion: "2026-06-01", estado: "resuelto", fecha_cierre: "2026-07-01" },
+        { fecha_recepcion: "2026-06-02", estado: "en_seguimiento", fecha_cierre: "2026-07-05" },
+        { fecha_recepcion: "2026-07-01", estado: "resuelto", fecha_cierre: "2026-09-30" },
+        { fecha_recepcion: "2026-08-01", estado: "resuelto", fecha_cierre: "2026-10-01" },
+        { fecha_recepcion: "2026-10-01", estado: "pendiente" },
+    ], "2026-09", new Date("2026-10-14T12:00:00Z"));
+    expect(indicador).toMatchObject({ abiertosInicio: 2, recibidos: 2, cerrados: 2, base: 4, porcentaje: 50, clasificacion: "malo" });
+});
+
+test("el indicador no adelanta datos futuros y distingue una medicion parcial", () => {
+    const tickets = [
+        { fecha_recepcion: "2026-10-01", estado: "resuelto", fecha_cierre: "2026-10-14" },
+        { fecha_recepcion: "2026-10-02", estado: "resuelto", fecha_cierre: "2026-11-15" },
+        { fecha_recepcion: "2026-12-01", estado: "pendiente" },
+    ];
+    const ahora = new Date("2026-10-14T12:00:00Z");
+    expect(calcularIndicadorTrimestralTicketISO(tickets, "2026-10", ahora)).toMatchObject({ fase: "en_curso", corte: "2026-10-14", recibidos: 2, cerrados: 1, porcentaje: 50 });
+    expect(calcularIndicadorTrimestralTicketISO(tickets, "2027-01", ahora)).toMatchObject({ fase: "futuro", corte: null, base: 0, porcentaje: null });
+    expect(calcularIndicadorTrimestralTicketISO([], "2026-01", ahora)).toMatchObject({ porcentaje: null, clasificacion: "sin_datos" });
+});
+
+test("el indicador clasifica los limites exactos y no asigna una nota con datos incompletos", () => {
+    expect(clasificarIndicadorTicketISO(74.99)).toBe("malo");
+    expect(clasificarIndicadorTicketISO(75)).toBe("regular");
+    expect(clasificarIndicadorTicketISO(85)).toBe("regular");
+    expect(clasificarIndicadorTicketISO(85.01)).toBe("bueno");
+    const indicador = calcularIndicadorTrimestralTicketISO([{ fecha_recepcion: "2026-07-01", estado: "resuelto" }], "2026-09", new Date("2026-10-14T12:00:00Z"));
+    expect(indicador).toMatchObject({ porcentaje: null, incompletos: 1, clasificacion: "incompleto" });
+});
+
+test("el indicador cambia el corte y las cifras entre meses del mismo trimestre", () => {
+    const tickets = [
+        { fecha_recepcion: "2026-06-20", estado: "resuelto", fecha_cierre: "2026-08-20" },
+        { fecha_recepcion: "2026-07-10", estado: "resuelto", fecha_cierre: "2026-07-20" },
+        { fecha_recepcion: "2026-08-10", estado: "pendiente" },
+    ];
+    const ahora = new Date("2026-10-14T12:00:00Z");
+    expect(calcularIndicadorTrimestralTicketISO(tickets, "2026-07", ahora)).toMatchObject({
+        corte: "2026-07-31", abiertosInicio: 1, recibidos: 1, cerrados: 1, porcentaje: 50, fase: "en_curso",
+    });
+    const agosto = calcularIndicadorTrimestralTicketISO(tickets, "2026-08", ahora);
+    expect(agosto).toMatchObject({ corte: "2026-08-31", abiertosInicio: 1, recibidos: 2, cerrados: 2, fase: "en_curso" });
+    expect(agosto.porcentaje).toBeCloseTo(66.67, 2);
 });

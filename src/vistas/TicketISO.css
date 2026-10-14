@@ -268,6 +268,96 @@
 .ticketiso-metric.amber strong { color: #b57609; }
 .ticketiso-metric.green strong { color: #18996c; }
 
+.ticketiso-summary-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr);
+    align-items: stretch;
+    gap: 1rem;
+}
+.ticketiso-summary-panels > * { min-width: 0; }
+.ticketiso-summary-panels > .ticketiso-indicator { margin-bottom: 0; }
+.ticketiso-summary-panels > .ticketiso-chart-panel { display: flex; flex-direction: column; }
+.ticketiso-summary-panels .ticketiso-chart-canvas { flex: 1; min-height: 340px; margin-bottom: 0.75rem; }
+.ticketiso-summary-panels .ticketiso-indicator-heading { flex-direction: column; }
+.ticketiso-summary-panels .ticketiso-indicator-period { text-align: left; }
+.ticketiso-summary-panels .ticketiso-indicator-body { grid-template-columns: 1fr; gap: 0.8rem; }
+.ticketiso-summary-panels .ticketiso-indicator-gauge { width: 155px; height: 155px; }
+.ticketiso-summary-panels .ticketiso-indicator-gauge strong { font-size: 2rem; }
+.ticketiso-monthly-detail { margin-top: 1rem; }
+@media (max-width: 1100px) {
+    .ticketiso-summary-panels { grid-template-columns: 1fr; }
+}
+
+.ticketiso-indicator {
+    --indicator-color: #64748b;
+    --indicator-soft: #edf3f8;
+    margin-bottom: 1rem;
+    border: 1px solid #d9e6ef;
+    border-top: 3px solid var(--indicator-color);
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 0 60%, var(--indicator-soft), transparent 55%), #fff;
+}
+.ticketiso-indicator.bueno { --indicator-color: #157b57; --indicator-soft: #e9f7f0; }
+.ticketiso-indicator.regular { --indicator-color: #a66d0b; --indicator-soft: #fff6dc; }
+.ticketiso-indicator.malo { --indicator-color: #c63445; --indicator-soft: #fff0f2; }
+.ticketiso-indicator-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.15rem 1.3rem 0.8rem;
+}
+.ticketiso-indicator-heading h3 { margin: 0.3rem 0; font-size: 1.1rem; color: var(--ticketiso-navy); font-weight: 800; }
+.ticketiso-indicator-heading p { margin: 0; color: #75879a; font-size: 0.75rem; }
+.ticketiso-indicator-period { display: flex; flex-direction: column; gap: 0.15rem; text-align: right; flex-shrink: 0; }
+.ticketiso-indicator-period strong { font-size: 0.76rem; color: var(--ticketiso-navy); }
+.ticketiso-indicator-period span { font-size: 0.72rem; color: #64748b; }
+.ticketiso-indicator-period small { font-size: 0.65rem; color: var(--indicator-color); font-weight: 700; }
+.ticketiso-indicator-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 1.4rem; padding: 0.5rem 1.3rem 1.15rem; }
+.ticketiso-indicator-result { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; }
+.ticketiso-indicator-result > small { color: #64748b; font-size: 0.68rem; }
+.ticketiso-indicator-gauge { position: relative; width: 180px; height: 180px; }
+.ticketiso-indicator-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ticketiso-indicator-gauge circle { fill: none; stroke-width: 10; }
+.ticketiso-indicator-gauge .track { stroke: #e2eaf0; }
+.ticketiso-indicator-gauge .value { stroke: var(--indicator-color); stroke-linecap: round; transition: stroke-dashoffset 500ms ease; }
+.ticketiso-indicator-gauge > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ticketiso-indicator-gauge strong { font-size: 2.2rem; color: var(--indicator-color); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.05em; }
+.ticketiso-indicator-gauge strong small { font-size: 0.9rem; margin-left: 0.15rem; }
+.ticketiso-indicator-gauge span { font-size: 0.66rem; color: #7b8fa0; }
+.ticketiso-indicator-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.65rem; border-radius: 99px; background: var(--indicator-soft); color: var(--indicator-color); font-size: 0.73rem; font-weight: 800; }
+.ticketiso-indicator-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.65rem; }
+.ticketiso-indicator-counts > div { padding: 0.75rem; border: 1px solid #e0eaf1; border-radius: 10px; background: rgba(255, 255, 255, 0.7); }
+.ticketiso-indicator-counts i { color: #7091a9; font-size: 0.75rem; }
+.ticketiso-indicator-counts strong { display: block; margin: 0.3rem 0; color: var(--ticketiso-navy); font-size: 1.45rem; font-weight: 800; }
+.ticketiso-indicator-counts span { display: block; color: #708397; font-size: 0.7rem; line-height: 1.4; }
+.ticketiso-indicator-formula { padding: 0.8rem 0; }
+.ticketiso-indicator-formula > span { color: #7990a4; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
+.ticketiso-indicator-formula p { margin: 0.25rem 0; color: #64748b; font-size: 0.74rem; line-height: 1.5; }
+.ticketiso-indicator-formula > strong { color: var(--ticketiso-navy); font-size: 0.83rem; }
+.ticketiso-indicator-ranges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+.ticketiso-indicator-ranges > div { padding: 0.45rem 0.6rem; border: 1px solid transparent; border-radius: 8px; opacity: 0.7; }
+.ticketiso-indicator-ranges .malo { background: #fff0f2; color: #af2c3b; }
+.ticketiso-indicator-ranges .regular { background: #fff5d7; color: #8b5b0c; }
+.ticketiso-indicator-ranges .bueno { background: #e7f6ed; color: #186e4a; }
+.ticketiso-indicator-ranges .active { border-color: currentColor; opacity: 1; }
+.ticketiso-indicator-ranges strong { display: block; font-size: 0.72rem; }
+.ticketiso-indicator-ranges span { display: block; margin-top: 0.15rem; font-size: 0.65rem; }
+.ticketiso-indicator-footer { display: flex; flex-wrap: wrap; gap: 0.6rem 1.3rem; padding: 0.65rem 1.3rem; border-top: 1px solid #e1eaf1; color: #648099; font-size: 0.69rem; background: #f6f9fc; }
+.ticketiso-indicator-footer i { margin-right: 0.3rem; }
+.ticketiso-indicator-note { margin: 0; padding: 0.55rem 1.3rem; font-size: 0.67rem; line-height: 1.5; color: #7c8ea0; }
+.ticketiso-indicator-warning { margin: 0.6rem 1.3rem 0; padding: 0.6rem; border-radius: 8px; background: #fff5dc; color: #946412; font-size: 0.74rem; }
+@media (max-width: 760px) {
+    .ticketiso-indicator-heading { flex-direction: column; }
+    .ticketiso-indicator-period { text-align: left; }
+    .ticketiso-indicator-body { grid-template-columns: 1fr; gap: 1rem; }
+    .ticketiso-indicator-counts > div { padding: 0.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ticketiso-indicator-gauge .value { transition: none; }
+}
+
 .ticketiso-chart-panel {
     padding: 1rem;
     border: 1px solid var(--ticketiso-line);
@@ -706,6 +796,7 @@
 }
 
 @media (max-width: 600px) {
+    .ticketiso-summary-panels .ticketiso-chart-canvas { min-height: 290px; flex: none; }
     .ticketiso-chart-panel { padding: 0.7rem; }
     .ticketiso-chart-canvas { height: 290px; }
     .ticketiso-table.ticketiso-summary-table { min-width: 570px; }

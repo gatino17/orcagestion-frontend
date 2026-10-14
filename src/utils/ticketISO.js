@@ -60,7 +60,7 @@ export const crearFormularioTicketISO = (ticket) => ({
     problema: ticket?.problema || "",
     estado: ticket?.estado || "pendiente",
     fecha_cierre: ticket?.fecha_cierre ? fechaTicketISOParaInput(ticket.fecha_cierre) : "",
-    responsable_id: String(ticket?.responsable_id || ""),
+    responsable: ticket?.responsable || ticket?.responsable_nombre || "",
     observaciones: ticket?.observaciones || "",
 });
 
@@ -129,4 +129,61 @@ export const resumirTicketsISO = (tickets, anio) => {
         sin_estado: actual.sin_estado + mes.sin_estado,
     }), { total: 0, pendiente: 0, seguimiento: 0, resuelto: 0, sin_estado: 0 });
     return { meses, totales, sinFecha };
+};
+
+export const clasificarIndicadorTicketISO = (porcentaje) => {
+    if (porcentaje === null || !Number.isFinite(porcentaje)) return "sin_datos";
+    if (porcentaje < 75) return "malo";
+    return porcentaje <= 85 ? "regular" : "bueno";
+};
+
+export const calcularIndicadorTrimestralTicketISO = (tickets, mes, ahora = new Date()) => {
+    const match = String(mes || "").match(/^([0-9]{4})-(0[1-9]|1[0-2])$/);
+    if (!match) throw new Error("Selecciona un mes valido para el indicador.");
+    const anio = Number(match[1]);
+    const primerMes = Math.floor((Number(match[2]) - 1) / 3) * 3;
+    const inicio = `${match[1]}-${String(primerMes + 1).padStart(2, "0")}-01`;
+    const fin = new Date(`${match[1]}-${String(primerMes + 3).padStart(2, "0")}-01T12:00:00Z`);
+    fin.setUTCMonth(fin.getUTCMonth() + 1);
+    fin.setUTCDate(0);
+    const finTrimestre = fin.toISOString().slice(0, 10);
+    const finMes = new Date(`${mes}-01T12:00:00Z`);
+    finMes.setUTCMonth(finMes.getUTCMonth() + 1);
+    finMes.setUTCDate(0);
+    const finMesConsultado = finMes.toISOString().slice(0, 10);
+    const hoy = fechaTicketISOParaInput(ahora);
+    const corte = hoy < finMesConsultado ? hoy : finMesConsultado;
+    const fase = hoy < inicio ? "futuro" : corte < finTrimestre ? "en_curso" : "finalizado";
+    const fechaValida = (valor) => {
+        if (!valor) return null;
+        const fecha = fechaTicketISOParaInput(valor);
+        const dia = new Date(`${fecha}T12:00:00Z`);
+        return /^\d{4}-\d{2}-\d{2}$/.test(fecha) && !Number.isNaN(dia.getTime()) && dia.toISOString().slice(0, 10) === fecha ? fecha : null;
+    };
+    let abiertosInicio = 0;
+    let recibidos = 0;
+    let cerrados = 0;
+    let incompletos = 0;
+    if (fase !== "futuro") (tickets || []).forEach((ticket) => {
+        const recepcion = fechaValida(ticket.fecha_recepcion);
+        if (!recepcion) { incompletos += 1; return; }
+        if (recepcion > corte) return;
+        const estado = agruparEstadoTicketISO(ticket.estado);
+        const cerrado = estado === "resuelto";
+        const cierre = cerrado ? fechaValida(ticket.fecha_cierre) : null;
+        if (estado === "sin_estado" || (cerrado && (!cierre || cierre < recepcion))) {
+            incompletos += 1;
+            return;
+        }
+        // Un ticket abierto puede tener fecha prevista: no constituye un cierre real.
+        if (recepcion < inicio && (!cerrado || cierre >= inicio)) abiertosInicio += 1;
+        if (recepcion >= inicio) recibidos += 1;
+        if (cerrado && cierre >= inicio && cierre <= corte) cerrados += 1;
+    });
+    const base = abiertosInicio + recibidos;
+    const porcentaje = base && !incompletos ? (cerrados / base) * 100 : null;
+    return { anio, trimestre: primerMes / 3 + 1, primerMes, inicio, fin: finTrimestre,
+        corte: fase === "futuro" ? null : corte, calculadoEl: hoy, fase,
+        abiertosInicio, recibidos, cerrados, base, incompletos, porcentaje,
+        clasificacion: incompletos ? "incompleto" : clasificarIndicadorTicketISO(porcentaje) };
 };

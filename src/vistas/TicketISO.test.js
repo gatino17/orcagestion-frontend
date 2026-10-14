@@ -34,6 +34,15 @@ const iniciar = async () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Nuevo ticket/ })).toBeEnabled());
 };
 
+test("la navegacion conserva Tickets y Resumen mensual sin la pestana Soluciones", async () => {
+    await iniciar();
+    expect(screen.getByRole("navigation", { name: "Vistas de Ticket ISO" }).querySelectorAll("button")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Tickets", exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resumen mensual" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Soluciones" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/biblioteca de soluciones/i)).not.toBeInTheDocument();
+});
+
 const llenarNuevo = (manual = true) => {
     fireEvent.click(screen.getByRole("button", { name: /Nuevo ticket/ }));
     if (manual) fireEvent.change(screen.getByLabelText("Numero de ticket"), { target: { value: " iso-001 " } });
@@ -64,7 +73,7 @@ test("edita un registro cargando primero sus datos guardados", async () => {
     expect(screen.getByLabelText("Fecha de recepcion *")).toHaveValue("2026-10-14");
     expect(screen.getByLabelText("Origen *")).toHaveValue("ticket_iso");
     expect(screen.getByLabelText("Categoria de procedimiento *")).toHaveValue("soporte_posventa");
-    expect(screen.getByLabelText("Responsable")).toHaveValue("2");
+    expect(screen.getByLabelText("Responsable")).toHaveValue("Jorge");
     expect(screen.getByLabelText("Observaciones")).toHaveValue("Pendiente validar documento");
     fireEvent.change(screen.getByLabelText("Asunto del procedimiento *"), { target: { value: "Procedimiento actualizado" } });
     fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
@@ -167,20 +176,23 @@ test("Resumen mensual permite consultar otro mes y otro ano con los tickets guar
     expect(screen.getByLabelText("En seguimiento / transito: 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Resueltos / cerrados: 1")).toBeInTheDocument();
     expect(screen.getByRole("img")).toHaveAccessibleName(/Grafico de tickets por mes de 2026/);
+    expect(screen.getByText("Mes consultado: Octubre 2026")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Nov 2026" }));
     expect(screen.getByLabelText("Mes a consultar")).toHaveValue("2026-11");
+    expect(screen.getByText("Mes consultado: Noviembre 2026")).toBeInTheDocument();
     expect(screen.getByLabelText("Recibidos en el mes: 0")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Mes a consultar"), { target: { value: "2027-01" } });
     expect(screen.getByRole("heading", { name: "Tickets por mes - 2027" })).toBeInTheDocument();
     expect(screen.getByLabelText("Recibidos en el mes: 0")).toBeInTheDocument();
 });
 
-test("permite elegir el responsable, anotar observaciones y guardar un cierre editable", async () => {
-    const cerrado = { ...ticket, estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z", observaciones: "Validado por auditoria" };
+test("permite escribir un responsable externo, anotar observaciones y guardar un cierre editable", async () => {
+    const cerrado = { ...ticket, responsable_id: null, responsable: "Carolina proveedor externo", estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z", observaciones: "Validado por auditoria" };
     crearTicketISO.mockResolvedValue(cerrado);
     await iniciar();
     llenarNuevo();
-    fireEvent.change(screen.getByLabelText("Responsable"), { target: { value: "2" } });
+    expect(screen.getByRole("textbox", { name: "Responsable" })).toHaveAttribute("maxlength", "100");
+    fireEvent.change(screen.getByLabelText("Responsable"), { target: { value: "Carolina proveedor externo" } });
     fireEvent.change(screen.getByLabelText("Observaciones"), { target: { value: "Validado por auditoria" } });
     fireEvent.change(screen.getByLabelText("Estado *"), { target: { value: "resuelto" } });
     expect(screen.getByLabelText("Fecha de cierre *")).toBeEnabled();
@@ -188,7 +200,9 @@ test("permite elegir el responsable, anotar observaciones y guardar un cierre ed
     fireEvent.change(screen.getByLabelText("Fecha de cierre *"), { target: { value: "2026-10-16" } });
     fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
     expect(await screen.findByText("Ticket registrado correctamente.")).toBeInTheDocument();
-    expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({ responsable_id: 2, observaciones: "Validado por auditoria", fecha_cierre: "2026-10-16" }));
+    expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({ responsable: "Carolina proveedor externo", observaciones: "Validado por auditoria", fecha_cierre: "2026-10-16" }));
+    expect(crearTicketISO.mock.calls[0][0]).not.toHaveProperty("responsable_id");
+    expect(screen.getByRole("cell", { name: "Carolina proveedor externo" })).toBeInTheDocument();
 });
 
 test("reabrir un ticket limpia el cierre y un cierre anterior al ingreso se rechaza", async () => {

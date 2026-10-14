@@ -58,3 +58,23 @@ test("carga y errores no se presentan como un resumen vacio valido", () => {
     fireEvent.click(screen.getByRole("button", { name: /Actualizar resumen/ }));
     expect(actualizar).toHaveBeenCalledTimes(1);
 });
+
+test("indicador y comparacion anual son tarjetas contiguas y cambian con el mes consultado", () => {
+    const datos = [
+        { fecha_recepcion: "2026-06-20", estado: "resuelto", fecha_cierre: "2026-08-20" },
+        { fecha_recepcion: "2026-07-10", estado: "resuelto", fecha_cierre: "2026-07-20" },
+        { fecha_recepcion: "2026-08-10", estado: "pendiente" },
+    ];
+    const props = { tickets: datos, onMesChange: jest.fn(), onActualizar: jest.fn(), ahora: new Date("2026-10-14T12:00:00Z") };
+    const { rerender } = render(<ResumenMensualTicketISO {...props} mes="2026-07" />);
+    const indicador = screen.getByRole("region", { name: "Tasa de cierre de Ticket ISO" });
+    const comparacion = screen.getByRole("img").closest(".ticketiso-chart-panel");
+    expect(indicador.parentElement).toHaveClass("ticketiso-summary-panels");
+    expect(comparacion.nextElementSibling).toBe(indicador);
+    expect(screen.getByLabelText("Indicador trimestral: 50,00 %")).toBeInTheDocument();
+    expect(screen.getByText("Corte: 31/07/2026")).toBeInTheDocument();
+    rerender(<ResumenMensualTicketISO {...props} mes="2026-08" />);
+    expect(screen.getByLabelText("Indicador trimestral: 66,67 %")).toBeInTheDocument();
+    expect(screen.getByText("Mes consultado: Agosto 2026")).toBeInTheDocument();
+    expect(screen.getByText("Corte: 31/08/2026")).toBeInTheDocument();
+});

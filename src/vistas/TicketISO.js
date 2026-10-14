@@ -7,7 +7,6 @@ import "./TicketISO.css";
 const SECCIONES = [
     { id: "tickets", nombre: "Tickets", icono: "fas fa-ticket-alt" },
     { id: "resumen", nombre: "Resumen mensual", icono: "fas fa-chart-bar" },
-    { id: "soluciones", nombre: "Soluciones", icono: "fas fa-lightbulb" },
 ];
 
 const obtenerMesActual = () => {
@@ -144,7 +143,6 @@ function TicketISO() {
         try {
             payload = { ...formulario, numero_ticket: formulario.numero_ticket.trim().toUpperCase(),
                 numero_automatico: !editandoId && (!numeroManual || !formulario.numero_ticket.trim()),
-                responsable_id: formulario.responsable_id ? Number(formulario.responsable_id) : null,
                 fecha_cierre: formulario.fecha_cierre || null,
             };
             if (formulario.estado === "resuelto" && !payload.fecha_cierre) throw new Error("Indica una fecha de cierre.");
@@ -241,21 +239,11 @@ function TicketISO() {
                     </>
                 )}
 
-                {seccion === "soluciones" && (
-                    <>
-                        <div className="ticketiso-panel-heading">
-                            <div><span className="ticketiso-section-label">Referencia para la revision</span><h3 id="ticketiso-panel-title">Posibles soluciones</h3></div>
-                            <span className="ticketiso-panel-note">Biblioteca de consulta</span>
-                        </div>
-                        <EstadoInicial icono="far fa-lightbulb" titulo="Construye una referencia con cada caso"
-                            descripcion="Esta vista reunira recomendaciones por tipo de falla y las soluciones que funcionaron, para facilitar la revision de nuevos reclamos." />
-                    </>
-                )}
             </section>
 
             <aside className="ticketiso-next-step">
                 <span className="ticketiso-next-icon"><i className="fas fa-pencil-alt" aria-hidden="true" /></span>
-                <div><strong>Registro y seguimiento de Ticket ISO</strong><p>Consulta los tickets y compara sus totales mensuales en Resumen mensual. La biblioteca de soluciones sera la siguiente etapa.</p></div>
+                <div><strong>Registro y seguimiento de Ticket ISO</strong><p>Consulta los tickets, compara sus totales mensuales y revisa el indicador de cierre en Resumen mensual.</p></div>
             </aside>
 
             {modal && <ModalTicketISO key={modal} titulo={modal === "detalle" ? "Detalle del ticket" : editandoId ? "Editar ticket" : "Nuevo ticket"} onCerrar={cerrarModal} guardando={guardando}>
@@ -271,7 +259,7 @@ function TicketISO() {
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-problem">Descripcion del problema *</label><textarea id="ticketiso-problem" name="problema" value={formulario.problema} onChange={cambiarCampo} required maxLength={10000} rows={3} placeholder="Describe el reclamo recibido por correo." /></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-state">Estado *</label><select id="ticketiso-state" className={`ticketiso-state-select ${formulario.estado}`} name="estado" value={formulario.estado} onChange={cambiarCampo}>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-origin">Origen *</label><select id="ticketiso-origin" name="origen" value={formulario.origen} onChange={cambiarCampo} required><option value="">Selecciona un origen</option>{Object.entries(ORIGENES_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-                            <div className="ticketiso-field"><label htmlFor="ticketiso-owner">Responsable</label><select id="ticketiso-owner" name="responsable_id" value={formulario.responsable_id} onChange={cambiarCampo}><option value="">Sin asignar</option>{(catalogos?.responsables || []).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}{formulario.responsable_id && !(catalogos?.responsables || []).some((item) => String(item.id) === formulario.responsable_id) && <option value={formulario.responsable_id}>{detalle?.responsable || "Responsable registrado"}</option>}</select></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-owner">Responsable</label><input id="ticketiso-owner" type="text" name="responsable" value={formulario.responsable} onChange={cambiarCampo} maxLength={100} placeholder="Nombre del responsable" /></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-closed">Fecha de cierre{formulario.estado === "resuelto" ? " *" : ""}</label><input id="ticketiso-closed" type="date" name="fecha_cierre" value={formulario.fecha_cierre} onChange={cambiarCampo} required={formulario.estado === "resuelto"} min={formulario.fecha_recepcion} /><small>{formulario.estado === "resuelto" ? "Fecha real de cierre del ticket." : "Opcional: indica una fecha prevista de cierre, sin cambiar el estado."}</small></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-notes">Observaciones</label><textarea id="ticketiso-notes" name="observaciones" value={formulario.observaciones} onChange={cambiarCampo} maxLength={10000} rows={3} placeholder="Comentarios, acciones realizadas o notas de seguimiento." /></div>
                         </fieldset>

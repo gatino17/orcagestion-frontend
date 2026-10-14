@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Chart } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, BarController, LineController, Tooltip, Legend } from "chart.js";
 import { resumirTicketsISO } from "../utils/ticketISO";
+import IndicadorTicketISO from "./IndicadorTicketISO";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, BarController, LineController, Tooltip, Legend);
 
@@ -12,7 +13,7 @@ const SERIES = [
     { clave: "resuelto", nombre: "Resueltos / cerrados", color: "#18996c" },
 ];
 
-export default function ResumenMensualTicketISO({ tickets, mes, onMesChange, cargando, error, onActualizar }) {
+export default function ResumenMensualTicketISO({ tickets, mes, onMesChange, cargando, error, onActualizar, ahora }) {
     const anio = mes.slice(0, 4);
     const resumen = useMemo(() => resumirTicketsISO(tickets, anio), [tickets, anio]);
     const seleccionado = resumen.meses.find((item) => item.mes === mes);
@@ -54,6 +55,7 @@ export default function ResumenMensualTicketISO({ tickets, mes, onMesChange, car
                 <small>{item.clave === "total" ? "Segun fecha de recepcion" : "Estado actual de los recibidos en este mes"}</small>
             </div>)}
         </div>
+        <div className="ticketiso-summary-panels">
         <div className="ticketiso-chart-panel">
             <div className="ticketiso-panel-heading">
                 <div><span className="ticketiso-section-label">Comparacion anual</span><h3>Tickets por mes - {anio}</h3></div>
@@ -64,19 +66,24 @@ export default function ResumenMensualTicketISO({ tickets, mes, onMesChange, car
                 <div className="ticketiso-chart-canvas"><Chart type="bar" data={data} options={options} role="img" aria-label={`Grafico de tickets por mes de ${anio}: total, pendientes, en seguimiento o transito y resueltos o cerrados`} /></div>
                 {!resumen.totales.total && <p className="ticketiso-chart-note">Aun no hay tickets recibidos en {anio}. Los meses sin registros se muestran en cero.</p>}
                 {!!resumen.totales.sin_estado && <p className="ticketiso-chart-note">Hay {resumen.totales.sin_estado} tickets con un estado sin clasificar, incluidos en el total.</p>}
-                <div className="ticketiso-table-scroll">
-                    <table className="ticketiso-table ticketiso-summary-table">
-                        <caption className="sr-only">Totales mensuales de tickets de {anio}</caption>
-                        <thead><tr><th scope="col">Mes</th><th scope="col">Total</th>{series.map((serie) => <th key={serie.clave} scope="col">{serie.nombre}</th>)}</tr></thead>
-                        <tbody>{resumen.meses.map((item, index) => <tr key={item.mes} className={item.mes === mes ? "selected" : ""}>
-                            <th scope="row"><button type="button" aria-pressed={item.mes === mes} onClick={() => onMesChange(item.mes)}>{MESES[index]} {anio}</button></th>
-                            <td><strong>{item.total}</strong></td>{series.map((serie) => <td key={serie.clave} className={serie.clave}>{item[serie.clave]}</td>)}
-                        </tr>)}</tbody>
-                        <tfoot><tr><th scope="row">Total {anio}</th><td>{resumen.totales.total}</td>{series.map((serie) => <td key={serie.clave}>{resumen.totales[serie.clave]}</td>)}</tr></tfoot>
-                    </table>
-                </div>
             </>}
             {!!resumen.sinFecha && <p className="ticketiso-chart-note">{resumen.sinFecha} registros no tienen una fecha de recepcion valida y no se incluyen en los totales mensuales.</p>}
         </div>
+        <IndicadorTicketISO tickets={tickets} mes={mes} noDisponible={noDisponible} ahora={ahora} />
+        </div>
+        {!noDisponible && <div className="ticketiso-chart-panel ticketiso-monthly-detail">
+            <div className="ticketiso-panel-heading"><div><span className="ticketiso-section-label">Cifras del ano</span><h3>Detalle mensual - {anio}</h3></div></div>
+            <div className="ticketiso-table-scroll">
+                <table className="ticketiso-table ticketiso-summary-table">
+                    <caption className="sr-only">Totales mensuales de tickets de {anio}</caption>
+                    <thead><tr><th scope="col">Mes</th><th scope="col">Total</th>{series.map((serie) => <th key={serie.clave} scope="col">{serie.nombre}</th>)}</tr></thead>
+                    <tbody>{resumen.meses.map((item, index) => <tr key={item.mes} className={item.mes === mes ? "selected" : ""}>
+                        <th scope="row"><button type="button" aria-pressed={item.mes === mes} onClick={() => onMesChange(item.mes)}>{MESES[index]} {anio}</button></th>
+                        <td><strong>{item.total}</strong></td>{series.map((serie) => <td key={serie.clave} className={serie.clave}>{item[serie.clave]}</td>)}
+                    </tr>)}</tbody>
+                    <tfoot><tr><th scope="row">Total {anio}</th><td>{resumen.totales.total}</td>{series.map((serie) => <td key={serie.clave}>{resumen.totales[serie.clave]}</td>)}</tr></tfoot>
+                </table>
+            </div>
+        </div>}
     </>;
 }
