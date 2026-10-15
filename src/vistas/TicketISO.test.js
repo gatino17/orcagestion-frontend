@@ -1,12 +1,12 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarPlanAccionTicketISO, actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
 import TicketISO from "./TicketISO";
 
 jest.mock("../api", () => ({
     actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), eliminarTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
-    guardarPlanAccionTicketISO: jest.fn(), cerrarTicketISO: jest.fn(),
+    actualizarPlanAccionTicketISO: jest.fn(), guardarPlanAccionTicketISO: jest.fn(), cerrarTicketISO: jest.fn(),
     obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(),
 }));
 jest.mock("react-chartjs-2", () => ({ Chart: ({ data, options, ...props }) => <canvas {...props} /> }));
@@ -31,6 +31,7 @@ beforeEach(() => {
     actualizarTicketISO.mockResolvedValue({ ...ticket, problema: "Problema actualizado" });
     eliminarTicketISO.mockResolvedValue({ message: "Ticket eliminado correctamente." });
     guardarPlanAccionTicketISO.mockResolvedValue(ticket);
+    actualizarPlanAccionTicketISO.mockResolvedValue(ticket);
     cerrarTicketISO.mockResolvedValue({ ...ticket, estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z" });
 });
 
@@ -118,6 +119,74 @@ test("siete planes muestran el total y solo el mas reciente desplegado, sin cier
     fireEvent.click(within(region).getByRole("button", { name: "Agregar plan" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Guardar plan de accion" })).toBeEnabled());
     expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("");
+});
+
+test("Editar plan esta junto a Agregar plan y permite corregir uno de siete sin agregar otro", async () => {
+    const planes = Array.from({ length: 7 }, (_, index) => ({ id_plan: 7 - index, numero: 7 - index,
+        resultado_plan_accion: `Resultado ${7 - index}`, fecha_control: "2026-10-15" }));
+    const actualizado = { ...ticket, planes_accion: planes.map((item) => item.id_plan === 1 ? { ...item, resultado_plan_accion: "Resultado corregido", fecha_control: "2026-10-16" } : item) };
+    obtenerTicketsISO.mockResolvedValue([{ ...ticket, planes_accion: planes }]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: planes });
+    actualizarPlanAccionTicketISO.mockResolvedValue(actualizado);
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    const editar = await screen.findByRole("button", { name: "Editar plan", exact: true });
+    expect(editar.previousElementSibling).toHaveTextContent("Agregar plan");
+    fireEvent.click(editar);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar cambios del plan" })).toBeEnabled());
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Editar plan de accion");
+    expect(screen.getByLabelText("Plan a editar")).toHaveValue("7");
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("Resultado 7");
+    fireEvent.change(screen.getByLabelText("Plan a editar"), { target: { value: "1" } });
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("Resultado 1");
+    expect(screen.getByLabelText("Fecha de control")).toHaveValue("2026-10-15");
+    fireEvent.change(screen.getByLabelText("Breve descripcion del resultado"), { target: { value: "  Resultado corregido  " } });
+    fireEvent.change(screen.getByLabelText("Fecha de control"), { target: { value: "2026-10-16" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar cambios del plan" }).closest("form"));
+    expect(await screen.findByText("Plan de accion actualizado correctamente.")).toBeInTheDocument();
+    expect(actualizarPlanAccionTicketISO).toHaveBeenCalledWith(1, 1, { resultado_plan_accion: "Resultado corregido", fecha_control: "2026-10-16" });
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+    expect(cerrarTicketISO).not.toHaveBeenCalled();
+    expect(screen.getByRole("cell", { name: "7 planes de accion" })).toBeInTheDocument();
+    obtenerTicketISO.mockResolvedValue(actualizado);
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    expect(await screen.findByRole("region", { name: "Planes de accion (7)" })).toHaveTextContent("Resultado corregido");
+});
+
+test("sin planes la edicion esta deshabilitada", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    expect(await screen.findByRole("button", { name: "Editar plan", exact: true })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Agregar plan" })).toBeEnabled();
+});
+
+test("un error de edicion conserva el plan y permite reintentar sin crear otro", async () => {
+    const planes = [{ id_plan: 4, numero: 1, resultado_plan_accion: "Original", fecha_control: "2026-10-15" }];
+    obtenerTicketsISO.mockResolvedValue([{ ...ticket, planes_accion: planes }]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: planes });
+    actualizarPlanAccionTicketISO.mockRejectedValue({ response: { data: { error: "No se pudo actualizar el plan." } } });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Editar plan", exact: true }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar cambios del plan" })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Breve descripcion del resultado"), { target: { value: "Correccion sin perder" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar cambios del plan" }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo actualizar el plan.");
+    expect(screen.getByLabelText("Plan a editar")).toHaveValue("4");
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("Correccion sin perder");
+    expect(screen.getByRole("button", { name: "Guardar cambios del plan" })).toBeEnabled();
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
+
+test.each(["ticket iso", "ticket_iso", "Ticket-ISO"])("el rol %s puede confirmar la eliminacion del ticket", async (rol) => {
+    localStorage.setItem("token", `e30.${btoa(JSON.stringify({ rol }))}.test`);
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar ticket ISO-001" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion" }));
+    expect(await screen.findByText("Ticket eliminado correctamente.")).toBeInTheDocument();
+    expect(eliminarTicketISO).toHaveBeenCalledWith(1);
 });
 
 test("cerrar el caso es independiente, actualiza el resumen y conserva los planes", async () => {

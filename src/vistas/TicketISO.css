@@ -873,6 +873,7 @@
 }
 
 .ticketiso-detail-section-heading h4 { margin: 0; }
+.ticketiso-detail-section-heading .ticketiso-toolbar-actions { flex-wrap: wrap; }
 .ticketiso-plans-list { display: grid; gap: 0.55rem; }
 .ticketiso-plan-entry { min-width: 0; border: 1px solid #e8dfc6; border-radius: 9px; background: #fff; }
 .ticketiso-plan-entry summary {

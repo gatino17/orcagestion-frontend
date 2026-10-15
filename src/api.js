@@ -1580,6 +1580,11 @@ export const guardarPlanAccionTicketISO = async (id, payload) => {
     return response.data.ticket;
 };
 
+export const actualizarPlanAccionTicketISO = async (id, planId, payload) => {
+    const response = await axios.patch(`${BASE_URL}/ticket-iso/${id}/planes-accion/${planId}`, payload, authHeaders());
+    return response.data.ticket;
+};
+
 export const cerrarTicketISO = async (id, payload) => {
     const response = await axios.patch(`${BASE_URL}/ticket-iso/${id}/cierre`, payload, authHeaders());
     return response.data.ticket;
