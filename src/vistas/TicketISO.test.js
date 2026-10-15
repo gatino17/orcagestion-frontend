@@ -1,11 +1,12 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { actualizarTicketISO, crearTicketISO, eliminarTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
 import TicketISO from "./TicketISO";
 
 jest.mock("../api", () => ({
     actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), eliminarTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
+    guardarPlanAccionTicketISO: jest.fn(), cerrarTicketISO: jest.fn(),
     obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(),
 }));
 jest.mock("react-chartjs-2", () => ({ Chart: ({ data, options, ...props }) => <canvas {...props} /> }));
@@ -15,7 +16,7 @@ const ticket = {
     asunto_procedimiento: "Revision del procedimiento", problema: "Falta actualizar el documento", estado: "pendiente",
     origen: "ticket_iso", categoria_procedimiento: "soporte_posventa",
     responsable_id: 2, responsable: "Jorge", observaciones: "Pendiente validar documento",
-    fecha_cierre: null, updated_at: "2026-10-14T13:00:00Z",
+    fecha_cierre: null, planes_accion: [], updated_at: "2026-10-14T13:00:00Z",
 };
 
 beforeEach(() => {
@@ -29,6 +30,8 @@ beforeEach(() => {
     crearTicketISO.mockResolvedValue(ticket);
     actualizarTicketISO.mockResolvedValue({ ...ticket, problema: "Problema actualizado" });
     eliminarTicketISO.mockResolvedValue({ message: "Ticket eliminado correctamente." });
+    guardarPlanAccionTicketISO.mockResolvedValue(ticket);
+    cerrarTicketISO.mockResolvedValue({ ...ticket, estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z" });
 });
 
 const iniciar = async () => {
@@ -41,6 +44,162 @@ const iniciarComoAdmin = async () => {
     obtenerTicketsISO.mockResolvedValue([ticket]);
     await iniciar();
 };
+
+const abrirPlan = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Plan de accion del ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar plan de accion" })).toBeEnabled());
+};
+
+test.each([0, 1, 7])("la columna Planes de accion muestra %s en la fila del ticket", async (cantidad) => {
+    obtenerTicketsISO.mockResolvedValue([{ ...ticket, planes_accion: Array.from({ length: cantidad }, (_, index) => ({ id_plan: index + 1 })) }]);
+    await iniciar();
+    const cabecera = screen.getByRole("columnheader", { name: "Planes de accion" });
+    expect(cabecera.nextElementSibling).toHaveTextContent("Acciones");
+    const fila = within(screen.getByRole("cell", { name: "ISO-001" }).closest("tr"));
+    expect(fila.getByRole("cell", { name: `${cantidad} ${cantidad === 1 ? "plan" : "planes"} de accion` })).toHaveTextContent(String(cantidad));
+});
+
+test("un ticket sin lista de planes muestra cero y la tabla vacia conserva sus diez columnas", async () => {
+    obtenerTicketsISO.mockResolvedValue([{ ...ticket, planes_accion: undefined }]);
+    await iniciar();
+    expect(screen.getByRole("cell", { name: "0 planes de accion" })).toHaveTextContent("0");
+    expect(screen.getAllByRole("columnheader")).toHaveLength(10);
+    fireEvent.change(screen.getByLabelText("Buscar ticket"), { target: { value: "No existe" } });
+    expect(screen.getByText("Sin resultados para estos filtros").closest("td")).toHaveAttribute("colspan", "10");
+});
+
+test("el mas amarillo agrega un plan vacio sin copiar los anteriores ni mostrar el cierre", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: [{ id_plan: 1, resultado_plan_accion: "Anterior", fecha_control: "2026-10-15" }] });
+    await iniciar();
+    expect(screen.getByRole("button", { name: "Plan de accion del ticket ISO-001" })).toHaveClass("plan");
+    await abrirPlan();
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Plan de accion");
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("");
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toBeRequired();
+    expect(screen.getByLabelText("Fecha de control")).toHaveValue("");
+    expect(screen.queryByLabelText(/Fecha de cierre/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
+
+test("agregar un plan conserva el caso abierto y envia solo resultado y control", async () => {
+    const nuevo = { id_plan: 1, numero: 1, resultado_plan_accion: "Pendiente validacion", fecha_control: "2026-10-15" };
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    guardarPlanAccionTicketISO.mockResolvedValue({ ...ticket, planes_accion: [nuevo] });
+    await iniciar();
+    await abrirPlan();
+    fireEvent.change(screen.getByLabelText("Breve descripcion del resultado"), { target: { value: "  Pendiente validacion  " } });
+    fireEvent.change(screen.getByLabelText("Fecha de control"), { target: { value: "2026-10-15" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar plan de accion" }).closest("form"));
+    expect(await screen.findByText("Nuevo plan de accion agregado correctamente.")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1 plan de accion" })).toHaveTextContent("1");
+    expect(guardarPlanAccionTicketISO).toHaveBeenCalledWith(1, { resultado_plan_accion: "Pendiente validacion", fecha_control: "2026-10-15" });
+    expect(screen.getByRole("cell", { name: "Pendiente" })).toBeInTheDocument();
+    expect(actualizarTicketISO).not.toHaveBeenCalled();
+    expect(cerrarTicketISO).not.toHaveBeenCalled();
+});
+
+test("siete planes muestran el total y solo el mas reciente desplegado, sin cierre entre los planes", async () => {
+    const planes = Array.from({ length: 7 }, (_, index) => ({ id_plan: 7 - index, numero: 7 - index,
+        resultado_plan_accion: `Resultado ${7 - index}`, fecha_control: "2026-10-15", created_at: "2026-10-15T15:00:00Z" }));
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: planes });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    const region = await screen.findByRole("region", { name: "Planes de accion (7)" });
+    const entries = region.querySelectorAll("details");
+    expect(entries).toHaveLength(7);
+    expect(entries[0]).toHaveAttribute("open");
+    expect(within(entries[0]).getByText("Plan 7")).toBeInTheDocument();
+    Array.from(entries).slice(1).forEach((entry) => expect(entry).not.toHaveAttribute("open"));
+    expect(within(entries[6]).getByText("Plan 1")).toBeInTheDocument();
+    expect(within(region).queryByText(/Fecha de cierre/)).not.toBeInTheDocument();
+    fireEvent.click(within(region).getByRole("button", { name: "Agregar plan" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar plan de accion" })).toBeEnabled());
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("");
+});
+
+test("cerrar el caso es independiente, actualiza el resumen y conserva los planes", async () => {
+    const planes = [{ id_plan: 1, numero: 1, resultado_plan_accion: "Validado" }];
+    const abierto = { ...ticket, planes_accion: planes };
+    const cerrado = { ...abierto, estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z" };
+    obtenerTicketsISO.mockResolvedValue([abierto]);
+    obtenerTicketISO.mockResolvedValue(abierto);
+    cerrarTicketISO.mockResolvedValue(cerrado);
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cerrar caso" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirmar cierre" })).toBeEnabled());
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Cierre del caso");
+    fireEvent.change(screen.getByLabelText("Fecha de cierre *"), { target: { value: "2026-10-16" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Confirmar cierre" }).closest("form"));
+    expect(await screen.findByText("Caso cerrado correctamente. El ticket quedo resuelto.")).toBeInTheDocument();
+    expect(cerrarTicketISO).toHaveBeenCalledWith(1, { fecha_cierre: "2026-10-16" });
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+    expect(screen.getByRole("cell", { name: "Resuelto" })).toBeInTheDocument();
+    obtenerTicketISO.mockResolvedValue(cerrado);
+    fireEvent.click(screen.getByRole("button", { name: "Editar ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByLabelText("Fecha de cierre *")).toHaveValue("2026-10-16"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resumen mensual" }));
+    fireEvent.change(screen.getByLabelText("Mes a consultar"), { target: { value: "2026-10" } });
+    expect(screen.getByLabelText("Resueltos / cerrados: 1")).toBeInTheDocument();
+});
+
+test("rechaza fecha de control anterior o resultado vacio sin enviar el plan", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    await iniciar();
+    await abrirPlan();
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar plan de accion" }).closest("form"));
+    expect(screen.getByRole("alert")).toHaveTextContent("Indica una breve descripcion");
+    fireEvent.change(screen.getByLabelText("Breve descripcion del resultado"), { target: { value: "Resultado" } });
+    fireEvent.change(screen.getByLabelText("Fecha de control"), { target: { value: "2026-10-13" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar plan de accion" }).closest("form"));
+    expect(screen.getByRole("alert")).toHaveTextContent(/anterior a la recepcion/);
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
+
+test("el cierre invalido o rechazado conserva el caso abierto y permite reintentar", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    cerrarTicketISO.mockRejectedValue({ response: { data: { error: "No se pudo confirmar el cierre." } } });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cerrar caso" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirmar cierre" })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Fecha de cierre *"), { target: { value: "2026-10-13" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Confirmar cierre" }).closest("form"));
+    expect(screen.getByRole("alert")).toHaveTextContent(/anterior a la recepcion/);
+    expect(cerrarTicketISO).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Fecha de cierre *"), { target: { value: "2026-10-16" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Confirmar cierre" }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo confirmar el cierre.");
+    expect(screen.getByLabelText("Fecha de cierre *")).toHaveValue("2026-10-16");
+    expect(screen.getByRole("cell", { name: "Pendiente" })).toBeInTheDocument();
+});
+
+test("un error al guardar el plan conserva la ventana y sus datos para reintentar", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    guardarPlanAccionTicketISO.mockRejectedValue({ response: { data: { error: "No se pudo guardar el plan." } } });
+    await iniciar();
+    await abrirPlan();
+    fireEvent.change(screen.getByLabelText("Breve descripcion del resultado"), { target: { value: "Resultado sin perder" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Guardar plan de accion" }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo guardar el plan.");
+    expect(screen.getByLabelText("Breve descripcion del resultado")).toHaveValue("Resultado sin perder");
+    expect(screen.getByRole("button", { name: "Guardar plan de accion" })).toBeEnabled();
+    expect(screen.getByRole("cell", { name: "Pendiente" })).toBeInTheDocument();
+});
+
+test("no permite guardar el plan cuando no pudo cargar el ticket", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockRejectedValue(new Error("Error de red"));
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Plan de accion del ticket ISO-001" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo cargar el ticket.");
+    expect(screen.getByRole("button", { name: "Guardar plan de accion" })).toBeDisabled();
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
 
 test.each([null, "invalido", "encargado_tickets"])("no muestra Eliminar sin rol admin (%s)", async (rol) => {
     if (rol) localStorage.setItem("token", rol === "invalido" ? rol : `e30.${btoa(JSON.stringify({ rol }))}.test`);
@@ -148,6 +307,68 @@ test("el detalle consulta el ticket y muestra sus datos", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
     expect(await screen.findByRole("button", { name: "Editar ticket" })).toBeEnabled();
     expect(obtenerTicketISO).toHaveBeenCalledWith(1);
+});
+
+test.each([["pendiente", "Cerrar caso"], ["resuelto", "Editar cierre"]])("el detalle %s tiene %s en el pie y se cierra con la X", async (estado, accion) => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, estado });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    const boton = await screen.findByRole("button", { name: accion });
+    expect(boton.parentElement).toHaveClass("ticketiso-modal-footer");
+    expect(boton.nextElementSibling).toHaveTextContent("Editar ticket");
+    const modal = within(screen.getByRole("dialog"));
+    expect(modal.queryByRole("button", { name: "Cerrar", exact: true })).not.toBeInTheDocument();
+    expect(within(modal.getByRole("region", { name: "Cierre del caso" })).queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.click(modal.getByRole("button", { name: "Cerrar ventana" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(cerrarTicketISO).not.toHaveBeenCalled();
+});
+
+test("el detalle agrupa datos, problema, plan y observaciones en ese orden", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: [{ id_plan: 1, numero: 1, resultado_plan_accion: "Validacion realizada", fecha_control: "2026-10-15" }],
+        fecha_cierre: "2026-10-16T15:00:00Z", estado: "resuelto", creado_por_nombre: "Admin", solucion: "Solucion anterior" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Editar ticket" })).toBeEnabled());
+    const modal = within(screen.getByRole("dialog"));
+    expect(modal.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent.trim())).toEqual([
+        "Datos del ticket", "Descripcion del problema", "Planes de accion (1)", "Cierre del caso", "Observaciones",
+    ]);
+    const datos = within(modal.getByRole("region", { name: "Datos del ticket" }));
+    expect(datos.getByText("005 Soporte y posventa")).toBeInTheDocument();
+    expect(datos.getByText("Jorge")).toBeInTheDocument();
+    expect(datos.getByText("Fecha de recepcion")).toBeInTheDocument();
+    expect(datos.queryByText("Fecha de cierre")).not.toBeInTheDocument();
+    expect(within(modal.getByRole("region", { name: "Descripcion del problema" })).getByText(ticket.problema)).toBeInTheDocument();
+    const plan = within(modal.getByRole("region", { name: "Planes de accion (1)" }));
+    expect(plan.getAllByText("Validacion realizada")).toHaveLength(2);
+    expect(plan.getByText("15/10/2026")).toBeInTheDocument();
+    const cierre = within(modal.getByRole("region", { name: "Cierre del caso" }));
+    expect(cierre.getByText("16/10/2026")).toBeInTheDocument();
+    expect(cierre.getByText("Fecha de cierre")).toBeInTheDocument();
+    expect(plan.getByText("Solucion anterior")).toBeInTheDocument();
+    expect(within(modal.getByRole("region", { name: "Observaciones" })).getByText(ticket.observaciones)).toBeInTheDocument();
+    expect(modal.getByText("Admin").closest("dl")).toHaveAccessibleName("Datos de registro");
+    expect(modal.getAllByText("ISO-001")).toHaveLength(1);
+    expect(modal.getAllByText("Resuelto")).toHaveLength(1);
+});
+
+test("el detalle sin plan muestra campos sin definir sin inventar resultados ni autor", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, observaciones: "" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Editar ticket" })).toBeEnabled());
+    const modal = within(screen.getByRole("dialog"));
+    const plan = within(modal.getByRole("region", { name: "Planes de accion (0)" }));
+    expect(plan.getByText("Aun no hay planes de accion registrados.")).toBeInTheDocument();
+    const cierre = within(modal.getByRole("region", { name: "Cierre del caso" }));
+    expect(cierre.getByText("Sin definir")).toBeInTheDocument();
+    expect(cierre.getByText("Fecha de cierre prevista")).toBeInTheDocument();
+    expect(modal.getByText("Sin observaciones registradas.")).toBeInTheDocument();
+    expect(modal.queryByText("Registrado por")).not.toBeInTheDocument();
 });
 
 test("el ingreso tiene nueve campos sin asunto, fecha sin hora y origen al lado del estado rojo", async () => {

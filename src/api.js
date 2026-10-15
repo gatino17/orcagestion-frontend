@@ -1575,6 +1575,16 @@ export const eliminarTicketISO = async (id) => {
     return response.data;
 };
 
+export const guardarPlanAccionTicketISO = async (id, payload) => {
+    const response = await axios.post(`${BASE_URL}/ticket-iso/${id}/planes-accion`, payload, authHeaders());
+    return response.data.ticket;
+};
+
+export const cerrarTicketISO = async (id, payload) => {
+    const response = await axios.patch(`${BASE_URL}/ticket-iso/${id}/cierre`, payload, authHeaders());
+    return response.data.ticket;
+};
+
 export const obtenerPlantillasDiagramas = async () => {
     const response = await axios.get(`${BASE_URL}/diagramas/plantillas`, authHeaders());
     return response.data;
