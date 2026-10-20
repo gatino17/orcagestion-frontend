@@ -23,6 +23,7 @@ import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consultaCentroControllers";
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
 import { agregarEquipo, modificarEquipo, borrarEquipo } from "../controllers/equiposControllers";
+import EstadoRegistroEquipoArmado from "../components/EstadoRegistroEquipoArmado";
 import "./ArmadoTecnico.css";
 
 const estadosOptions = [
@@ -1167,12 +1168,13 @@ const ArmadoTecnico = () => {
     const equiposOrdenadosFiltradosPlanilla = useMemo(() => {
         if (filtroVistaEquiposPlanilla === "todo") return equiposOrdenados;
         return equiposOrdenados.filter((eq) => {
+            if (editingId === (eq.id_equipo || `tmp-${eq.__idx}`)) return true;
             const estadoRegistro = normalizarEstadoRegistroEquipo(eq?.estado_registro);
             if (filtroVistaEquiposPlanilla === "no_aplica") return estadoRegistro === "no_aplica";
             if (filtroVistaEquiposPlanilla === "pendiente") return estadoRegistro === "pendiente";
             return true;
         });
-    }, [equiposOrdenados, filtroVistaEquiposPlanilla]);
+    }, [equiposOrdenados, filtroVistaEquiposPlanilla, editingId]);
 
     // Arma una lista combinada con filas de título + filas de ítems para mostrar secciones
     const equiposConTitulos = useMemo(() => {
@@ -2315,6 +2317,10 @@ const ArmadoTecnico = () => {
         );
     };
 
+    const handleRegistroEquipoChange = (index, cambios) => {
+        setEquipos((actuales) => actuales.map((equipo, i) => i === index ? { ...equipo, ...cambios } : equipo));
+    };
+
     const handleEstadoRapido = async (row, nuevoEstado) => {
         if (!puedeGestionarArmados) return;
         const id = row.id_armado || row.id;
@@ -2621,6 +2627,10 @@ const ArmadoTecnico = () => {
                 return;
             }
             // Si ya existe un equipo con mismo nombre guardado, actualizamos para evitar duplicados
+            if (normalizarEstadoRegistroEquipo(equipo.estado_registro) === "pendiente" && !String(equipo.observacion_registro || "").trim()) {
+                alert("Debes escribir una observacion para dejar este equipo pendiente.");
+                return;
+            }
             const existente = equipos.find(
                 (e) =>
                     e.id_equipo &&
@@ -2858,7 +2868,7 @@ const ArmadoTecnico = () => {
                                             </div>
 
             {planillaOpen && (
-                <div className="modal show d-block" tabIndex="-1" role="dialog">
+                <div className="modal show d-block armado-planilla-modal" tabIndex="-1" role="dialog">
                     <div className="modal-dialog modal-xl" role="document">
                         <div className="modal-content">
                             <div className="modal-header">
@@ -3112,7 +3122,7 @@ const ArmadoTecnico = () => {
                                             </div>
                                                     )}
                                             </div>
-                                                    <div className="table-responsive">
+                                                    <div className="table-responsive arm-equip-scroll">
                                                 <table className="table table-bordered arm-equip-table">
                                                     <thead>
                                                         <tr>
@@ -3123,7 +3133,7 @@ const ArmadoTecnico = () => {
                                                             {!esMovil && <th>Codigo</th>}
                                                             <th>N Serie / Cantidad</th>
                                                             {!esMovil && <th>Estado</th>}
-                                                            <th>Acciones</th>
+                                                            <th className="arm-equip-actions">Acciones</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -3161,6 +3171,7 @@ const ArmadoTecnico = () => {
                                                                     <tr key={rowKey}>
                                                                         <td>
                                                                             <div>{eq.nombre}</div>
+                                                                            {esMovil && enEdicion && !esEquipoCantidad && <EstadoRegistroEquipoArmado equipo={eq} cajaPendiente={DEFAULT_PENDING_BOX} onChange={(cambios) => handleRegistroEquipoChange(eq.__idx, cambios)} />}
                                                                         </td>
                                                                             <td style={{ minWidth: "110px" }}>
                                                                                 {enEdicion ? (
@@ -3289,11 +3300,16 @@ const ArmadoTecnico = () => {
                                                                         {!esMovil && (
                                                                             <td>
                                                                                 {enEdicion ? (
+                                                                                    <>
+                                                                                    {!esEquipoCantidad && <EstadoRegistroEquipoArmado equipo={eq} cajaPendiente={DEFAULT_PENDING_BOX} onChange={(cambios) => handleRegistroEquipoChange(eq.__idx, cambios)} /> }
                                                                                     <input
                                                                                         className="form-control"
                                                                                         value={eq.estado || ""}
+                                                                                        aria-label={`Estado fisico de ${eq.nombre}`}
+                                                                                        placeholder="Estado fisico (opcional)"
                                                                                         onChange={(e) => handleEquipoChange(eq.__idx, "estado", e.target.value)}
                                                                                     />
+                                                                                    </>
                                                                                 ) : (
                                                                                     estadoRegistro !== "normal" ? (
                                                                                         <span
@@ -3308,17 +3324,18 @@ const ArmadoTecnico = () => {
                                                                                             {labelEstadoRegistroEquipo(estadoRegistro)}
                                                                                         </span>
                                                                                     ) : (
-                                                                                        eq.estado || "-"
+                                                                                        eq.estado || (esEquipoCantidad ? "-" : "Habilitado")
                                                                                     )
                                                                                 )}
                                                                             </td>
                                                                         )}
-                                                                        <td className="text-nowrap">
+                                                                        <td className="text-nowrap arm-equip-actions">
                                                                             {enEdicion ? (
                                                                                 <>
                                                                                     <button
                                                                                         className="btn btn-sm btn-primary mr-2"
                                                                                         onClick={() => handleGuardarEquipo(eq)}
+                                                                                        aria-label={`Guardar equipo ${eq.nombre}`}
                                                                                     >
                                                                                         <i className="fas fa-save" />
                                                                                     </button>
@@ -3337,12 +3354,14 @@ const ArmadoTecnico = () => {
                                                                                     <button
                                                                                         className="btn btn-sm btn-outline-primary mr-2"
                                                                                         onClick={() => setEditingId(rowKey)}
+                                                                                        aria-label={`Editar equipo ${eq.nombre}`}
                                                                                     >
                                                                                         <i className="fas fa-edit" />
                                                                                     </button>
                                                                                     <button
                                                                                         className="btn btn-sm btn-danger"
                                                                                         onClick={() => handleEliminarEquipo(eq)}
+                                                                                        aria-label={`Eliminar equipo ${eq.nombre}`}
                                                                                         disabled={!eq.id_equipo}
                                                                                     >
                                                                                         <i className="fas fa-trash-alt" />

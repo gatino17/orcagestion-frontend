@@ -39,6 +39,73 @@
     overflow-y: auto;
 }
 
+.armado-planilla-modal .modal-dialog {
+    width: calc(100% - 2rem);
+    max-width: 1600px;
+    margin: 1rem auto;
+}
+
+.armado-planilla-modal .modal-content {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overflow: hidden;
+}
+
+.armado-planilla-modal .modal-header {
+    align-items: flex-start;
+}
+
+.armado-planilla-modal .modal-title {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.armado-planilla-modal .modal-header .close {
+    flex-shrink: 0;
+}
+
+.armado-planilla-modal .modal-body {
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+}
+
+.armado-planilla-modal .arm-equip-scroll {
+    position: relative;
+    isolation: isolate;
+}
+
+.armado-planilla-modal .arm-equip-actions {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    width: 136px;
+    min-width: 104px;
+    background: #fff;
+    box-shadow: -4px 0 8px rgba(15, 23, 42, 0.08);
+    text-align: center;
+}
+
+.armado-planilla-modal th.arm-equip-actions {
+    z-index: 3;
+    background: #f1f5f9;
+}
+
+@media (max-width: 575.98px) {
+    .armado-planilla-modal .modal-dialog {
+        width: calc(100% - 1rem);
+        margin: 0.5rem auto;
+    }
+    .armado-planilla-modal .modal-content {
+        max-height: calc(100vh - 1rem);
+        max-height: calc(100dvh - 1rem);
+    }
+    .armado-planilla-modal .modal-body {
+        padding: 0.75rem;
+    }
+}
+
 .armado-page .list-unstyled li small {
     display: block;
 }
