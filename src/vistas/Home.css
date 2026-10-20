@@ -1448,3 +1448,71 @@ button.metric-card.active {
         margin-bottom: 1rem;
     }
 }
+.home-work-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .65rem;
+}
+
+.home-work-pagination { margin-top: 1rem; font-size: .8rem; }
+.home-work-item.from-armado .home-work-main { width: 100%; min-width: 0; }
+.home-armado-tracking { width: 100%; margin-top: 1rem; }
+.home-armado-timeline {
+    --timeline-blue: #087fa8;
+    --timeline-muted: #b4c6d7;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 .8rem;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.home-armado-timeline li { position: relative; min-width: 0; padding: 0 .3rem; text-align: center; }
+.home-armado-timeline li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    height: 2px;
+    background: #dae4ed;
+    top: 12px;
+    left: calc(50% + 13px);
+    width: calc(100% - 26px);
+}
+.home-armado-timeline li.is-done::after { background: var(--timeline-blue); }
+.home-armado-step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin: 0 auto .4rem;
+    border-radius: 50%;
+    background: #eef3f8;
+    color: #94a7ba;
+    border: 1px solid var(--timeline-muted);
+    font-size: .5rem;
+}
+.is-done .home-armado-step { background: var(--timeline-blue); border-color: var(--timeline-blue); color: white; font-size: .65rem; }
+.is-current .home-armado-step { border: 2px solid #e3a11b; color: #bb7900; background: #fff4d8; }
+.home-armado-timeline strong { display: block; font-size: .68rem; line-height: 1.3; color: #3e5369; }
+.home-armado-timeline small { display: block; font-size: .63rem; margin-top: .25rem; color: #687d91; line-height: 1.35; }
+.home-armado-tracking-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-size: .72rem; color: #50697c; }
+.home-armado-warning { display: block; color: #946000; margin-top: .5rem; }
+.home-armado-confirmed { display: block; color: #24794e; margin-top: .5rem; }
+.home-installation-dialog { border: 1px solid #d5e4ef; border-radius: 20px; padding: 0; width: min(540px, calc(100vw - 24px)); max-height: 90vh; color: #213d55; }
+.home-installation-dialog::backdrop { background: rgba(10, 28, 49, .6); }
+.home-installation-dialog header,
+.home-installation-dialog footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: #f1f7fc; }
+.home-installation-dialog header h5 { margin: .25rem 0 0; }
+.home-installation-dialog header button { border: 0; background: transparent; font-size: 1.6rem; color: #4d6d89; }
+.home-installation-dialog footer { justify-content: flex-end; }
+.home-installation-body { padding: 1.25rem; }
+.home-installation-body p { color: #64788b; font-size: .85rem; margin-top: .5rem; }
+.home-installation-body label { display: block; margin: 1rem 0 .35rem; font-size: .8rem; font-weight: 600; }
+@media (max-width: 480px) {
+    .home-armado-timeline { grid-template-columns: 1fr; gap: .65rem; }
+    .home-armado-timeline li { text-align: left; padding-left: 38px; min-height: 36px; }
+    .home-armado-step { position: absolute; top: 0; left: 0; }
+    .home-armado-timeline li:not(:last-child)::after { left: 12px; top: 28px; width: 2px; height: calc(100% - 21px); }
+}

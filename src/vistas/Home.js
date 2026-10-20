@@ -7,6 +7,9 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import esLocale from "@fullcalendar/core/locales/es";
 import { io } from "socket.io-client";
 import './Home.css';
+import LineaTiempoArmado from '../components/LineaTiempoArmado';
+import ConfirmarInstalacionArmado from '../components/ConfirmarInstalacionArmado';
+import { construirLineaTiempoArmado, mostrarArmadoEnCurso } from '../utils/seguimientoArmado';
 
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
@@ -58,8 +61,12 @@ const Home = () => {
     const [soportes, setSoportes] = useState([]);
     const [casosIsmael, setCasosIsmael] = useState([]);
     const [armadosHome, setArmadosHome] = useState([]);
+    const [instalacionArmado, setInstalacionArmado] = useState(null);
+    const [paginaTrabajos, setPaginaTrabajos] = useState(1);
     const [guiasSalidaHome, setGuiasSalidaHome] = useState([]);
     const [loadingArmadosHome, setLoadingArmadosHome] = useState(false);
+    const [errorArmadosHome, setErrorArmadosHome] = useState('');
+    const [errorGuiasHome, setErrorGuiasHome] = useState('');
     const [paginaSoportes, setPaginaSoportes] = useState(1);
     const [vistaResumenAreas, setVistaResumenAreas] = useState(false);
     const [sliderPausaInteraccion, setSliderPausaInteraccion] = useState(false);
@@ -111,24 +118,30 @@ const Home = () => {
 
     const cargarArmadosHome = useCallback(async ({ silent = false } = {}) => {
       if (!silent) setLoadingArmadosHome(true);
-      try {
-        const [armados, guias] = await Promise.all([obtenerArmados(), obtenerGuiasSalidaArmado()]);
-        const lista = (Array.isArray(armados) ? armados : []).sort((a, b) => {
+      const cargarLista = obtenerArmados().then((armados) => {
+        if (!Array.isArray(armados)) throw new Error('Respuesta de armados no valida');
+        const lista = [...armados].sort((a, b) => {
           const fa = new Date(a?.fecha_asignacion || a?.created_at || 0).getTime();
           const fb = new Date(b?.fecha_asignacion || b?.created_at || 0).getTime();
           return fb - fa;
         });
         setArmadosHome(lista);
-        setGuiasSalidaHome(Array.isArray(guias) ? guias : []);
-      } catch (error) {
+        setErrorArmadosHome('');
+      }).catch((error) => {
         console.error("No se pudieron cargar armados operativos:", error);
-        if (!silent) {
-          setArmadosHome([]);
-          setGuiasSalidaHome([]);
-        }
-      } finally {
+        setErrorArmadosHome('No se pudieron actualizar los armados. Reintenta la carga.');
+      }).finally(() => {
         if (!silent) setLoadingArmadosHome(false);
-      }
+      });
+      const cargarGuias = obtenerGuiasSalidaArmado().then((guias) => {
+        if (!Array.isArray(guias)) throw new Error('Respuesta de guias no valida');
+        setGuiasSalidaHome(guias);
+        setErrorGuiasHome('');
+      }).catch((error) => {
+        console.error('No se pudieron cargar las guias de salida:', error);
+        setErrorGuiasHome('No se pudieron actualizar las guias de salida. Esto no oculta los armados.');
+      });
+      await Promise.all([cargarLista, cargarGuias]);
     }, []);
 
     const cargarCasosIsmaelHome = useCallback(async () => {
@@ -759,22 +772,20 @@ const trabajosCursoHoyOperativos = [
     };
   }),
   ...armadosHomeOperativos
-	    .filter((armado) => {
-	      const estado = normalizarTexto(armado?.estado || "");
-	      if (!estado || estado === "finalizado" || estado === "cancelado" || estado === "anulado") return false;
-	      return true;
-	    })
+    .filter((armado) => mostrarArmadoEnCurso(armado))
     .map((armado) => {
-      const estado = String(armado.estado || "Sin estado");
+      const linea = construirLineaTiempoArmado(armado);
+      const estado = linea.resumen;
       return {
         key: `armado-${armado.id_armado}`,
         centro: armado.centro?.nombre || armado.centro_nombre || "Sin centro",
         cliente: armado.centro?.cliente || armado.cliente_nombre || "Sin cliente",
         tipo: "Armado",
+        armado,
         fecha: armado.fecha_inicio || armado.fecha_asignacion,
         tecnicos: obtenerTecnicosArmadoHome(armado),
 	        estado,
-	        estadoClass: normalizarTexto(estado).replace(/\s+/g, "-").replace(/_/g, "-") || "sin-estado",
+	        estadoClass: linea.instalacion ? "finalizado" : "en-progreso",
 	        destacado: false,
 	        tipoClass: "home-state-pendiente",
 	        extraClass: "from-armado",
@@ -809,7 +820,11 @@ const trabajosCursoHoyOperativos = [
   if (a.orden !== b.orden) return a.orden - b.orden;
   if (a.orden === -1) return a.timestamp - b.timestamp;
   return b.timestamp - a.timestamp;
-}).slice(0, 6);
+});
+
+const totalPaginasTrabajos = Math.max(1, Math.ceil(trabajosCursoHoyOperativos.length / 6));
+const paginaTrabajosActual = Math.min(paginaTrabajos, totalPaginasTrabajos);
+const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual - 1) * 6, paginaTrabajosActual * 6);
 	  
 	    
 
@@ -1034,6 +1049,13 @@ const trabajosCursoHoyOperativos = [
         
     return (
         <div className="container-fluid home-dashboard">
+            {instalacionArmado && <ConfirmarInstalacionArmado armado={instalacionArmado}
+                onCerrar={() => setInstalacionArmado(null)}
+                onConfirmado={(id, instalacion) => {
+                    setArmadosHome((actuales) => actuales.map((armado) => armado.id_armado === id
+                        ? { ...armado, seguimiento: { ...armado.seguimiento, instalacion } } : armado));
+                    cargarArmadosHome({ silent: true });
+                }} />}
 	            <div className="home-header">
 	                <div>
 	                    <h2>Panel operativo</h2>
@@ -1390,11 +1412,18 @@ const trabajosCursoHoyOperativos = [
 		                        <span className="home-section-kicker">Operacion diaria</span>
 		                        <h5>Trabajo en curso de hoy</h5>
 		                    </div>
-			                    <span className="home-work-count">{trabajosCursoHoyOperativos.length}</span>
+                            <span className="home-work-count">{trabajosCursoHoyOperativos.length}</span>
 			                </div>
+                        {(errorArmadosHome || errorGuiasHome) && <div className="alert alert-warning small" role="alert">
+                            {errorArmadosHome && <div>{errorArmadosHome}</div>}
+                            {errorGuiasHome && <div>{errorGuiasHome}</div>}
+                            <button type="button" className="btn btn-sm btn-outline-secondary mt-2" disabled={loadingArmadosHome}
+                                onClick={() => cargarArmadosHome()}>Reintentar carga de armados</button>
+                        </div>}
+                        {loadingArmadosHome && !armadosHome.length && <p role="status" className="small text-muted">Cargando armados...</p>}
 			                {trabajosCursoHoyOperativos.length ? (
 			                    <div className="home-work-list">
-			                        {trabajosCursoHoyOperativos.map((trabajo) => {
+			                        {trabajosVisibles.map((trabajo) => {
 			                            return (
 			                                <div className={`home-work-item ${trabajo.extraClass}`} key={trabajo.key}>
 			                                    <div className="home-work-main">
@@ -1410,6 +1439,7 @@ const trabajosCursoHoyOperativos = [
 				                                                {trabajo.metaLabel || (trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente")}
 				                                            </span>
 				                                        </div>
+                                                {trabajo.armado && <LineaTiempoArmado armado={trabajo.armado} onConfirmar={setInstalacionArmado} />}
 				                                        {trabajo.solucion && (
 				                                            <div className="home-work-solution">
 				                                                <i className={`${trabajo.solucionIcon || "fas fa-clipboard-check"} mr-1`} />
@@ -1428,6 +1458,13 @@ const trabajosCursoHoyOperativos = [
 		                        Sin actividad por el momento.
 		                    </div>
 		                )}
+                    {totalPaginasTrabajos > 1 && <nav className="home-work-pagination" aria-label="Paginas de trabajos en curso">
+                        <button type="button" className="btn btn-sm btn-outline-secondary" disabled={paginaTrabajosActual === 1}
+                            onClick={() => setPaginaTrabajos(paginaTrabajosActual - 1)}>Anterior</button>
+                        <span>Pagina {paginaTrabajosActual} de {totalPaginasTrabajos}</span>
+                        <button type="button" className="btn btn-sm btn-outline-secondary" disabled={paginaTrabajosActual === totalPaginasTrabajos}
+                            onClick={() => setPaginaTrabajos(paginaTrabajosActual + 1)}>Siguiente</button>
+                    </nav>}
 		            </div>
             </div>
 

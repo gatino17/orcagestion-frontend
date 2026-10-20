@@ -1841,12 +1841,17 @@ export const guardarMantencionPreventivaBulk = async ({ anio, mes, revisiones })
 
 export const obtenerArmados = async (params = {}) => {
     try {
-        const response = await axios.get(`${BASE_URL}/armados`, { params });
+        const response = await axios.get(`${BASE_URL}/armados/`, { ...authHeaders(), params });
         return response.data;
     } catch (error) {
         console.error("Error al obtener armados:", error);
         throw error;
     }
+};
+
+export const confirmarInstalacionArmado = async (id, payload) => {
+    const response = await axios.post(`${BASE_URL}/armados/${id}/instalacion-confirmada`, payload, authHeaders());
+    return response.data;
 };
 
 export const crearArmado = async (armadoData) => {
