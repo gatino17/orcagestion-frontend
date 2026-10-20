@@ -45,8 +45,12 @@ export default function ConfirmarInstalacionArmado({ armado, onCerrar, onConfirm
         <div className="home-installation-body">
           <strong>{armado.centro?.nombre || armado.centro_nombre || 'Centro'} &middot; Armado #{armado.id_armado}</strong>
           <p>Confirma solo cuando los equipos esten instalados. La recepcion de bultos no confirma la instalacion.</p>
+          {armado.seguimiento?.asignacion_instalacion && <p>
+            Actividad #{armado.seguimiento.asignacion_instalacion.actividad_id} / Instaladores: {armado.seguimiento.asignacion_instalacion.instaladores?.map((item) => item.nombre).join(' / ') || 'Sin asignar'}
+          </p>}
           <label htmlFor="instalacion-fecha">Fecha de instalacion *</label>
           <input id="instalacion-fecha" type="date" className="form-control" required value={fecha}
+            min={armado.seguimiento?.asignacion_instalacion?.fecha_inicio || undefined}
             max={fechaHoyChile()} disabled={guardando} onChange={(event) => setFecha(event.target.value)} />
           <label htmlFor="instalacion-acta">Acta de entrega (opcional)</label>
           <select id="instalacion-acta" className="form-control" value={acta} disabled={guardando} onChange={(event) => setActa(event.target.value)}>

@@ -18,11 +18,18 @@ export default function LineaTiempoArmado({ armado, onConfirmar }) {
           </li>
         ))}
       </ol>
+      {!instalacion && <div className="home-armado-installers">
+        <strong>{linea.estadoAsignacion}</strong>
+        {linea.asignacion && <>
+          <span>Fecha: {linea.asignacion.fecha_inicio ? fechaEtapaArmado(linea.asignacion.fecha_inicio) : 'Por definir'}</span>
+          <span>Instaladores: {linea.asignacion.instaladores?.map((item) => item.nombre).join(' / ') || 'Sin asignar'}</span>
+        </>}
+      </div>}
       <div className="home-armado-tracking-footer">
         <span>{despacho.total_bultos > 0
           ? `${despacho.bultos_enviados || 0} de ${despacho.total_bultos} bultos enviados`
           : 'Bultos sin registrar'}
-          {despacho.bultos_recibidos > 0 && ` / ${despacho.bultos_recibidos} recibidos en centro`}
+          {despacho.total_bultos > 0 && ` / ${despacho.bultos_recibidos || 0} de ${despacho.total_bultos} recibidos en centro`}
         </span>
         {linea.puedeConfirmar && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onConfirmar(armado)}>
           <i className="fas fa-check mr-1" aria-hidden="true" />Confirmar instalacion

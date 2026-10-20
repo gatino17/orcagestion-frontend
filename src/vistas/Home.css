@@ -1459,6 +1459,7 @@ button.metric-card.active {
 .home-work-pagination { margin-top: 1rem; font-size: .8rem; }
 .home-work-item.from-armado .home-work-main { width: 100%; min-width: 0; }
 .home-armado-tracking { width: 100%; margin-top: 1rem; }
+.home-armado-installers { display: grid; gap: .2rem; margin: .7rem 0; padding: .65rem; background: #edf5fc; border-radius: 10px; font-size: .75rem; color: #43627b; }
 .home-armado-timeline {
     --timeline-blue: #087fa8;
     --timeline-muted: #b4c6d7;
@@ -1466,7 +1467,7 @@ button.metric-card.active {
     padding: 0;
     margin: 0 0 .8rem;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 .home-armado-timeline li { position: relative; min-width: 0; padding: 0 .3rem; text-align: center; }
 .home-armado-timeline li:not(:last-child)::after {

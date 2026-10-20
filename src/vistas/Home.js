@@ -189,7 +189,7 @@ const Home = () => {
         cargarSoportesHome();
         cargarCasosIsmaelHome();
       };
-      const refrescarActividades = () => cargarActividadesHome();
+      const refrescarActividades = () => { cargarActividadesHome(); cargarArmadosHome({ silent: true }); };
       const refrescarArmados = () => cargarArmadosHome({ silent: true });
       socket.on("soporte_updated", refrescarSoportes);
       socket.on("actividad_updated", refrescarActividades);
@@ -753,7 +753,8 @@ const trabajosCursoHoyOperativos = [
       timestamp: Number.isNaN(timestamp) ? 0 : timestamp
     };
   }),
-  ...trabajosCursoHoy.map((actividad) => {
+  ...trabajosCursoHoy.filter((actividad) => !actividad.armado_id || !armadosHome.some((armado) =>
+    mostrarArmadoEnCurso(armado) && Number(armado.id_armado) === Number(actividad.armado_id))).map((actividad) => {
     const estado = String(actividad.estado || "Sin estado");
     return {
       key: `actividad-${actividad.id_actividad}`,
@@ -782,6 +783,8 @@ const trabajosCursoHoyOperativos = [
         cliente: armado.centro?.cliente || armado.cliente_nombre || "Sin cliente",
         tipo: "Armado",
         armado,
+        estadoEnDetalle: estado === linea.estadoAsignacion,
+        metaLabel: `Armado: ${obtenerTecnicosArmadoHome(armado).join(' / ') || 'Tecnico pendiente'}`,
         fecha: armado.fecha_inicio || armado.fecha_asignacion,
         tecnicos: obtenerTecnicosArmadoHome(armado),
 	        estado,
@@ -1447,7 +1450,7 @@ const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual 
 				                                            </div>
 				                                        )}
 				                                    </div>
-		                                    <span className={`home-pill home-state-${trabajo.estadoClass}`}>{trabajo.estado}</span>
+		                                    {!trabajo.estadoEnDetalle && <span className={`home-pill home-state-${trabajo.estadoClass}`}>{trabajo.estado}</span>}
 		                                </div>
 		                            );
 		                        })}

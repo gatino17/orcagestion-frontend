@@ -1854,6 +1854,21 @@ export const confirmarInstalacionArmado = async (id, payload) => {
     return response.data;
 };
 
+export const cerrarBultoArmadoAdmin = async (id, caja) => {
+    const response = await axios.post(`${BASE_URL}/armados/${id}/cajas/cerrar`, { caja }, authHeaders());
+    return response.data;
+};
+
+export const abrirBultoArmadoAdmin = async (id, caja) => {
+    const response = await axios.post(`${BASE_URL}/armados/${id}/cajas/abrir`, { caja }, authHeaders());
+    return response.data;
+};
+
+export const eliminarBultoArmadoAdmin = async (id, caja) => {
+    const response = await axios.delete(`${BASE_URL}/armados/${id}/cajas`, { ...authHeaders(), data: { caja } });
+    return response.data;
+};
+
 export const crearArmado = async (armadoData) => {
     try {
         const response = await axios.post(`${BASE_URL}/armados/`, armadoData);

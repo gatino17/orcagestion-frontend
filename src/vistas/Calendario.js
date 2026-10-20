@@ -30,6 +30,7 @@ import { cargarEncargados } from "../controllers/encargadosControllers";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import "./Calendario.css";
+import SelectorArmadoInstalacion from '../components/SelectorArmadoInstalacion';
 
 const estadoOptions = [
   { label: "Todos los estados", value: "" },
@@ -240,6 +241,7 @@ function Calendario() {
   const [ayudanteId, setAyudanteId] = useState("");
   const [tecnicosAdicionalesIds, setTecnicosAdicionalesIds] = useState([]);
   const [soporteActividadId, setSoporteActividadId] = useState("");
+  const [armadoActividadId, setArmadoActividadId] = useState("");
   const [bloqueoTecnicoId, setBloqueoTecnicoId] = useState("");
   const [bloqueoTipo, setBloqueoTipo] = useState("vacaciones");
   const [bloqueoDesde, setBloqueoDesde] = useState("");
@@ -464,6 +466,7 @@ function Calendario() {
   };
 
   const handleEditarActividad = (actividad) => {
+    setArmadoActividadId(actividad.armado_id ? String(actividad.armado_id) : '');
     setEditarActividad(actividad);
     setNombreActividad(actividad.nombre_actividad || "");
     setFechaReclamo(actividad.fecha_reclamo || "");
@@ -574,7 +577,8 @@ function Calendario() {
       tecnicos_adicionales: tecnicosAdicionales,
       estado: estadoActividad || null,
       centro_id: centroId ? parseInt(centroId, 10) : null,
-      soporte_id: soporteActividadId ? parseInt(soporteActividadId, 10) : null
+      soporte_id: soporteActividadId ? parseInt(soporteActividadId, 10) : null,
+      armado_id: armadoActividadId ? Number(armadoActividadId) : null
     };
 
     try {
@@ -589,11 +593,12 @@ function Calendario() {
       setShowModal(false);
       resetForm();
     } catch (error) {
-      alert(`Error al guardar la actividad: ${error.message}`);
+      alert(`Error al guardar la actividad: ${error.response?.data?.message || error.message}`);
     }
   };
 
   const resetForm = () => {
+    setArmadoActividadId('');
     setNombreActividad("");
     setFechaReclamo("");
     setFechaInicio("");
@@ -726,6 +731,7 @@ function Calendario() {
   };
 
   const handleClienteChange = (event) => {
+    setArmadoActividadId('');
     setClienteId(event.target.value);
     setCentroId("");
   };
@@ -774,6 +780,7 @@ function Calendario() {
   };
 
   const handleProgramarDesdeSoporte = (soporte) => {
+    setArmadoActividadId('');
     const clienteKey = buildClienteKey(null, soporte?.centro?.cliente);
     setEditarActividad(null);
     setNombreActividad(`Mantencion terreno - ${soporte?.centro?.nombre || "Centro"}`);
@@ -795,6 +802,7 @@ function Calendario() {
   useEffect(() => {
     const payload = location.state?.programarSoporte;
     if (!payload) return;
+    setArmadoActividadId('');
     const clienteKey = buildClienteKey(null, payload?.centro?.cliente);
     setEditarActividad(null);
     setNombreActividad(`Mantencion terreno - ${payload?.centro?.nombre || "Centro"}`);
@@ -2883,7 +2891,7 @@ function Calendario() {
                   </div>
                   <div className="col-md-6">
                     <label>Tipo de actividad</label>
-                    <select className="form-control" value={area} onChange={(e) => setArea(e.target.value)}>
+                    <select className="form-control" value={area} onChange={(e) => { setArea(e.target.value); setArmadoActividadId(''); }}>
                       <option value="">Seleccione tipo</option>
                       {tipoActividadOptions.map((tipoItem) => (
                         <option key={tipoItem} value={tipoItem}>
@@ -2940,7 +2948,7 @@ function Calendario() {
                   </div>
                   <div className="col-md-6">
                     <label>Centro</label>
-                    <select className="form-control" value={centroId} onChange={(e) => setCentroId(e.target.value)}>
+                    <select className="form-control" value={centroId} onChange={(e) => { setCentroId(e.target.value); setArmadoActividadId(''); }}>
                       <option value="">Seleccione centro</option>
                       {filteredCentros.map((centro) => (
                         <option key={centro.id} value={centro.id}>
@@ -2949,6 +2957,8 @@ function Calendario() {
                       ))}
                     </select>
                   </div>
+                  <SelectorArmadoInstalacion area={area} centroId={centroId} armados={armadosCalendario}
+                    actividadId={editarActividad?.id_actividad} value={armadoActividadId} onChange={setArmadoActividadId} />
                   <div className="col-md-6">
                     <label>Tecnico</label>
                     <select className="form-control" value={encargadoId} onChange={(e) => setEncargadoId(e.target.value)}>

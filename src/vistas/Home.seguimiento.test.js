@@ -29,6 +29,7 @@ const armado = (id, cambios = {}) => ({ id_armado: id, centro: { nombre: `Centro
   seguimiento: { fecha_asignacion: '2026-10-01', fecha_inicio: '2026-10-02', fecha_fin_armado: '2026-10-10',
     despacho: { total_bultos: 2, bultos_enviados: 2, completo: true, fecha_completo: '2026-10-15' },
     puede_confirmar_instalacion: true, actas: [],
+    asignacion_instalacion: { asignada: true, fecha_inicio: '2000-01-01', estado: 'En progreso', actividad_id: 7, instaladores: [{ nombre: 'Instalador de terreno' }] },
   }, ...cambios });
 
 beforeAll(() => {
@@ -72,7 +73,7 @@ test('finished armado remains in work card until explicitly installed', async ()
   confirmarInstalacionArmado.mockResolvedValue({ instalacion });
   render(<Home />);
   await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
-  expect(within(tarjeta()).getByText('Pendiente de instalacion')).toBeInTheDocument();
+  expect(within(tarjeta()).getAllByText('Instalacion asignada')).toHaveLength(1);
   fireEvent.click(within(tarjeta()).getByRole('button', { name: 'Confirmar instalacion' }));
   obtenerArmados.mockResolvedValue([{ ...armado(1), seguimiento: { ...armado(1).seguimiento, instalacion } }]);
   await act(async () => { fireEvent.submit(screen.getByRole('dialog').querySelector('form')); });
@@ -147,4 +148,42 @@ test('armado error is visible and retry restores the timeline', async () => {
     expect(within(tarjeta()).queryByRole('alert')).not.toBeInTheDocument();
     expect(error).toHaveBeenCalled();
   } finally { error.mockRestore(); }
+});
+
+test('unassigned installation shows pending installers without confirmation action', async () => {
+  obtenerArmados.mockResolvedValue([{ ...armado(1), seguimiento: { ...armado(1).seguimiento, asignacion_instalacion: null } }]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(within(tarjeta()).getAllByText('Pendiente de asignacion de instaladores')).toHaveLength(1);
+  expect(within(tarjeta()).queryByRole('button', { name: 'Confirmar instalacion' })).not.toBeInTheDocument();
+});
+
+test('programmed installation status is shown only once', async () => {
+  const item = armado(1);
+  item.seguimiento.asignacion_instalacion.fecha_inicio = '2099-10-20';
+  obtenerArmados.mockResolvedValue([item]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(within(tarjeta()).getAllByText('Instalacion programada')).toHaveLength(1);
+  expect(within(tarjeta()).getByText('Instaladores: Instalador de terreno')).toBeInTheDocument();
+});
+
+test('different work status is retained alongside installer details', async () => {
+  const item = armado(1);
+  item.seguimiento.despacho = { total_bultos: 2, bultos_enviados: 1, completo: false };
+  obtenerArmados.mockResolvedValue([item]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(within(tarjeta()).getByText('Despacho parcial')).toBeInTheDocument();
+  expect(within(tarjeta()).getAllByText('Instalacion asignada')).toHaveLength(1);
+});
+
+test('linked installation shows installers separately and not as a duplicate work card', async () => {
+  cargarActividades.mockResolvedValue([{ id_actividad: 7, armado_id: 1, nombre_actividad: 'Instalar sistema',
+    area: 'Instalacion', estado: 'En progreso', fecha_inicio: '2000-01-01', centro: { nombre: 'Centro 1', cliente: 'Cliente A' } }]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(tarjeta().querySelectorAll('.home-work-item')).toHaveLength(1);
+  expect(within(tarjeta()).getByText('Armado: Jorge')).toBeInTheDocument();
+  expect(within(tarjeta()).getByText('Instaladores: Instalador de terreno')).toBeInTheDocument();
 });

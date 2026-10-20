@@ -24,7 +24,15 @@ export const mostrarArmadoEnCurso = (armado, incluirInstalados = false, ahora = 
 export const construirLineaTiempoArmado = (armado) => {
   const seguimiento = armado.seguimiento || {};
   const despacho = seguimiento.despacho || {};
+  const recepcionCompleta = despacho.recepcion_completa ??
+    (despacho.total_bultos > 0 && despacho.bultos_recibidos >= despacho.total_bultos);
   const instalacion = seguimiento.instalacion;
+  const asignacion = seguimiento.asignacion_instalacion;
+  const asignada = Boolean(asignacion?.asignada);
+  const programada = asignada && asignacion.fecha_inicio > fechaHoyChile();
+  const estadoAsignacion = instalacion ? null : asignada
+    ? programada ? 'Instalacion programada' : 'Instalacion asignada'
+    : 'Pendiente de asignacion de instaladores';
   const estado = String(armado.estado || '').trim().toLowerCase();
   const finalizado = estado === 'finalizado';
   const iniciado = Boolean(seguimiento.fecha_inicio || seguimiento.inicio_registrado ||
@@ -34,20 +42,29 @@ export const construirLineaTiempoArmado = (armado) => {
     { nombre: 'Armado iniciado', fecha: seguimiento.fecha_inicio, completo: iniciado },
     { nombre: 'Armado finalizado', fecha: seguimiento.fecha_fin_armado || (finalizado ? armado.fecha_cierre : null), completo: finalizado },
     { nombre: 'Despacho', fecha: despacho.fecha_completo || despacho.fecha_inicio, completo: Boolean(despacho.completo) },
+    { nombre: 'Recepcion en centro', fecha: recepcionCompleta ? despacho.fecha_recepcion_completa : despacho.fecha_recepcion_inicio, completo: Boolean(recepcionCompleta) },
     { nombre: 'Instalado', fecha: instalacion?.fecha_instalacion, completo: Boolean(instalacion) },
   ];
   const actual = etapas.findIndex((etapa) => !etapa.completo);
   let resumen = 'Pendiente de armado';
   if (iniciado) resumen = estado === 'prefinalizado' ? 'En revision de armado' : 'Armado en curso';
   if (finalizado) resumen = 'Pendiente de despacho';
-  if (despacho.bultos_enviados > 0) resumen = despacho.completo ? 'Pendiente de instalacion' : 'Despacho parcial';
+  if (despacho.bultos_enviados > 0) resumen = despacho.completo
+    ? !asignada ? 'Pendiente de asignacion de instaladores'
+      : programada ? 'Instalacion programada'
+        : String(asignacion.estado || '').toLowerCase() === 'finalizado' ? 'Pendiente de confirmar instalacion' : 'Instalacion asignada'
+    : 'Despacho parcial';
   if (instalacion) resumen = 'Instalado';
   return {
     etapas: etapas.map((etapa, index) => ({ ...etapa, actual: index === actual })),
     resumen,
     despacho,
     instalacion,
+    asignacion,
+    estadoAsignacion,
+    asignada,
+    programada,
     pendientes: finalizado ? Number(armado.armado_equipos_pendientes || 0) : 0,
-    puedeConfirmar: Boolean(seguimiento.puede_confirmar_instalacion && finalizado && despacho.completo && !instalacion),
+    puedeConfirmar: Boolean(seguimiento.puede_confirmar_instalacion && finalizado && despacho.completo && !instalacion && asignada && !programada),
   };
 };

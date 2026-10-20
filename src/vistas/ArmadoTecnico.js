@@ -24,6 +24,8 @@ import { obtenerClientes, obtenerCentrosPorCliente } from "../controllers/consul
 import { cargarDetallesCentro } from "../controllers/centrosControllers";
 import { agregarEquipo, modificarEquipo, borrarEquipo } from "../controllers/equiposControllers";
 import EstadoRegistroEquipoArmado from "../components/EstadoRegistroEquipoArmado";
+import CerrarBultoAdmin from "../components/CerrarBultoAdmin";
+import EstadoBultosArmado from "../components/EstadoBultosArmado";
 import "./ArmadoTecnico.css";
 
 const estadosOptions = [
@@ -2082,7 +2084,7 @@ const ArmadoTecnico = () => {
             sortable: true,
             grow: 0.5,
             wrap: true,
-            cell: (row) => row.total_cajas ?? 0
+            cell: (row) => <EstadoBultosArmado armado={row} />
         },
         {
             name: "Armado",
@@ -4208,6 +4210,18 @@ const ArmadoTecnico = () => {
                                                             </span>
                                                         </div>
 
+                                                        <CerrarBultoAdmin esAdmin={esAdmin} armadoId={armadoHistorialSeleccionado?.id_armado}
+                                                            caja={caja} etiqueta={etiquetaBulto(caja.nombre)} onCerrado={(resultado) => {
+                                                                const cambio = { cajas_estado: resultado.cajas_estado,
+                                                                    ...(resultado.total_cajas !== undefined ? { total_cajas: resultado.total_cajas } : {}) };
+                                                                setArmados((actuales) => actuales.map((item) => Number(item.id_armado) === Number(resultado.id_armado)
+                                                                    ? { ...item, ...cambio } : item));
+                                                                setArmadoActivo((actual) => actual && Number(actual.id_armado) === Number(resultado.id_armado)
+                                                                    ? { ...actual, ...cambio } : actual);
+                                                                setCajasResumenData((actuales) => actuales
+                                                                    .filter((item) => !resultado.eliminada || Object.prototype.hasOwnProperty.call(resultado.cajas_estado, item.nombre))
+                                                                    .map((item) => ({ ...item, estado: resultado.cajas_estado[item.nombre] || item.estado })));
+                                                            }} />
                                                         <div className="small text-muted mb-2">
                                                             Ultimo movimiento: {caja.ultimaFecha ? formatearFechaHora(caja.ultimaFecha) : "Sin movimientos"}
                                                         </div>
