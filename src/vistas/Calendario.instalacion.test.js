@@ -20,7 +20,12 @@ jest.mock('@fullcalendar/react', () => () => null);
 jest.mock('@fullcalendar/daygrid', () => ({}));
 jest.mock('@fullcalendar/interaction', () => ({}));
 jest.mock('@fullcalendar/timegrid', () => ({}));
-jest.mock('react-data-table-component', () => () => null);
+jest.mock('react-data-table-component', () => function MockDataTable({ columns = [], data = [] }) {
+  const React = require('react');
+  const acciones = columns.find((columna) => columna.name === 'Acciones');
+  return React.createElement('div', null, data.filter((item) => item.id_actividad).map((item) =>
+    React.createElement('div', { key: item.id_actividad, 'data-testid': `actividad-${item.id_actividad}` }, acciones?.cell(item))));
+});
 jest.mock('socket.io-client', () => ({ io: () => ({ on: jest.fn(), off: jest.fn(), disconnect: jest.fn() }) }));
 jest.setTimeout(15000);
 
@@ -56,4 +61,19 @@ test('calendar sends chosen armado together with installer and planned date', as
   expect(agregarActividad).toHaveBeenCalledWith(expect.objectContaining({
     armado_id: 4, centro_id: 1, area: 'Instalacion', tecnico_encargado: 9, fecha_inicio: '2026-10-20',
   }));
+});
+
+test('edit activity displays the installation end date supplied by its report', async () => {
+  cargarActividades.mockResolvedValue([{
+    id_actividad: 58, nombre_actividad: 'Instalacion Isla Colorada', area: 'Instalacion', estado: 'Finalizado',
+    armado_id: 4, fecha_inicio: '2026-09-10', fecha_termino: '2026-09-13',
+    centro: { id_centro: 1, nombre: 'Centro A', cliente_id: 1, cliente: 'Cliente A' },
+    encargado_principal: { id_encargado: 9, nombre_encargado: 'Instalador' }, tecnicos_asignados: [],
+  }]);
+  render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><Calendario /></MemoryRouter>);
+  const fila = await screen.findByTestId('actividad-58');
+  fireEvent.click(fila.querySelector('button.btn-warning'));
+  const modal = screen.getByText('Editar actividad').closest('.modal-content');
+  expect(within(modal).getByText(/Fecha t.rmino/).parentElement.querySelector('input')).toHaveValue('2026-09-13');
+  expect(within(modal).getByText('Fecha inicio').parentElement.querySelector('input')).toHaveValue('2026-09-10');
 });

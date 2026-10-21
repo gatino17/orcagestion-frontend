@@ -785,13 +785,15 @@ const trabajosCursoHoyOperativos = [
         armado,
         estadoEnDetalle: estado === linea.estadoAsignacion,
         metaLabel: `Armado: ${obtenerTecnicosArmadoHome(armado).join(' / ') || 'Tecnico pendiente'}`,
+        metaInstalacionLabel: linea.instalacion && linea.tecnicosInstalacion.length
+          ? `Instalacion: ${linea.tecnicosInstalacion.join(' / ')}` : null,
         fecha: armado.fecha_inicio || armado.fecha_asignacion,
         tecnicos: obtenerTecnicosArmadoHome(armado),
 	        estado,
 	        estadoClass: linea.instalacion ? "finalizado" : "en-progreso",
 	        destacado: false,
 	        tipoClass: "home-state-pendiente",
-	        extraClass: "from-armado",
+	        extraClass: linea.instalacion ? "from-armado is-installed" : "from-armado",
 	        orden: 1,
 	        timestamp: new Date(armado.fecha_inicio || armado.fecha_asignacion || 0).getTime() || 0
 	      };
@@ -1441,6 +1443,9 @@ const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual 
 				                                                <i className={`${trabajo.metaIcon || "fas fa-user-check"} mr-1`} />
 				                                                {trabajo.metaLabel || (trabajo.tecnicos.length ? trabajo.tecnicos.join(" / ") : "Tecnico pendiente")}
 				                                            </span>
+                                            {trabajo.metaInstalacionLabel && <span>
+                                                <i className="fas fa-tools mr-1" aria-hidden="true" />{trabajo.metaInstalacionLabel}
+                                            </span>}
 				                                        </div>
                                                 {trabajo.armado && <LineaTiempoArmado armado={trabajo.armado} onConfirmar={setInstalacionArmado} />}
 				                                        {trabajo.solucion && (

@@ -54,6 +54,17 @@ test('partial reception displays count and stays pending', () => {
   expect(screen.getByText(/1 de 2 recibidos en centro/)).toBeInTheDocument();
 });
 
+test('mobile installation report completes installed stage and identifies its source', () => {
+  render(<LineaTiempoArmado armado={{ ...armado, seguimiento: { ...armado.seguimiento, instalacion: {
+    origen: 'informe_instalacion', fecha_instalacion: '2026-10-20', acta_entrega_id: 42,
+  } } }} />);
+  const etapa = screen.getByText('Instalado').closest('li');
+  expect(within(etapa).getByLabelText('Completado')).toBeInTheDocument();
+  expect(screen.getByText(/Instalacion registrada en informe/)).toHaveTextContent('Acta #42');
+  expect(screen.queryByText(/Instalacion confirmada por/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Confirmar instalacion/ })).not.toBeInTheDocument();
+});
+
 test('legacy receipt without timestamp is explicit instead of using dispatch date', () => {
   render(<LineaTiempoArmado armado={{ ...armado, seguimiento: { ...armado.seguimiento, despacho: {
     ...armado.seguimiento.despacho, fecha_recepcion_completa: null,

@@ -74,6 +74,7 @@ test('finished armado remains in work card until explicitly installed', async ()
   render(<Home />);
   await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
   expect(within(tarjeta()).getAllByText('Instalacion asignada')).toHaveLength(1);
+  expect(tarjeta().querySelector('.from-armado')).not.toHaveClass('is-installed');
   fireEvent.click(within(tarjeta()).getByRole('button', { name: 'Confirmar instalacion' }));
   obtenerArmados.mockResolvedValue([{ ...armado(1), seguimiento: { ...armado(1).seguimiento, instalacion } }]);
   await act(async () => { fireEvent.submit(screen.getByRole('dialog').querySelector('form')); });
@@ -81,6 +82,34 @@ test('finished armado remains in work card until explicitly installed', async ()
   expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument();
   expect(within(tarjeta()).getByText(/Instalacion confirmada por Jorge/)).toBeInTheDocument();
   expect(tarjeta().querySelector('.home-state-finalizado')).toHaveTextContent('Instalado');
+  expect(tarjeta().querySelector('.from-armado')).toHaveClass('is-installed');
+});
+
+test('installation completed in mobile report is green without manual confirmation', async () => {
+  obtenerArmados.mockResolvedValue([armado(1, { seguimiento: { ...armado(1).seguimiento, instalacion: {
+    origen: 'informe_instalacion', fecha_instalacion: fechaHoyChile(), acta_entrega_id: 42,
+    tecnicos: ['Gustavo Mella', 'Renato Vega'],
+  } } })]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(tarjeta().querySelector('.home-state-finalizado')).toHaveTextContent('Instalado');
+  expect(within(tarjeta()).getByText(/Instalacion registrada en informe/)).toHaveTextContent('Acta #42');
+  expect(tarjeta().querySelector('.from-armado')).toHaveClass('is-installed');
+  const creadorArmado = within(tarjeta()).getByText('Armado: Jorge');
+  const instaladores = within(tarjeta()).getByText('Instalacion: Gustavo Mella / Renato Vega');
+  expect(creadorArmado.parentElement).toBe(instaladores.parentElement);
+  expect(creadorArmado.compareDocumentPosition(instaladores) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(tarjeta()).queryByRole('button', { name: /Confirmar instalacion/ })).not.toBeInTheDocument();
+});
+
+test('installed card falls back to assigned installers when legacy confirmation has no report names', async () => {
+  obtenerArmados.mockResolvedValue([armado(1, { seguimiento: { ...armado(1).seguimiento, instalacion: {
+    fecha_instalacion: fechaHoyChile(), confirmado_por_nombre: 'Admin',
+  } } })]);
+  render(<Home />);
+  await waitFor(() => expect(within(tarjeta()).getByText('Centro 1')).toBeInTheDocument());
+  expect(within(tarjeta()).getByText('Instalacion: Instalador de terreno')).toBeInTheDocument();
+  expect(within(tarjeta()).queryByText('Instalacion: Admin')).not.toBeInTheDocument();
 });
 
 test('old installed and cancelled stay excluded without history button', async () => {

@@ -351,6 +351,26 @@
     gap: 1.25rem;
 }
 
+.consulta-instalaciones-manuales { margin: .8rem 0; font-size: .85rem; color: #475569; }
+.consulta-documentos-instalacion { margin-top: 1rem; }
+.consulta-documentos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: .85rem; margin-bottom: .75rem; }
+.consulta-documentos-grupo { min-width: 0; border: 1px solid #dbe5ef; border-radius: 14px; background: linear-gradient(145deg, #f5faff, #fff 65%); overflow: hidden; }
+.consulta-documentos-grupo header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .8rem; border-bottom: 1px solid #e3edf5; }
+.consulta-documentos-grupo h6 { margin: 0; color: #16628a; font-size: .9rem; font-weight: 600; }
+.consulta-documentos-total { min-width: 25px; padding: .15rem .45rem; border-radius: 20px; background: #deeff9; text-align: center; color: #145b83; font-size: .75rem; font-weight: 600; }
+.consulta-documentos-grupo > p { margin: 0; padding: .85rem; font-size: .8rem; color: #64748b; }
+.consulta-documentos-grupo > p[role="alert"] { color: #b91c1c; }
+.consulta-documentos-lista { list-style: none; margin: 0; padding: 0; }
+.consulta-documentos-lista li { padding: .85rem; overflow-wrap: anywhere; }
+.consulta-documentos-lista li + li { border-top: 1px solid #e3edf5; }
+.consulta-documento-cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .7rem; font-size: .8rem; }
+.consulta-documento-cabecera > span { padding: .15rem .4rem; border-radius: 6px; background: #e5f6ee; color: #22744e; font-size: .7rem; }
+.consulta-documentos-lista dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3rem .6rem; margin: 0; font-size: .78rem; }
+.consulta-documentos-lista dt { font-weight: 500; color: #64748b; }
+.consulta-documentos-lista dd { margin: 0; color: #243c50; }
+.consulta-documento-descripcion { margin: .75rem 0 0; white-space: pre-wrap; font-size: .78rem; color: #475569; }
+.consulta-documento-descripcion > strong { display: block; margin-bottom: .25rem; color: #243c50; }
+
 .timeline-section {
     border-left: 3px solid rgba(15, 23, 42, 0.08);
     padding-left: 1.25rem;

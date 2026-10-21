@@ -17,8 +17,11 @@ export const fechaEtapaArmado = (fecha) => {
 export const mostrarArmadoEnCurso = (armado, incluirInstalados = false, ahora = new Date()) => {
   const estado = String(armado.estado || '').trim().toLowerCase();
   if (['cancelado', 'anulado'].includes(estado)) return false;
-  const instalado = armado.seguimiento?.instalacion?.fecha_instalacion;
-  return !instalado || incluirInstalados || instalado === fechaHoyChile(ahora);
+  const instalacion = armado.seguimiento?.instalacion;
+  const instalado = instalacion?.fecha_instalacion;
+  const fechaSeguimiento = instalacion?.origen === 'informe_instalacion'
+    ? instalacion.fecha_registro_seguimiento || instalado : instalado;
+  return !instalado || incluirInstalados || fechaSeguimiento === fechaHoyChile(ahora);
 };
 
 export const construirLineaTiempoArmado = (armado) => {
@@ -28,6 +31,11 @@ export const construirLineaTiempoArmado = (armado) => {
     (despacho.total_bultos > 0 && despacho.bultos_recibidos >= despacho.total_bultos);
   const instalacion = seguimiento.instalacion;
   const asignacion = seguimiento.asignacion_instalacion;
+  const tecnicosInforme = Array.isArray(instalacion?.tecnicos)
+    ? instalacion.tecnicos.map((nombre) => String(nombre || '').trim()).filter(Boolean) : [];
+  const tecnicosAsignados = Array.isArray(asignacion?.instaladores)
+    ? asignacion.instaladores.map((item) => String(item?.nombre || '').trim()).filter(Boolean) : [];
+  const tecnicosInstalacion = [...new Set(tecnicosInforme.length ? tecnicosInforme : tecnicosAsignados)];
   const asignada = Boolean(asignacion?.asignada);
   const programada = asignada && asignacion.fecha_inicio > fechaHoyChile();
   const estadoAsignacion = instalacion ? null : asignada
@@ -61,6 +69,7 @@ export const construirLineaTiempoArmado = (armado) => {
     despacho,
     instalacion,
     asignacion,
+    tecnicosInstalacion,
     estadoAsignacion,
     asignada,
     programada,

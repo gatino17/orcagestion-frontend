@@ -36,7 +36,9 @@ export default function LineaTiempoArmado({ armado, onConfirmar }) {
         </button>}
       </div>
       {linea.pendientes > 0 && <small className="home-armado-warning">Finalizado con {linea.pendientes} equipos pendientes de completar.</small>}
-      {instalacion && <small className="home-armado-confirmed">Instalacion confirmada por {instalacion.confirmado_por_nombre || 'usuario registrado'}
+      {instalacion && <small className="home-armado-confirmed">{instalacion.origen === 'informe_instalacion'
+        ? 'Instalacion registrada en informe'
+        : `Instalacion confirmada por ${instalacion.confirmado_por_nombre || 'usuario registrado'}`}
         {instalacion.acta_entrega_id ? ` / Acta #${instalacion.acta_entrega_id}` : ''}.
       </small>}
     </div>

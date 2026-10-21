@@ -7,6 +7,7 @@ import {
   obtenerHistorialCentro,
   obtenerHistorialCentroPDF
 } from '../controllers/consultaCentroControllers';
+import DocumentosInstalacionCentro, { useDocumentosInstalacionCentro } from '../components/DocumentosInstalacionCentro';
 import './ConsultaCentro.css';
 
 const ConsultaCentro = () => {
@@ -19,6 +20,7 @@ const ConsultaCentro = () => {
   const [showModal, setShowModal] = useState(false);
   const [inventario, setInventario] = useState([]);
   const [rolUsuario, setRolUsuario] = useState('');
+  const documentosInstalacion = useDocumentosInstalacionCentro(selectedCentro);
 
   // Cargar rol del usuario desde el token
   useEffect(() => {
@@ -36,15 +38,17 @@ const ConsultaCentro = () => {
   // Cargar historial del centro cuando cambia el centro seleccionado
   useEffect(() => {
     if (!selectedCentro) return;
-
+    let vigente = true;
     obtenerHistorialCentro(
       selectedCentro,
       (data) => {
+        if (!vigente) return;
         setHistorial(data);
         setInventario(data.inventario || []);
       },
-      setError
+      (mensaje) => { if (vigente) setError(mensaje); }
     );
+    return () => { vigente = false; };
   }, [selectedCentro]);
 
   // Cargar clientes al inicio
@@ -65,6 +69,10 @@ const ConsultaCentro = () => {
   };
 
   const handleCentroChange = (centroId) => {
+    setHistorial(null);
+    setInventario([]);
+    setError(null);
+    setShowModal(false);
     setSelectedCentro(centroId);
   };
 
@@ -269,7 +277,7 @@ const ConsultaCentro = () => {
   const totalEventos = timelineSections.reduce(
     (acc, section) => acc + section.items.length,
     0
-  );
+  ) + documentosInstalacion.actas.length + documentosInstalacion.permisos.length;
 
   const centerMeta = centroInfo
     ? [
@@ -477,6 +485,7 @@ const ConsultaCentro = () => {
                     </span>
                     <h5>{section.title}</h5>
                   </div>
+                  {section.key === 'instalaciones' && section.items.length > 0 && <h6 className="consulta-instalaciones-manuales">Instalaciones manuales</h6>}
                   {section.items.length > 0 ? (
                     section.items.map((item) => (
                       <div
@@ -491,8 +500,9 @@ const ConsultaCentro = () => {
                       </div>
                     ))
                   ) : (
-                    <p className="timeline-empty">Sin registros</p>
+                    section.key !== 'instalaciones' && <p className="timeline-empty">Sin registros</p>
                   )}
+                  {section.key === 'instalaciones' && <DocumentosInstalacionCentro documentos={documentosInstalacion} />}
                 </div>
               ))}
             </div>

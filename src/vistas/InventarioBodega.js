@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { jwtDecode } from "jwt-decode";
+import { io } from "socket.io-client";
 import {
   cerrarInventarioBodegaToma,
   crearInventarioBodegaEquipos,
@@ -134,6 +135,10 @@ export default function InventarioBodega() {
     ubicacion: "Bodega central",
     observacion: "",
   });
+  const cargasRef = useRef({});
+  const cargaTomasId = useRef(0);
+  const cargaDetalleId = useRef(0);
+  const tomaSeleccionadaId = useRef(null);
 
   const esAdmin = useMemo(() => {
     try {
@@ -155,6 +160,7 @@ export default function InventarioBodega() {
   }, [seriesGeneradasBodega]);
 
   const cargarTomas = async (seleccionarId = null) => {
+    const cargaId = ++cargaTomasId.current;
     setLoading(true);
     try {
       const [data, tipos] = await Promise.all([
@@ -163,35 +169,77 @@ export default function InventarioBodega() {
         ),
         obtenerInventarioBodegaTipos().catch(() => []),
       ]);
+      if (cargaId !== cargaTomasId.current) return;
       const lista = Array.isArray(data) ? data : [];
       setTiposEquipo(Array.isArray(tipos) ? tipos : []);
       setTomas(lista);
-      const idObjetivo = seleccionarId || tomaActiva?.id_toma || lista[0]?.id_toma;
+      const preferida = seleccionarId || tomaSeleccionadaId.current || tomaActiva?.id_toma;
+      const idObjetivo = lista.find((item) => String(item.id_toma) === String(preferida))?.id_toma || lista[0]?.id_toma;
       if (idObjetivo) {
-        await cargarDetalle(idObjetivo);
+        await cargasRef.current.cargarDetalle(idObjetivo);
       } else {
+        ++cargaDetalleId.current;
+        tomaSeleccionadaId.current = null;
         setTomaActiva(null);
       }
     } catch (error) {
+      if (cargaId !== cargaTomasId.current) return;
       console.error("Error al cargar tomas de inventario:", error);
       alert(error?.response?.data?.error || "No se pudo cargar inventario bodega.");
     } finally {
-      setLoading(false);
+      if (cargaId === cargaTomasId.current) setLoading(false);
     }
   };
 
   const cargarDetalle = async (id) => {
+    const cargaId = ++cargaDetalleId.current;
+    tomaSeleccionadaId.current = id;
     try {
       const data = await obtenerInventarioBodegaToma(
         id,
         tipoSeleccionado ? { tipo_equipo: tipoSeleccionado } : {}
       );
+      if (cargaId !== cargaDetalleId.current) return;
       setTomaActiva(data || null);
     } catch (error) {
+      if (cargaId !== cargaDetalleId.current) return;
       console.error("Error al cargar detalle de inventario:", error);
       alert(error?.response?.data?.error || "No se pudo cargar el detalle.");
     }
   };
+  cargasRef.current = { cargarTomas, cargarDetalle };
+
+  useEffect(() => {
+    const env = process.env.REACT_APP_API_BASE_URL;
+    const socketBaseUrl = env && /^https?:\/\//i.test(env)
+      ? env.replace(/\/api\/?$/i, "")
+      : ["localhost", "127.0.0.1"].includes(window.location.hostname)
+        ? "http://localhost:5000" : `${window.location.protocol}//${window.location.host}`;
+    const socket = io(socketBaseUrl, {
+      transports: process.env.REACT_APP_SOCKET_POLLING_ONLY === "1" ? ["polling"] : ["websocket", "polling"],
+      reconnection: true,
+    });
+    let timer;
+    const refrescar = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => cargasRef.current.cargarTomas(), 200);
+    };
+    const volverVisible = () => { if (document.visibilityState === "visible") refrescar(); };
+    socket.on("inventario_updated", refrescar);
+    socket.on("connect", refrescar);
+    window.addEventListener("focus", refrescar);
+    document.addEventListener("visibilitychange", volverVisible);
+    return () => {
+      clearTimeout(timer);
+      cargaTomasId.current += 1;
+      cargaDetalleId.current += 1;
+      socket.off("inventario_updated", refrescar);
+      socket.off("connect", refrescar);
+      socket.disconnect();
+      window.removeEventListener("focus", refrescar);
+      document.removeEventListener("visibilitychange", volverVisible);
+    };
+  }, []);
 
   useEffect(() => {
     cargarTomas();

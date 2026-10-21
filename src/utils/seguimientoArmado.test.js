@@ -6,6 +6,21 @@ const base = {
     despacho: { total_bultos: 2, bultos_enviados: 0, completo: false }, instalacion: null },
 };
 
+test('actual report installers take precedence over calendar assignment and builder', () => {
+  const linea = construirLineaTiempoArmado({ ...base, tecnico: { nombre: 'Armador' }, seguimiento: {
+    ...base.seguimiento, instalacion: { tecnicos: [' Gustavo Mella ', 'Renato Vega', 'Gustavo Mella'] },
+    asignacion_instalacion: { instaladores: [{ nombre: 'Otro asignado' }] },
+  } });
+  expect(linea.tecnicosInstalacion).toEqual(['Gustavo Mella', 'Renato Vega']);
+});
+
+test('missing installer names never fall back to armado builder or confirming administrator', () => {
+  const linea = construirLineaTiempoArmado({ ...base, tecnico: { nombre: 'Armador' }, seguimiento: {
+    ...base.seguimiento, instalacion: { confirmado_por_nombre: 'Admin', tecnicos: [] },
+  } });
+  expect(linea.tecnicosInstalacion).toEqual([]);
+});
+
 test('assignment does not invent actual start date', () => {
   const linea = construirLineaTiempoArmado(base);
   expect(linea.etapas.map((item) => item.completo)).toEqual([true, false, false, false, false, false]);
@@ -61,6 +76,16 @@ test('Chile day boundary controls installed retention', () => {
 
 test.each(['cancelado', 'anulado'])('cancelled armado %s is hidden even with history', (estado) => {
   expect(mostrarArmadoEnCurso({ ...base, estado }, true)).toBe(false);
+});
+
+test('backdated mobile installation stays visible on report registration day only', () => {
+  const armado = { ...base, seguimiento: { ...base.seguimiento, instalacion: {
+    origen: 'informe_instalacion', fecha_instalacion: '2026-09-13', fecha_registro_seguimiento: '2026-10-21',
+  } } };
+  expect(mostrarArmadoEnCurso(armado, false, new Date('2026-10-21T15:00:00Z'))).toBe(true);
+  expect(construirLineaTiempoArmado(armado).etapas[5].fecha).toBe('2026-09-13');
+  expect(mostrarArmadoEnCurso(armado, false, new Date('2026-10-22T03:01:00Z'))).toBe(false);
+  expect(mostrarArmadoEnCurso(armado, true, new Date('2026-10-22T03:01:00Z'))).toBe(true);
 });
 
 test('legacy response does not fabricate installation from center dates', () => {
