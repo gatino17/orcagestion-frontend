@@ -532,6 +532,55 @@ body.sidenav-expanded .app-header {
     }
 }
 
+@media (min-width: 576px) and (max-width: 992px) {
+    .app-header,
+    body.sidenav-collapsed .app-header,
+    body.sidenav-expanded .app-header {
+        flex-wrap: nowrap;
+        gap: 0.75rem;
+        padding: 0.6rem 1rem;
+    }
+
+    .header-left {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+        justify-content: flex-start;
+        gap: 0.65rem;
+    }
+
+    .header-right {
+        flex: 0 0 auto;
+        width: auto;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    .status-pill {
+        width: auto;
+        white-space: nowrap;
+    }
+
+    .header-brand {
+        gap: 0.5rem;
+    }
+
+    .header-brand small {
+        font-size: 0.65rem;
+    }
+}
+
+@media (max-width: 575px) {
+    .header-right {
+        flex-wrap: nowrap;
+    }
+
+    .status-pill {
+        width: auto;
+        white-space: nowrap;
+    }
+}
+
 .app-footer a {
     color: #38bdf8;
 }

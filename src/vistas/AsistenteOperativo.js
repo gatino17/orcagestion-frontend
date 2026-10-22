@@ -17,6 +17,7 @@ import {
 } from "../api";
 import VistaGeneralViewer from "../components/VistaGeneralViewer";
 import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
+import { extraerTipoEquipoBodega, coincideTipoEquipoBodega } from "../utils/consultaBodega";
 import "./AsistenteOperativo.css";
 
 const normalizar = (value) =>
@@ -246,12 +247,8 @@ function AsistenteOperativo() {
     {
       id: "intro",
       tipo: "asistente",
-      titulo: "Asistente operativo",
-      texto: "Pregunta por series, fallas, armados o actividades.",
-      items: [
-        "Ej: donde esta 311030052",
-        "Ej: fallas de este ano",
-      ],
+      texto: "En que te puedo ayudar? Consulta por equipos, fallas o actividades.",
+      items: [],
     },
   ]);
 
@@ -993,9 +990,11 @@ function AsistenteOperativo() {
     };
   };
 
-  const responderEquipos = (filtro = "resumen") => {
+  const responderEquipos = (filtro = "resumen", consultaBodega = "") => {
+    const tipoBodega = filtro === "bodega" ? extraerTipoEquipoBodega(consultaBodega) : null;
     const instalados = datos.equipos.filter((e) => String(e?.numero_serie || "").trim() && normalizar(e?.estado_registro) !== "no_aplica");
-    const bodega = datos.bodega.filter((e) => normalizar(e?.estado_asignacion || "en_bodega") === "en_bodega");
+    const bodega = datos.bodega.filter((e) => normalizar(e?.estado_asignacion || "en_bodega") === "en_bodega"
+      && coincideTipoEquipoBodega(e, tipoBodega));
     const asignadosTecnico = datos.bodega.filter((e) => normalizar(e?.estado_asignacion) === "asignado_tecnico");
     const revision = bodega.filter((equipo) => {
       const idEquipo = Number(equipo?.id_bodega_equipo || equipo?.id || 0);
@@ -1018,11 +1017,14 @@ function AsistenteOperativo() {
 
     if (filtro === "bodega") {
       const disponibles = bodega.length - revision.length;
+      const nombre = tipoBodega ? (bodega.length === 1 ? tipoBodega.singular : tipoBodega.plural) : "equipos";
+      const texto = bodega.length
+        ? `Hay ${bodega.length} ${nombre} en bodega: ${disponibles} ${disponibles === 1 ? "disponible" : "disponibles"} y ${revision.length} en revision.`
+        : tipoBodega ? `Actualmente no hay ${tipoBodega.plural} en bodega.` : "Actualmente no hay equipos registrados en bodega.";
       return {
-        titulo: "Equipos en bodega",
-        texto: bodega.length
-          ? `Hay ${bodega.length} equipos en bodega: ${disponibles} disponibles y ${revision.length} en revision.`
-          : "Actualmente no hay equipos registrados en bodega.",
+        titulo: tipoBodega ? `${tipoBodega.plural} en bodega` : "Equipos en bodega",
+        texto,
+        locucion: bodega.length ? `${texto} Te dejo el listado en el chat.` : texto,
         items: bodega.map(describirEquipoBodega),
       };
     }
@@ -1119,6 +1121,9 @@ function AsistenteOperativo() {
         };
       }
     }
+    if (query.includes("bodega") && !/\b(fallas?|casos?|tickets?|pendientes?|seguimiento|actividad(?:es)?|trabajos?|calendario|armados?|armando|bultos?|despacho)\b/.test(query)) {
+      return responderEquipos("bodega", texto);
+    }
     if ((query.includes("soporte") || query.includes("falla")) && (query.includes("ano") || query.includes("este ano") || query.includes("actual"))) {
       return responderSoportesAnio();
     }
@@ -1145,9 +1150,6 @@ function AsistenteOperativo() {
     }
     if (query.includes("actividad") || query.includes("trabajo") || query.includes("hoy") || query.includes("semana") || query.includes("calendario")) {
       return responderActividades(query.includes("semana") ? "semana" : "hoy");
-    }
-    if (query.includes("bodega")) {
-      return responderEquipos("bodega");
     }
     if (query.includes("revision")) {
       return responderEquipos("revision");
@@ -1295,12 +1297,11 @@ function AsistenteOperativo() {
   ];
 
   return (
-    <div className="asistente-page container-fluid py-4">
+    <div className="asistente-page container-fluid">
       <div className="asistente-hero">
-        <div>
-          <span className="asistente-eyebrow">Solo administracion</span>
+        <div className="asistente-heading">
           <h2>Asistente operativo</h2>
-          <p>Consulta rapida por texto sobre equipos, soporte, armados, bodega y calendario.</p>
+          <p>Equipos y operaciones, en un solo lugar.</p>
         </div>
         <div className="asistente-hero-tools">
           <div className="asistente-kpis compact">
@@ -1318,9 +1319,11 @@ function AsistenteOperativo() {
               <small>Incompletos {resumen.armadosIncompletos}</small>
             </div>
           </div>
-          <button className="asistente-refresh" type="button" onClick={() => cargarDatos()} disabled={loading}>
+          <button className="asistente-refresh" type="button" onClick={() => cargarDatos()} disabled={loading}
+            title={loading ? "Actualizando datos" : "Actualizar datos"}
+            aria-label={loading ? "Actualizando datos" : "Actualizar datos"}>
             <i className={`fas ${loading ? "fa-spinner fa-spin" : "fa-sync-alt"}`} />
-            {loading ? "Actualizando" : "Actualizar datos"}
+            <span>{loading ? "Actualizando" : "Actualizar datos"}</span>
           </button>
         </div>
       </div>
@@ -1342,7 +1345,7 @@ function AsistenteOperativo() {
 
           <div className="asistente-messages">
             {mensajes.map((msg) => (
-              <div key={msg.id} className={`asistente-message ${msg.tipo === "usuario" ? "user" : "assistant"}`}>
+              <div key={msg.id} className={`asistente-message ${msg.tipo === "usuario" ? "user" : "assistant"}${msg.id === "intro" ? " is-intro" : ""}`}>
                 {msg.titulo ? <h6>{msg.titulo}</h6> : null}
                 <p>{msg.texto}</p>
                 {Array.isArray(msg.items) && msg.items.length ? (
@@ -1372,6 +1375,7 @@ function AsistenteOperativo() {
             }}
           >
             <input
+              aria-label="Escribe tu consulta"
               value={consulta}
               onChange={(event) => setConsulta(event.target.value)}
               placeholder="Pregunta por serie, soporte, armados, bodega o actividades..."
@@ -1395,7 +1399,7 @@ function AsistenteOperativo() {
               <span className="voice-orbit orbit-one" aria-hidden="true" />
               <span className="voice-orbit orbit-two" aria-hidden="true" />
             </button>
-            <button type="submit" disabled={consultando || !consulta.trim()}>
+            <button type="submit" aria-label="Enviar consulta" title="Enviar consulta" disabled={consultando || !consulta.trim()}>
               <i className="fas fa-paper-plane" />
             </button>
           </form>
@@ -1403,7 +1407,6 @@ function AsistenteOperativo() {
 
         <aside className="asistente-side-card">
           <h5>Consultas rapidas</h5>
-          <p>Selecciona una consulta o escribe una propia.</p>
           <div className="asistente-suggestions">
             {sugerencias.map((sugerencia) => (
               <button key={sugerencia} type="button" onClick={() => enviarConsulta(sugerencia)} disabled={consultando}>
@@ -1412,13 +1415,6 @@ function AsistenteOperativo() {
             ))}
           </div>
 
-          <div className="asistente-scope">
-            <h6>Alcance de esta version</h6>
-            <span>Texto solamente</span>
-            <span>Sin IA externa</span>
-            <span>Datos actuales del sistema</span>
-            <span>Acceso solo admin</span>
-          </div>
         </aside>
       </div>
 
