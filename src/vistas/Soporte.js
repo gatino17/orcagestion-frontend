@@ -8,7 +8,9 @@ import {
     modificarSoporte,
     borrarSoporte
 } from "../controllers/soporteControllers";
-import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerEquipos, obtenerFallasDispositivos, resolverPlantillaDiagrama } from "../api";
+import { eliminarCasoExternoSoporte, obtenerCasosIsmael, obtenerEquipos, obtenerFallasDispositivos, resolverPlantillaDiagrama, enviarAvisoSoporteTerreno } from "../api";
+import SoporteAvisoTerreno, { EstadoAvisoTerreno, ResultadoAvisoTerreno } from "../components/SoporteAvisoTerreno";
+import { admiteAvisoTerreno, notificarSoporteGuardado } from "../utils/soporteAviso";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
 import VistaGeneralViewer from "../components/VistaGeneralViewer";
@@ -254,6 +256,10 @@ const Soporte = () => {
     const [prioridadSoporte, setPrioridadSoporte] = useState("media");
     const [fechaSoporte, setFechaSoporte] = useState("");
     const [solucion, setSolucion] = useState("");
+    const [sugerencia, setSugerencia] = useState("");
+    const [enviarAvisoTerreno, setEnviarAvisoTerreno] = useState(false);
+    const [resultadoAviso, setResultadoAviso] = useState(null);
+    const [reintentandoAviso, setReintentandoAviso] = useState(false);
     const [categoriaFalla, setCategoriaFalla] = useState("");
     const [subcategoriaFalla, setSubcategoriaFalla] = useState("");
     const [permisoTrabajo, setPermisoTrabajo] = useState(false);
@@ -269,6 +275,9 @@ const Soporte = () => {
     const [editarSoporte, setEditarSoporte] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [guardandoSoporte, setGuardandoSoporte] = useState(false);
+    useEffect(() => {
+        if (!admiteAvisoTerreno(tipo, estado, fechaCierre)) setEnviarAvisoTerreno(false);
+    }, [tipo, estado, fechaCierre]);
     const [diagramaConsulta, setDiagramaConsulta] = useState({
         abierto: false,
         cargando: false,
@@ -503,6 +512,7 @@ const Soporte = () => {
                     soporte.subcategoria_falla,
                     soporte.tipo,
                     soporte.solucion,
+                    soporte.sugerencia,
                     esAdmin ? soporte.creado_por_nombre : null
                 ]
                     .filter(Boolean)
@@ -557,6 +567,8 @@ const Soporte = () => {
         setPrioridadSoporte("media");
         setFechaSoporte("");
         setSolucion("");
+        setSugerencia("");
+        setEnviarAvisoTerreno(false);
         setCategoriaFalla("");
         setSubcategoriaFalla("");
         setPermisoTrabajo(false);
@@ -756,6 +768,11 @@ const Soporte = () => {
 
     const handleGuardarSoporte = async () => {
         if (guardandoSoporte) return;
+        const notificar = enviarAvisoTerreno && admiteAvisoTerreno(tipo, estado, fechaCierre);
+        if (notificar && (!problema.trim() || !sugerencia.trim())) {
+            alert("Completa el problema y la sugerencia para enviar el aviso a soporte.");
+            return;
+        }
 
         if (!origen) {
             alert("Selecciona el origen del soporte.");
@@ -784,6 +801,7 @@ const Soporte = () => {
             prioridad: prioridadSoporte,
             fecha_soporte: fechaSoporte,
             solucion,
+            sugerencia: sugerencia.trim() || null,
             categoria_falla: categoriaFalla || null,
             subcategoria_falla: subcategoriaFalla || null,
             permiso_trabajo: permisoTrabajo,
@@ -799,10 +817,14 @@ const Soporte = () => {
         };
 
         setGuardandoSoporte(true);
+        setResultadoAviso(null);
         try {
-            const onSuccess = async () => {
+            const onSuccess = async (resultado) => {
+                const id = editarSoporte?.id_soporte || resultado?.id_soporte;
+                const aviso = notificar ? await notificarSoporteGuardado(id, enviarAvisoSoporteTerreno) : null;
                 resetForm();
                 setShowModal(false);
+                setResultadoAviso(aviso);
                 await refrescarSoportes();
             };
 
@@ -818,6 +840,17 @@ const Soporte = () => {
         }
     };
 
+    const handleReintentarAviso = async () => {
+        if (!resultadoAviso?.id || !resultadoAviso.reintentable || reintentandoAviso) return;
+        setReintentandoAviso(true);
+        try {
+            setResultadoAviso(await notificarSoporteGuardado(resultadoAviso.id, enviarAvisoSoporteTerreno));
+            await refrescarSoportes();
+        } finally {
+            setReintentandoAviso(false);
+        }
+    };
+
     const handleEliminarSoporte = async (id) => {
         if (window.confirm("¿Estás seguro de que deseas eliminar este soporte?")) {
             await borrarSoporte(id, async () => {
@@ -827,7 +860,7 @@ const Soporte = () => {
     };
 
     const esElementoInteractivoTabla = (target) =>
-        Boolean(target?.closest?.("button, a, input, select, textarea, label, [role='button']"));
+        Boolean(target?.closest?.("button, a, input, select, textarea, label, summary, [role='button']"));
 
     const obtenerScrollTargetTabla = () => {
         const container = tableScrollRef.current;
@@ -921,6 +954,8 @@ const Soporte = () => {
         const fechaCierreNormalizada = formatearParaInputFecha(soporte.fecha_cierre);
         setFechaSoporte(fechaSoporteNormalizada);
         setSolucion(soporte.solucion);
+        setSugerencia(soporte.sugerencia || "");
+        setEnviarAvisoTerreno(false);
         const categoriaResuelta = resolverCategoriaExistente(
             soporte.categoria_falla,
             soporte.subcategoria_falla
@@ -1249,7 +1284,14 @@ const Soporte = () => {
         },
         { name: "Centro", selector: (row) => row.centro?.nombre || "No asignado", sortable: true, wrap: true, minWidth: "145px" },
         { name: "Cliente", selector: (row) => row.centro?.cliente || "-", sortable: true, wrap: true, minWidth: "135px" },
-        { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, minWidth: "270px" },
+        { name: "Problema", selector: (row) => row.problema, sortable: true, wrap: true, minWidth: "270px",
+            cell: (row) => <div className="py-2">
+                <span>{row.problema}</span>
+                {row.sugerencia && <details className="soporte-sugerencia-detalle mt-2">
+                    <summary>Sugerencia de terreno</summary><p>{row.sugerencia}</p>
+                </details>}
+                <EstadoAvisoTerreno aviso={row.aviso_terreno} />
+            </div> },
         { name: "Tipo", selector: (row) => obtenerEtiquetaTipoSoporte(row.tipo), sortable: true, width: "90px" },
         {
             name: "Origen",
@@ -1512,6 +1554,7 @@ const Soporte = () => {
                 </button>
             </div>
 
+            <ResultadoAvisoTerreno resultado={resultadoAviso} onReintentar={handleReintentarAviso} ocupado={reintentandoAviso} />
             <div className="card mb-4 filter-card">
                 <div className="card-body">
                     <div className="row align-items-end">
@@ -1913,7 +1956,7 @@ const Soporte = () => {
                                             Ver diagrama
                                         </button>
                                     )}
-                                    <button className="close" onClick={() => setShowModal(false)}>
+                                    <button className="close" disabled={guardandoSoporte} onClick={() => setShowModal(false)}>
                                         &times;
                                     </button>
                                 </div>
@@ -2052,6 +2095,10 @@ const Soporte = () => {
                                     </div>
                                 </div>
 
+                                <SoporteAvisoTerreno tipo={tipo} estado={estado} fechaCierre={fechaCierre}
+                                    sugerencia={sugerencia} onSugerencia={setSugerencia}
+                                    enviar={enviarAvisoTerreno} onEnviar={setEnviarAvisoTerreno}
+                                    disabled={guardandoSoporte} aviso={editarSoporte?.aviso_terreno} />
                                 {subcategoriasDisponibles.length > 0 && (
                                     <div className="form-row">
                                         <div className="form-group col-md-6">

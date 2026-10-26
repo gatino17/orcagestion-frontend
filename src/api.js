@@ -1449,7 +1449,7 @@ export const obtenerSoportes = async () => {
 // Actualizar soporte
 export const actualizarSoporte = async (id, soporteData) => {
     try {
-        const response = await axios.put(`${BASE_URL}/soporte/${id}`, soporteData);
+        const response = await axios.put(`${BASE_URL}/soporte/${id}`, soporteData, authHeaders());
         return response.data;
     } catch (error) {
         throw error;
@@ -1463,6 +1463,11 @@ export const marcarCorreoSoporteEnviado = async (id) => {
         {},
         token ? { headers: { Authorization: `Bearer ${token}` } } : {}
     );
+    return response.data;
+};
+
+export const enviarAvisoSoporteTerreno = async (id) => {
+    const response = await axios.post(`${BASE_URL}/soporte/${id}/aviso-terreno`, {}, authHeaders());
     return response.data;
 };
 
