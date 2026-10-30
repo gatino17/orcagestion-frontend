@@ -1565,6 +1565,11 @@ export const obtenerTicketISO = async (id) => {
     return response.data.ticket;
 };
 
+export const obtenerPDFTicketISO = async (id) => {
+    const response = await axios.get(`${BASE_URL}/ticket-iso/${id}/pdf`, { ...authHeaders(), responseType: 'blob' });
+    return response.data;
+};
+
 export const crearTicketISO = async (payload) => {
     const response = await axios.post(`${BASE_URL}/ticket-iso/`, payload, authHeaders());
     return response.data.ticket;

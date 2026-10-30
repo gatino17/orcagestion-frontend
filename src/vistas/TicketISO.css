@@ -745,6 +745,16 @@
     min-height: 0;
 }
 
+.ticketiso-dialog-pdf { width: min(1150px, calc(100vw - 2rem)); height: calc(100vh - 2rem); height: calc(100dvh - 2rem); }
+.ticketiso-pdf-body { display: flex; flex-direction: column; gap: 0.7rem; overflow: hidden; }
+.ticketiso-pdf-caption { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; margin: 0; color: #315c7c; font-size: 0.8rem; }
+.ticketiso-pdf-caption span { color: #758b9d; font-size: 0.73rem; }
+.ticketiso-pdf-viewer { flex: 1 1 auto; width: 100%; min-height: 200px; border: 1px solid #cddce6; border-radius: 10px; background: #eef2f6; }
+.ticketiso-pdf-help { margin: 0; color: #637f95; font-size: 0.72rem; line-height: 1.5; }
+.ticketiso-pdf-actions { flex-wrap: wrap; }
+.ticketiso-pdf-actions a { text-decoration: none; }
+.ticketiso-icon-button.pdf { border-color: #e7bdc2; background: #fff3f4; color: #b62e43; }
+
 .ticketiso-dialog::backdrop {
     background: rgba(5, 18, 33, 0.65);
     backdrop-filter: blur(3px);
@@ -800,6 +810,66 @@
 .ticketiso-form-grid .full {
     grid-column: 1 / -1;
 }
+
+.ticketiso-followup {
+    min-width: 0;
+    margin: 0;
+    padding: 1rem;
+    border: 1px solid #d8e7f3;
+    border-radius: 12px;
+    background: linear-gradient(125deg, #f2f8fd, #fff);
+}
+.ticketiso-followup legend {
+    float: none;
+    width: auto;
+    margin: 0;
+    padding: 0 0.4rem;
+    color: #294f6c;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+.ticketiso-followup legend span {
+    margin-left: 0.5rem;
+    color: #758b9d;
+    font-size: 0.67rem;
+    font-weight: 500;
+}
+.ticketiso-followup-options { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; }
+.ticketiso-followup-options label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0.5rem 1rem;
+    border: 1px solid #cddce6;
+    border-radius: 8px;
+    background: #fff;
+    color: #315c7c;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.ticketiso-followup-options input { width: 16px; height: 16px; margin: 0; accent-color: #0f67ae; }
+.ticketiso-followup-options button {
+    margin-left: auto;
+    padding: 0.4rem;
+    border: 0;
+    background: transparent;
+    color: #526b80;
+    text-decoration: underline;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+.ticketiso-followup-help { margin: 0.75rem 0 0; color: #637f95; font-size: 0.73rem; line-height: 1.6; }
+.ticketiso-followup-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.ticketiso-followup-entry { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.85rem; background: #fff; border: 1px solid #e1eaf1; border-radius: 10px; }
+.ticketiso-followup-number { flex-shrink: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: #0f67ae; background: #eaf4fc; font-size: 0.7rem; font-weight: 800; }
+.ticketiso-followup-fields { display: grid; gap: 0.65rem; flex: 1; min-width: 0; }
+.ticketiso-followup-root { margin-top: 1rem; }
+.ticketiso-followup-detail-list { display: grid; gap: 0.75rem; margin: 1rem 0 0; padding-left: 1.3rem; }
+.ticketiso-followup-detail-list li { padding-left: 0.3rem; overflow-wrap: anywhere; }
+.ticketiso-followup-detail-list li::marker { color: #0f67ae; font-weight: 800; }
+.ticketiso-followup-detail-list strong { display: block; margin-bottom: 0.25rem; color: #294f6c; font-size: 0.8rem; white-space: pre-wrap; }
+.ticketiso-followup-options :focus-visible { outline: 2px solid #0ea5e9; outline-offset: 2px; }
 
 .ticketiso-detail {
     display: flex;
@@ -930,6 +1000,12 @@
     line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+}
+
+.ticketiso-description-meta {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #e1eaf1;
 }
 
 .ticketiso-detail-result {

@@ -4,6 +4,8 @@ import { jwtDecode } from "jwt-decode";
 import { CATEGORIAS_TICKET_ISO, ORIGENES_TICKET_ISO, crearFormularioTicketISO, fechaTicketISOParaInput, formatearFechaTicketISO, formatearFechaHoraTicketISO, normalizarBusquedaTicketISO, sugerirNumeroTicketISO } from "../utils/ticketISO";
 import ResumenMensualTicketISO from "../components/ResumenMensualTicketISO";
 import ListaPlanesTicketISO from "../components/ListaPlanesTicketISO";
+import SeguimientoTicketISO, { DetalleSeguimientoTicketISO } from "../components/SeguimientoTicketISO";
+import VistaPreviaPDFTicketISO from "../components/VistaPreviaPDFTicketISO";
 import "./TicketISO.css";
 
 const SECCIONES = [
@@ -29,7 +31,7 @@ const EstadoInicial = ({ icono, titulo, descripcion }) => (
 const ESTADOS = { pendiente: "Pendiente", en_seguimiento: "En seguimiento", resuelto: "Resuelto" };
 const EstadoTicket = ({ estado }) => <span className={`ticketiso-status ${estado}`}>{ESTADOS[estado] || estado}</span>;
 
-const ModalTicketISO = ({ titulo, onCerrar, guardando, children }) => {
+const ModalTicketISO = ({ titulo, onCerrar, guardando, children, amplio = false }) => {
     const ref = useRef(null);
     useEffect(() => {
         const dialogo = ref.current;
@@ -39,7 +41,7 @@ const ModalTicketISO = ({ titulo, onCerrar, guardando, children }) => {
         return () => { dialogo.close(); document.body.style.overflow = overflow; };
     }, []);
     return (
-        <dialog ref={ref} className="ticketiso-dialog" aria-labelledby="ticketiso-modal-title"
+        <dialog ref={ref} className={`ticketiso-dialog${amplio ? " ticketiso-dialog-pdf" : ""}`} aria-labelledby="ticketiso-modal-title"
             onCancel={(event) => { event.preventDefault(); if (!guardando) onCerrar(); }}
             onClick={(event) => {
                 if (event.target !== event.currentTarget || guardando) return;
@@ -81,6 +83,7 @@ function TicketISO() {
     const [numeroManual, setNumeroManual] = useState(false);
     const [editandoId, setEditandoId] = useState(null);
     const [detalle, setDetalle] = useState(null);
+    const [ticketPDF, setTicketPDF] = useState(null);
     const [cargandoTicket, setCargandoTicket] = useState(false);
     const [guardando, setGuardando] = useState(false);
     const [errorFormulario, setErrorFormulario] = useState("");
@@ -106,7 +109,11 @@ function TicketISO() {
         const texto = normalizarBusquedaTicketISO(busqueda);
         return tickets.filter((ticket) => (!estadoFiltro || ticket.estado === estadoFiltro)
             && (!texto || normalizarBusquedaTicketISO([ticket.numero_ticket,
-                ticket.problema, ticket.responsable, ticket.observaciones, ...(ticket.planes_accion || []).map((item) => item.resultado_plan_accion), ORIGENES_TICKET_ISO[ticket.origen], CATEGORIAS_TICKET_ISO[ticket.categoria_procedimiento]].filter(Boolean).join(" ")).includes(texto)));
+                ticket.problema, ticket.accion_inmediata, ticket.responsable, ticket.responsable_accion_inmediata, ticket.observaciones,
+                ticket.amerita_seguimiento ? ticket.causa_raiz : "",
+                ticket.amerita_seguimiento ? ticket.responsable_causa_raiz : "",
+                ...(ticket.amerita_seguimiento ? (ticket.seguimiento_preguntas || []).flatMap((item) => [item.pregunta, item.respuesta]) : []),
+                ...(ticket.planes_accion || []).map((item) => item.resultado_plan_accion), ORIGENES_TICKET_ISO[ticket.origen], CATEGORIAS_TICKET_ISO[ticket.categoria_procedimiento]].filter(Boolean).join(" ")).includes(texto)));
     }, [tickets, busqueda, estadoFiltro]);
     const paginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
     const paginaActual = Math.min(pagina, paginas);
@@ -169,7 +176,16 @@ function TicketISO() {
             payload = { ...formulario, numero_ticket: formulario.numero_ticket.trim().toUpperCase(),
                 numero_automatico: !editandoId && (!numeroManual || !formulario.numero_ticket.trim()),
                 fecha_cierre: formulario.fecha_cierre || null,
+                fecha_registro_descripcion: formulario.fecha_registro_descripcion || null,
+                fecha_accion_inmediata: formulario.fecha_accion_inmediata || null,
+                accion_inmediata: formulario.accion_inmediata.trim(),
+                causa_raiz: formulario.amerita_seguimiento === true ? formulario.causa_raiz.trim() : null,
+                responsable_causa_raiz: formulario.amerita_seguimiento === true ? formulario.responsable_causa_raiz.trim() : null,
+                fecha_causa_raiz: formulario.amerita_seguimiento === true ? (formulario.fecha_causa_raiz || null) : null,
+                seguimiento_preguntas: formulario.amerita_seguimiento === true ? formulario.seguimiento_preguntas.map((item) => ({ pregunta: item.pregunta.trim(), respuesta: item.respuesta.trim() })) : [],
             };
+            const sinPregunta = payload.seguimiento_preguntas.findIndex((item) => item.respuesta && !item.pregunta);
+            if (sinPregunta >= 0) throw new Error(`Escribe la pregunta ${sinPregunta + 1} antes de completar su respuesta.`);
             if (formulario.estado === "resuelto" && !payload.fecha_cierre) throw new Error("Indica una fecha de cierre.");
             if (payload.fecha_cierre && payload.fecha_cierre < payload.fecha_recepcion) throw new Error("El cierre no puede ser anterior a la recepcion del ticket.");
             if (!payload.numero_automatico && payload.numero_ticket && tickets.some((ticket) => ticket.numero_ticket.toUpperCase() === payload.numero_ticket && ticket.id_ticket !== editandoId)) throw new Error("Ese numero de ticket ya esta registrado.");
@@ -249,6 +265,11 @@ function TicketISO() {
         setErrorFormulario("");
         setModal("eliminar");
     };
+    const abrirPDF = (ticket) => {
+        solicitudTicketRef.current += 1;
+        setTicketPDF({ id_ticket: ticket.id_ticket, numero_ticket: ticket.numero_ticket });
+        setModal("pdf");
+    };
     const eliminarTicket = async () => {
         if (!puedeEliminar || guardando || !detalle) return;
         setGuardando(true);
@@ -300,7 +321,7 @@ function TicketISO() {
                             </div>
                         </div>
                         <div className="ticketiso-filters">
-                            <div><label htmlFor="ticketiso-search">Buscar ticket</label><input id="ticketiso-search" type="search" placeholder="Numero, problema, responsable, observaciones, origen o categoria" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
+                            <div><label htmlFor="ticketiso-search">Buscar ticket</label><input id="ticketiso-search" type="search" placeholder="Numero, problema, responsable, resultados, causa raiz, origen o categoria" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
                             <div><label htmlFor="ticketiso-filter-status">Estado</label><select id="ticketiso-filter-status" value={estadoFiltro} onChange={(event) => { setEstadoFiltro(event.target.value); setPagina(1); }}><option value="">Todos los estados</option>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                         </div>
                         <div className="ticketiso-table-scroll">
@@ -319,7 +340,13 @@ function TicketISO() {
                                             <td>{ticket.responsable || "Sin asignar"}</td>
                                             <td>{formatearFechaTicketISO(ticket.fecha_cierre)}{ticket.fecha_cierre && ticket.estado !== "resuelto" && <small>Prevista</small>}</td>
                                             <td className="ticketiso-plans-column"><span className={`ticketiso-plans-count${ticket.planes_accion?.length ? "" : " empty"}`} aria-label={`${ticket.planes_accion?.length || 0} ${ticket.planes_accion?.length === 1 ? "plan" : "planes"} de accion`}>{ticket.planes_accion?.length || 0}</span></td>
-                                            <td><div className="ticketiso-row-actions"><button type="button" className="ticketiso-icon-button" onClick={() => abrirTicket(ticket)} title="Ver detalle" aria-label={`Ver ticket ${ticket.numero_ticket}`}><i className="fas fa-eye" /></button><button type="button" className="ticketiso-icon-button plan" onClick={() => abrirTicket(ticket, "plan")} title="Plan de accion" aria-label={`Plan de accion del ticket ${ticket.numero_ticket}`}><i className="fas fa-plus" aria-hidden="true" /></button><button type="button" className="ticketiso-icon-button edit" onClick={() => abrirTicket(ticket, "formulario")} title="Editar ticket" aria-label={`Editar ticket ${ticket.numero_ticket}`}><i className="fas fa-pen" /></button>{puedeEliminar && <button type="button" className="ticketiso-icon-button delete" onClick={() => confirmarEliminacion(ticket)} title="Eliminar ticket" aria-label={`Eliminar ticket ${ticket.numero_ticket}`}><i className="fas fa-trash-alt" /></button>}</div></td>
+                                            <td><div className="ticketiso-row-actions">
+                                                <button type="button" className="ticketiso-icon-button" onClick={() => abrirTicket(ticket)} title="Ver detalle" aria-label={`Ver ticket ${ticket.numero_ticket}`}><i className="fas fa-eye" /></button>
+                                                <button type="button" className="ticketiso-icon-button pdf" onClick={() => abrirPDF(ticket)} title="Vista previa PDF" aria-label={`Ver PDF del ticket ${ticket.numero_ticket}`}><i className="fas fa-file-pdf" aria-hidden="true" /></button>
+                                                <button type="button" className="ticketiso-icon-button plan" onClick={() => abrirTicket(ticket, "plan")} title="Plan de accion" aria-label={`Plan de accion del ticket ${ticket.numero_ticket}`}><i className="fas fa-plus" aria-hidden="true" /></button>
+                                                <button type="button" className="ticketiso-icon-button edit" onClick={() => abrirTicket(ticket, "formulario")} title="Editar ticket" aria-label={`Editar ticket ${ticket.numero_ticket}`}><i className="fas fa-pen" /></button>
+                                                {puedeEliminar && <button type="button" className="ticketiso-icon-button delete" onClick={() => confirmarEliminacion(ticket)} title="Eliminar ticket" aria-label={`Eliminar ticket ${ticket.numero_ticket}`}><i className="fas fa-trash-alt" /></button>}
+                                            </div></td>
                                         </tr>
                                     ))}
                                     {!cargando && !visibles.length && <tr><td colSpan={10} className="ticketiso-table-empty"><EstadoInicial icono="fas fa-envelope-open-text" titulo={error ? "No se pudieron cargar los tickets" : tickets.length ? "Sin resultados para estos filtros" : "Aun no hay tickets registrados"} descripcion={error ? "Usa Actualizar para volver a cargar la informacion." : tickets.length ? "Prueba otro texto o estado." : "Presiona Nuevo ticket para registrar el primer reclamo recibido."} /></td></tr>}
@@ -348,8 +375,8 @@ function TicketISO() {
                 <div><strong>Registro y seguimiento de Ticket ISO</strong><p>Consulta los tickets, compara sus totales mensuales y revisa el indicador de cierre en Resumen mensual.</p></div>
             </aside>
 
-            {modal && <ModalTicketISO key={modal} titulo={modal === "editar-plan" ? "Editar plan de accion" : modal === "cierre" ? "Cierre del caso" : modal === "plan" ? "Plan de accion" : modal === "eliminar" ? "Eliminar ticket" : modal === "detalle" ? "Detalle del ticket" : editandoId ? "Editar ticket" : "Nuevo ticket"} onCerrar={cerrarModal} guardando={guardando}>
-                {modal === "cierre" ? <form className="ticketiso-form" onSubmit={guardarCierre}>
+            {modal && <ModalTicketISO key={modal} amplio={modal === "pdf"} titulo={modal === "pdf" ? "Vista previa del PDF" : modal === "editar-plan" ? "Editar plan de accion" : modal === "cierre" ? "Cierre del caso" : modal === "plan" ? "Plan de accion" : modal === "eliminar" ? "Eliminar ticket" : modal === "detalle" ? "Detalle del ticket" : editandoId ? "Editar ticket" : "Nuevo ticket"} onCerrar={cerrarModal} guardando={guardando}>
+                {modal === "pdf" ? <VistaPreviaPDFTicketISO ticket={ticketPDF} /> : modal === "cierre" ? <form className="ticketiso-form" onSubmit={guardarCierre}>
                     <div className="ticketiso-modal-body">
                         {errorFormulario && <div className="ticketiso-alert error" role="alert">{errorFormulario}</div>}
                         {cargandoTicket && <p role="status">Cargando ticket...</p>}
@@ -386,11 +413,24 @@ function TicketISO() {
                             <div className="ticketiso-field"><label htmlFor="ticketiso-received">Fecha de recepcion *</label><input id="ticketiso-received" type="date" name="fecha_recepcion" value={formulario.fecha_recepcion} onChange={cambiarCampo} required /></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-category">Categoria de procedimiento *</label><select id="ticketiso-category" name="categoria_procedimiento" value={formulario.categoria_procedimiento} onChange={cambiarCampo} required><option value="">Selecciona una categoria</option>{Object.entries(CATEGORIAS_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field full"><label htmlFor="ticketiso-problem">Descripcion del problema *</label><textarea id="ticketiso-problem" name="problema" value={formulario.problema} onChange={cambiarCampo} required maxLength={10000} rows={3} placeholder="Describe el reclamo recibido por correo." /></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-owner">Responsable</label><input id="ticketiso-owner" type="text" name="responsable" value={formulario.responsable} onChange={cambiarCampo} maxLength={100} placeholder="Nombre de quien registra la descripcion" /></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-description-date">Fecha de registro</label><input id="ticketiso-description-date" type="date" name="fecha_registro_descripcion" value={formulario.fecha_registro_descripcion} onChange={cambiarCampo} /><small>Fecha de registro de la descripcion, distinta de la recepcion del ticket.</small></div>
+                            <div className="ticketiso-field full"><label htmlFor="ticketiso-immediate-action">Accion inmediata</label><textarea id="ticketiso-immediate-action" name="accion_inmediata" value={formulario.accion_inmediata} onChange={cambiarCampo} maxLength={10000} rows={3} placeholder="Describe la medida tomada inicialmente para atender el problema." /></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-action-owner">Responsable de la accion inmediata</label><input id="ticketiso-action-owner" type="text" name="responsable_accion_inmediata" value={formulario.responsable_accion_inmediata} onChange={cambiarCampo} maxLength={100} placeholder="Nombre de quien realiza la accion" /></div>
+                            <div className="ticketiso-field"><label htmlFor="ticketiso-action-date">Fecha de accion</label><input id="ticketiso-action-date" type="date" name="fecha_accion_inmediata" value={formulario.fecha_accion_inmediata} onChange={cambiarCampo} /><small>Fecha en que se realiza la accion inmediata.</small></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-state">Estado *</label><select id="ticketiso-state" className={`ticketiso-state-select ${formulario.estado}`} name="estado" value={formulario.estado} onChange={cambiarCampo}>{Object.entries(ESTADOS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-origin">Origen *</label><select id="ticketiso-origin" name="origen" value={formulario.origen} onChange={cambiarCampo} required><option value="">Selecciona un origen</option>{Object.entries(ORIGENES_TICKET_ISO).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-                            <div className="ticketiso-field"><label htmlFor="ticketiso-owner">Responsable</label><input id="ticketiso-owner" type="text" name="responsable" value={formulario.responsable} onChange={cambiarCampo} maxLength={100} placeholder="Nombre del responsable" /></div>
                             <div className="ticketiso-field"><label htmlFor="ticketiso-closed">Fecha de cierre{formulario.estado === "resuelto" ? " *" : ""}</label><input id="ticketiso-closed" type="date" name="fecha_cierre" value={formulario.fecha_cierre} onChange={cambiarCampo} required={formulario.estado === "resuelto"} min={formulario.fecha_recepcion} /><small>{formulario.estado === "resuelto" ? "Fecha real de cierre del ticket." : "Opcional: indica una fecha prevista de cierre, sin cambiar el estado."}</small></div>
-                            <div className="ticketiso-field full"><label htmlFor="ticketiso-notes">Observaciones</label><textarea id="ticketiso-notes" name="observaciones" value={formulario.observaciones} onChange={cambiarCampo} maxLength={10000} rows={3} placeholder="Comentarios, acciones realizadas o notas de seguimiento." /></div>
+                            <SeguimientoTicketISO valor={formulario.amerita_seguimiento} preguntas={formulario.seguimiento_preguntas} causaRaiz={formulario.causa_raiz}
+                                responsableCausa={formulario.responsable_causa_raiz} fechaCausa={formulario.fecha_causa_raiz}
+                                onCambiarDatosCausa={(campo, valor) => { setFormulario((actual) => ({ ...actual, [campo]: valor })); setErrorFormulario(""); }}
+                                onCambiarCausa={(valor) => { setFormulario((actual) => ({ ...actual, causa_raiz: valor })); setErrorFormulario(""); }}
+                                onSeleccionar={(valor) => { setFormulario((actual) => ({ ...actual, amerita_seguimiento: valor })); setErrorFormulario(""); }}
+                                onCambiar={(index, campo, valor) => {
+                                    setFormulario((actual) => ({ ...actual, seguimiento_preguntas: actual.seguimiento_preguntas.map((item, posicion) => posicion === index ? { ...item, [campo]: valor } : item) }));
+                                    setErrorFormulario("");
+                                }} />
+                            <div className="ticketiso-field full"><label htmlFor="ticketiso-notes">Resultados obtenidos</label><textarea id="ticketiso-notes" name="observaciones" value={formulario.observaciones} onChange={cambiarCampo} maxLength={10000} rows={3} placeholder="Describe los resultados obtenidos tras las acciones realizadas." /></div>
                         </fieldset>
                     </div>
                     <div className="ticketiso-modal-footer"><button type="button" className="ticketiso-button secondary" disabled={guardando} onClick={cerrarModal}>Cancelar</button><button type="submit" className="ticketiso-button primary" disabled={guardando || cargandoTicket || (!!editandoId && !detalle)}><i className={`fas ${guardando ? "fa-spinner fa-spin" : "fa-save"}`} /> {guardando ? "Guardando..." : "Guardar ticket"}</button></div>
@@ -409,7 +449,6 @@ function TicketISO() {
                                     {[
                                         ["Categoria de procedimiento", CATEGORIAS_TICKET_ISO[detalle.categoria_procedimiento] || "Sin categoria registrada"],
                                         ["Origen", ORIGENES_TICKET_ISO[detalle.origen] || "Sin origen registrado"],
-                                        ["Responsable", detalle.responsable || "Sin asignar"],
                                         ["Fecha de recepcion", formatearFechaTicketISO(detalle.fecha_recepcion)],
                                     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
                                 </dl>
@@ -417,6 +456,12 @@ function TicketISO() {
                             <section className="ticketiso-detail-section" aria-labelledby="ticketiso-detail-problem">
                                 <h4 id="ticketiso-detail-problem"><i className="fas fa-align-left" aria-hidden="true" /> Descripcion del problema</h4>
                                 <p className="ticketiso-detail-text">{detalle.problema}</p>
+                                <dl className="ticketiso-detail-fields ticketiso-description-meta"><div><dt>Responsable</dt><dd>{detalle.responsable || "Sin asignar"}</dd></div><div><dt>Fecha de registro</dt><dd>{detalle.fecha_registro_descripcion ? formatearFechaTicketISO(detalle.fecha_registro_descripcion) : "Sin registrar"}</dd></div></dl>
+                            </section>
+                            <section className="ticketiso-detail-section" aria-labelledby="ticketiso-detail-immediate-action">
+                                <h4 id="ticketiso-detail-immediate-action"><i className="fas fa-bolt" aria-hidden="true" /> Accion inmediata</h4>
+                                <p className="ticketiso-detail-text">{detalle.accion_inmediata || "Sin accion inmediata registrada."}</p>
+                                <dl className="ticketiso-detail-fields ticketiso-description-meta"><div><dt>Responsable de la accion inmediata</dt><dd>{detalle.responsable_accion_inmediata || "Sin asignar"}</dd></div><div><dt>Fecha de accion</dt><dd>{detalle.fecha_accion_inmediata ? formatearFechaTicketISO(detalle.fecha_accion_inmediata) : "Sin registrar"}</dd></div></dl>
                             </section>
                             <section className="ticketiso-detail-section action-plan" aria-labelledby="ticketiso-detail-plan">
                                 <div className="ticketiso-detail-section-heading"><h4 id="ticketiso-detail-plan"><i className="fas fa-clipboard-check" aria-hidden="true" /> Planes de accion ({detalle.planes_accion?.length || 0})</h4><div className="ticketiso-toolbar-actions"><button type="button" className="ticketiso-button secondary" onClick={() => abrirTicket(detalle, "plan")}><i className="fas fa-plus" aria-hidden="true" /> Agregar plan</button><button type="button" className="ticketiso-button secondary" disabled={!detalle.planes_accion?.length} onClick={() => abrirTicket(detalle, "editar-plan")}><i className="fas fa-pen" aria-hidden="true" /> Editar plan</button></div></div>
@@ -427,9 +472,10 @@ function TicketISO() {
                                 <h4 id="ticketiso-detail-closing"><i className="fas fa-check-circle" aria-hidden="true" /> Cierre del caso</h4>
                                 <dl className="ticketiso-detail-fields"><div><dt>{detalle.estado === "resuelto" ? "Fecha de cierre" : "Fecha de cierre prevista"}</dt><dd>{detalle.fecha_cierre ? formatearFechaTicketISO(detalle.fecha_cierre) : "Sin definir"}</dd></div></dl>
                             </section>
+                            <DetalleSeguimientoTicketISO valor={detalle.amerita_seguimiento} preguntas={detalle.seguimiento_preguntas || []} causaRaiz={detalle.causa_raiz} responsableCausa={detalle.responsable_causa_raiz} fechaCausa={detalle.fecha_causa_raiz} />
                             <section className="ticketiso-detail-section" aria-labelledby="ticketiso-detail-notes">
-                                <h4 id="ticketiso-detail-notes"><i className="fas fa-comment-alt" aria-hidden="true" /> Observaciones</h4>
-                                <p className="ticketiso-detail-text">{detalle.observaciones || "Sin observaciones registradas."}</p>
+                                <h4 id="ticketiso-detail-notes"><i className="fas fa-clipboard-check" aria-hidden="true" /> Resultados obtenidos</h4>
+                                <p className="ticketiso-detail-text">{detalle.observaciones || "Sin resultados obtenidos registrados."}</p>
                             </section>
                             <dl className="ticketiso-detail-fields ticketiso-detail-audit" aria-label="Datos de registro">
                                 {detalle.creado_por_nombre && <div><dt>Registrado por</dt><dd>{detalle.creado_por_nombre}</dd></div>}

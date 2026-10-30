@@ -17,8 +17,9 @@ test("el formulario conserva solo los campos del ingreso simplificado y la fecha
     const formulario = crearFormularioTicketISO({ numero_ticket: "ISO-001", asunto_procedimiento: "Revision del procedimiento",
         problema: "Falta actualizar", estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega" });
     expect(formulario).toEqual({ numero_ticket: "ISO-001", problema: "Falta actualizar",
-        estado: "resuelto", fecha_recepcion: "2026-07-14", origen: "ticket_iso", categoria_procedimiento: "bodega",
-        fecha_cierre: "", responsable: "", observaciones: "" });
+        estado: "resuelto", fecha_recepcion: "2026-07-14", fecha_registro_descripcion: "", origen: "ticket_iso", categoria_procedimiento: "bodega",
+        fecha_cierre: "", responsable: "", observaciones: "", accion_inmediata: "", responsable_accion_inmediata: "", fecha_accion_inmediata: "", causa_raiz: "", responsable_causa_raiz: "", fecha_causa_raiz: "", amerita_seguimiento: null,
+        seguimiento_preguntas: Array.from({ length: 5 }, () => ({ pregunta: "", respuesta: "" })) });
     expect(formatearFechaTicketISO("2026-07-14")).toBe("14/07/2026");
     expect(crearFormularioTicketISO().numero_ticket).toBe("");
     expect(formatearFechaTicketISO(undefined)).toBe("-");
@@ -29,6 +30,43 @@ test("el formulario conserva fecha de cierre, responsable y observaciones al edi
     expect(crearFormularioTicketISO({ fecha_recepcion: "2026-10-14", estado: "resuelto", responsable_id: 3, responsable: "Responsable externo",
         observaciones: "Procedimiento actualizado", fecha_cierre: "2026-10-15T01:30:00Z" }))
         .toMatchObject({ fecha_cierre: "2026-10-14", responsable: "Responsable externo", observaciones: "Procedimiento actualizado" });
+});
+
+test("conserva las fechas de descripcion y accion por separado sin inventarlas en tickets antiguos", () => {
+    const formulario = crearFormularioTicketISO({ fecha_recepcion: "2026-10-14", responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16" });
+    expect(formulario).toMatchObject({ responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16" });
+    expect(crearFormularioTicketISO({ responsable: "Persona descripcion" })).toMatchObject({
+        fecha_registro_descripcion: "", responsable_accion_inmediata: "", fecha_accion_inmediata: "",
+    });
+    expect(crearFormularioTicketISO()).toMatchObject({ fecha_registro_descripcion: fechaHoraTicketISOParaInput(new Date()).slice(0, 10),
+        responsable_accion_inmediata: "", fecha_accion_inmediata: "" });
+});
+
+test("prepara cinco preguntas independientes, conserva respuestas y distingue No de sin seleccionar", () => {
+    const guardadas = [{ pregunta: "Causa?", respuesta: "En revision" }];
+    const formulario = crearFormularioTicketISO({ amerita_seguimiento: true, seguimiento_preguntas: guardadas, accion_inmediata: "Contencion", causa_raiz: "Causa identificada", observaciones: "Resultados previos" });
+    expect(formulario.accion_inmediata).toBe("Contencion");
+    expect(formulario.causa_raiz).toBe("Causa identificada");
+    expect(formulario.observaciones).toBe("Resultados previos");
+    expect(formulario.amerita_seguimiento).toBe(true);
+    expect(formulario.seguimiento_preguntas).toHaveLength(5);
+    expect(formulario.seguimiento_preguntas[0]).toEqual(guardadas[0]);
+    formulario.seguimiento_preguntas[0].pregunta = "Corregida";
+    expect(guardadas[0].pregunta).toBe("Causa?");
+    expect(formulario.seguimiento_preguntas[1].pregunta).toBe("");
+    expect(crearFormularioTicketISO({ amerita_seguimiento: false }).amerita_seguimiento).toBe(false);
+    expect(crearFormularioTicketISO().amerita_seguimiento).toBeNull();
+    expect(crearFormularioTicketISO().seguimiento_preguntas[0].pregunta).toBe("");
+});
+
+test("carga los datos de causa raiz por separado sin copiar los de descripcion ni accion", () => {
+    expect(crearFormularioTicketISO({ responsable: "Persona descripcion", responsable_accion_inmediata: "Persona accion",
+        responsable_causa_raiz: "Persona analisis", fecha_causa_raiz: "2026-10-17" }))
+        .toMatchObject({ responsable: "Persona descripcion", responsable_accion_inmediata: "Persona accion",
+            responsable_causa_raiz: "Persona analisis", fecha_causa_raiz: "2026-10-17" });
+    expect(crearFormularioTicketISO({ responsable: "No copiar" })).toMatchObject({ responsable_causa_raiz: "", fecha_causa_raiz: "" });
 });
 
 test("sugiere un valor ISO real aunque el backend no entregue el proximo numero", () => {

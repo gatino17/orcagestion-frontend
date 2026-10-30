@@ -1,13 +1,13 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { actualizarPlanAccionTicketISO, actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarPlanAccionTicketISO, actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerPDFTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
 import TicketISO from "./TicketISO";
 
 jest.mock("../api", () => ({
     actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), eliminarTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
     actualizarPlanAccionTicketISO: jest.fn(), guardarPlanAccionTicketISO: jest.fn(), cerrarTicketISO: jest.fn(),
-    obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(),
+    obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(), obtenerPDFTicketISO: jest.fn(),
 }));
 jest.mock("react-chartjs-2", () => ({ Chart: ({ data, options, ...props }) => <canvas {...props} /> }));
 
@@ -58,6 +58,26 @@ test.each([0, 1, 7])("la columna Planes de accion muestra %s en la fila del tick
     expect(cabecera.nextElementSibling).toHaveTextContent("Acciones");
     const fila = within(screen.getByRole("cell", { name: "ISO-001" }).closest("tr"));
     expect(fila.getByRole("cell", { name: `${cantidad} ${cantidad === 1 ? "plan" : "planes"} de accion` })).toHaveTextContent(String(cantidad));
+});
+
+test("el boton PDF abre una vista previa amplia con descarga, sin pasar por editar ticket", async () => {
+    const crearURL = URL.createObjectURL;
+    const revocarURL = URL.revokeObjectURL;
+    URL.createObjectURL = jest.fn(() => "blob:ticket-integration");
+    URL.revokeObjectURL = jest.fn();
+    try {
+        obtenerTicketsISO.mockResolvedValue([ticket]);
+        obtenerPDFTicketISO.mockResolvedValue(new Blob(["%PDF"], { type: "application/pdf" }));
+        await iniciar();
+        fireEvent.click(screen.getByRole("button", { name: "Ver PDF del ticket ISO-001" }));
+        expect(screen.getByRole("dialog")).toHaveAccessibleName("Vista previa del PDF");
+        expect(screen.getByRole("dialog")).toHaveClass("ticketiso-dialog-pdf");
+        expect(await screen.findByRole("link", { name: "Descargar PDF" })).toHaveAttribute("href", "blob:ticket-integration");
+        expect(actualizarTicketISO).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: "Cerrar ventana" }));
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:ticket-integration");
+    } finally { URL.createObjectURL = crearURL; URL.revokeObjectURL = revocarURL; }
 });
 
 test("un ticket sin lista de planes muestra cero y la tabla vacia conserva sus diez columnas", async () => {
@@ -328,6 +348,230 @@ const llenarNuevo = (manual = true) => {
     fireEvent.change(screen.getByLabelText("Categoria de procedimiento *"), { target: { value: "soporte_posventa" } });
 };
 
+test("responsable y fecha de registro van debajo del problema y el seguimiento es opcional despues del cierre", async () => {
+    await iniciar();
+    llenarNuevo();
+    const accion = screen.getByLabelText("Accion inmediata");
+    const responsable = screen.getByLabelText("Responsable");
+    const registro = screen.getByLabelText("Fecha de registro");
+    expect(responsable.closest("div").previousElementSibling).toContainElement(screen.getByLabelText("Descripcion del problema *"));
+    expect(registro.closest("div").previousElementSibling).toContainElement(responsable);
+    expect(accion.closest("div").previousElementSibling).toContainElement(registro);
+    const responsableAccion = screen.getByLabelText("Responsable de la accion inmediata");
+    expect(responsableAccion.closest("div").previousElementSibling).toContainElement(accion);
+    expect(screen.getByLabelText("Fecha de accion").closest("div").previousElementSibling).toContainElement(responsableAccion);
+    const seguimiento = screen.getByRole("group", { name: /Amerita seguimiento/ });
+    expect(seguimiento.previousElementSibling).toContainElement(screen.getByLabelText("Fecha de cierre"));
+    expect(screen.getByRole("radio", { name: "Si" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "No" })).not.toBeChecked();
+    expect(screen.queryByLabelText("Pregunta 1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Causa raiz")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Responsable de causa raiz")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fecha de causa raiz")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Resultados obtenidos")).toBeInTheDocument();
+    fireEvent.change(accion, { target: { value: "  Se contiene el problema  " } });
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({
+        accion_inmediata: "Se contiene el problema", amerita_seguimiento: null, seguimiento_preguntas: [],
+    })));
+});
+
+test("Si despliega exactamente cinco preguntas editables con sus respuestas y las guarda", async () => {
+    await iniciar();
+    llenarNuevo();
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    expect(screen.getAllByLabelText(/^Pregunta [1-5]$/)).toHaveLength(5);
+    expect(screen.getAllByLabelText(/^Respuesta [1-5]$/)).toHaveLength(5);
+    fireEvent.change(screen.getByLabelText("Causa raiz"), { target: { value: "  Procedimiento desactualizado  " } });
+    fireEvent.change(screen.getByLabelText("Responsable de causa raiz"), { target: { value: "  Persona analisis  " } });
+    fireEvent.change(screen.getByLabelText("Fecha de causa raiz"), { target: { value: "2026-10-17" } });
+    fireEvent.change(screen.getByLabelText("Resultados obtenidos"), { target: { value: "Procedimiento corregido" } });
+    for (let index = 1; index <= 5; index += 1) {
+        fireEvent.change(screen.getByLabelText(`Pregunta ${index}`), { target: { value: `  Consulta ${index}  ` } });
+        fireEvent.change(screen.getByLabelText(`Respuesta ${index}`), { target: { value: `  Respuesta ${index}  ` } });
+    }
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({
+        amerita_seguimiento: true, causa_raiz: "Procedimiento desactualizado", observaciones: "Procedimiento corregido",
+        responsable_causa_raiz: "Persona analisis", fecha_causa_raiz: "2026-10-17",
+        seguimiento_preguntas: Array.from({ length: 5 }, (_, index) => ({ pregunta: `Consulta ${index + 1}`, respuesta: `Respuesta ${index + 1}` })),
+    })));
+});
+
+test("guarda responsables y fechas independientes para descripcion y accion inmediata", async () => {
+    await iniciar();
+    llenarNuevo();
+    fireEvent.change(screen.getByLabelText("Responsable"), { target: { value: "Persona descripcion" } });
+    fireEvent.change(screen.getByLabelText("Fecha de registro"), { target: { value: "2026-10-15" } });
+    fireEvent.change(screen.getByLabelText("Accion inmediata"), { target: { value: "Se coordina la revision" } });
+    fireEvent.change(screen.getByLabelText("Responsable de la accion inmediata"), { target: { value: "Persona accion" } });
+    fireEvent.change(screen.getByLabelText("Fecha de accion"), { target: { value: "2026-10-16" } });
+    expect(screen.getAllByLabelText("Responsable", { exact: true })).toHaveLength(1);
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({
+        responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15", accion_inmediata: "Se coordina la revision",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16",
+    })));
+});
+
+test("editar el responsable y fecha de accion no modifica los de la descripcion", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Editar ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByLabelText("Fecha de accion")).toHaveValue("2026-10-16"));
+    expect(screen.getByLabelText("Fecha de registro")).toHaveValue("2026-10-15");
+    fireEvent.change(screen.getByLabelText("Responsable de la accion inmediata"), { target: { value: "Otro responsable" } });
+    fireEvent.change(screen.getByLabelText("Fecha de accion"), { target: { value: "2026-10-17" } });
+    expect(screen.getByLabelText("Responsable")).toHaveValue("Persona descripcion");
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(actualizarTicketISO).toHaveBeenCalledWith(1, expect.objectContaining({
+        responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15",
+        responsable_accion_inmediata: "Otro responsable", fecha_accion_inmediata: "2026-10-17",
+    })));
+});
+
+test("el detalle ubica cada responsable y fecha en su bloque sin confundirlos", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, responsable: "Persona descripcion", fecha_registro_descripcion: "2026-10-15",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    const descripcion = within(await screen.findByRole("region", { name: "Descripcion del problema" }));
+    expect(descripcion.getByText("Persona descripcion")).toBeInTheDocument();
+    expect(descripcion.getByText("15/10/2026")).toBeInTheDocument();
+    expect(descripcion.queryByText("Persona accion")).not.toBeInTheDocument();
+    const accion = within(screen.getByRole("region", { name: "Accion inmediata" }));
+    expect(accion.getByText("Persona accion")).toBeInTheDocument();
+    expect(accion.getByText("16/10/2026")).toBeInTheDocument();
+    expect(accion.queryByText("Persona descripcion")).not.toBeInTheDocument();
+});
+
+test("Si y No son excluyentes, conserva el borrador al alternar y permite quitar la seleccion", async () => {
+    await iniciar();
+    llenarNuevo();
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    fireEvent.change(screen.getByLabelText("Pregunta 1"), { target: { value: "Causa del problema?" } });
+    fireEvent.change(screen.getByLabelText("Causa raiz"), { target: { value: "Causa en borrador" } });
+    fireEvent.click(screen.getByRole("radio", { name: "No" }));
+    expect(screen.getByRole("radio", { name: "Si" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "No" })).toBeChecked();
+    expect(screen.queryByLabelText("Pregunta 1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Causa raiz")).not.toBeInTheDocument();
+    expect(screen.getByText(/Al guardar sin seguimiento/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    expect(screen.getByLabelText("Pregunta 1")).toHaveValue("Causa del problema?");
+    expect(screen.getByLabelText("Causa raiz")).toHaveValue("Causa en borrador");
+    fireEvent.click(screen.getByRole("button", { name: "Quitar seleccion" }));
+    expect(screen.getByRole("radio", { name: "Si" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "No" })).not.toBeChecked();
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({ amerita_seguimiento: null, seguimiento_preguntas: [], causa_raiz: null })));
+});
+
+test("No guarda la eleccion negativa sin enviar preguntas ocultas", async () => {
+    await iniciar();
+    llenarNuevo();
+    fireEvent.click(screen.getByRole("radio", { name: "No" }));
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(crearTicketISO).toHaveBeenCalledWith(expect.objectContaining({ amerita_seguimiento: false, seguimiento_preguntas: [] })));
+});
+
+test("edita accion inmediata y preguntas guardadas sin duplicar tickets ni planes", async () => {
+    const preguntas = Array.from({ length: 5 }, (_, index) => ({ pregunta: `Pregunta guardada ${index + 1}`, respuesta: `Respuesta guardada ${index + 1}` }));
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, accion_inmediata: "Medida inicial", amerita_seguimiento: true, seguimiento_preguntas: preguntas, causa_raiz: "Causa guardada" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Editar ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByLabelText("Accion inmediata")).toHaveValue("Medida inicial"));
+    expect(screen.getByRole("radio", { name: "Si" })).toBeChecked();
+    expect(screen.getByLabelText("Pregunta 5")).toHaveValue("Pregunta guardada 5");
+    expect(screen.getByLabelText("Respuesta 5")).toHaveValue("Respuesta guardada 5");
+    expect(screen.getByLabelText("Causa raiz")).toHaveValue("Causa guardada");
+    expect(screen.getByLabelText("Resultados obtenidos")).toHaveValue(ticket.observaciones);
+    fireEvent.change(screen.getByLabelText("Causa raiz"), { target: { value: "Causa corregida" } });
+    fireEvent.change(screen.getByLabelText("Pregunta 2"), { target: { value: "Pregunta corregida" } });
+    fireEvent.change(screen.getByLabelText("Respuesta 2"), { target: { value: "Respuesta corregida" } });
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(actualizarTicketISO).toHaveBeenCalledWith(1, expect.objectContaining({
+        accion_inmediata: "Medida inicial", amerita_seguimiento: true, causa_raiz: "Causa corregida", observaciones: ticket.observaciones,
+        seguimiento_preguntas: preguntas.map((item, index) => index === 1 ? { pregunta: "Pregunta corregida", respuesta: "Respuesta corregida" } : item),
+    })));
+    expect(crearTicketISO).not.toHaveBeenCalled();
+    expect(guardarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
+
+test("el detalle muestra accion inmediata y seguimiento sin interpretar HTML del usuario", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, accion_inmediata: "Se informa al responsable", amerita_seguimiento: true, causa_raiz: "Causa confirmada", responsable_causa_raiz: "Persona analisis", fecha_causa_raiz: "2026-10-17",
+        seguimiento_preguntas: [{ pregunta: '<img src=x onerror="alert(1)">', respuesta: "Validacion pendiente" }] });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    const inmediata = await screen.findByRole("region", { name: "Accion inmediata" });
+    expect(inmediata).toHaveTextContent("Se informa al responsable");
+    const seguimiento = screen.getByRole("region", { name: "Seguimiento del ticket" });
+    expect(within(seguimiento).getByText("Si", { exact: true })).toBeInTheDocument();
+    expect(within(seguimiento).getAllByRole("listitem")).toHaveLength(5);
+    expect(seguimiento).toHaveTextContent("Validacion pendiente");
+    expect(seguimiento.querySelector("img")).toBeNull();
+    expect(seguimiento).toHaveTextContent("Pregunta 5 pendiente de definir");
+    expect(seguimiento).toHaveTextContent("Causa confirmada");
+    expect(seguimiento).toHaveTextContent("Persona analisis");
+    expect(seguimiento).toHaveTextContent("17/10/2026");
+    expect(within(screen.getByRole("region", { name: "Resultados obtenidos" })).getByText(ticket.observaciones)).toBeInTheDocument();
+});
+
+test("carga el responsable y fecha de causa raiz al editar, conserva el borrador y limpia solo ese bloque al quitar seguimiento", async () => {
+    obtenerTicketsISO.mockResolvedValue([ticket]);
+    obtenerTicketISO.mockResolvedValue({ ...ticket, amerita_seguimiento: true, causa_raiz: "Causa inicial",
+        responsable_causa_raiz: "Persona analisis", fecha_causa_raiz: "2026-10-17",
+        responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16" });
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Editar ticket ISO-001" }));
+    await waitFor(() => expect(screen.getByLabelText("Responsable de causa raiz")).toHaveValue("Persona analisis"));
+    expect(screen.getByLabelText("Fecha de causa raiz")).toHaveValue("2026-10-17");
+    fireEvent.change(screen.getByLabelText("Responsable de causa raiz"), { target: { value: "Otro analista" } });
+    fireEvent.click(screen.getByRole("radio", { name: "No" }));
+    expect(screen.queryByLabelText("Responsable de causa raiz")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fecha de causa raiz")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    expect(screen.getByLabelText("Responsable de causa raiz")).toHaveValue("Otro analista");
+    expect(screen.getByLabelText("Fecha de causa raiz")).toHaveValue("2026-10-17");
+    fireEvent.click(screen.getByRole("radio", { name: "No" }));
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    await waitFor(() => expect(actualizarTicketISO).toHaveBeenCalledWith(1, expect.objectContaining({
+        amerita_seguimiento: false, responsable_causa_raiz: null, fecha_causa_raiz: null,
+        responsable: ticket.responsable, responsable_accion_inmediata: "Persona accion", fecha_accion_inmediata: "2026-10-16",
+    })));
+});
+
+test("requiere escribir la pregunta antes de guardar una respuesta y conserva el formulario", async () => {
+    await iniciar();
+    llenarNuevo();
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    fireEvent.change(screen.getByLabelText("Respuesta 3"), { target: { value: "Respuesta sin pregunta" } });
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Escribe la pregunta 3");
+    expect(crearTicketISO).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Respuesta 3")).toHaveValue("Respuesta sin pregunta");
+});
+
+test("un error de guardado conserva accion inmediata, preguntas y respuestas", async () => {
+    crearTicketISO.mockRejectedValue({ response: { data: { error: "Error de prueba" } } });
+    await iniciar();
+    llenarNuevo();
+    fireEvent.change(screen.getByLabelText("Accion inmediata"), { target: { value: "Medida sin perder" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Si" }));
+    fireEvent.change(screen.getByLabelText("Pregunta 1"), { target: { value: "Que se reviso?" } });
+    fireEvent.change(screen.getByLabelText("Respuesta 1"), { target: { value: "El procedimiento" } });
+    fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Error de prueba");
+    expect(screen.getByLabelText("Accion inmediata")).toHaveValue("Medida sin perder");
+    expect(screen.getByLabelText("Pregunta 1")).toHaveValue("Que se reviso?");
+    expect(screen.getByLabelText("Respuesta 1")).toHaveValue("El procedimiento");
+});
+
 test("registra un numero manual sin asunto y muestra el problema en la tabla", async () => {
     await iniciar();
     llenarNuevo();
@@ -351,7 +595,9 @@ test("edita un registro cargando primero sus datos guardados", async () => {
     expect(screen.getByLabelText("Origen *")).toHaveValue("ticket_iso");
     expect(screen.getByLabelText("Categoria de procedimiento *")).toHaveValue("soporte_posventa");
     expect(screen.getByLabelText("Responsable")).toHaveValue("Jorge");
-    expect(screen.getByLabelText("Observaciones")).toHaveValue("Pendiente validar documento");
+    expect(screen.getByLabelText("Resultados obtenidos")).toHaveValue("Pendiente validar documento");
+    expect(screen.queryByLabelText("Causa raiz")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Observaciones")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Asunto del procedimiento *")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Descripcion del problema *"), { target: { value: "Problema actualizado" } });
     fireEvent.submit(screen.getByRole("button", { name: /Guardar ticket/ }).closest("form"));
@@ -394,7 +640,7 @@ test.each([["pendiente", "Cerrar caso"], ["resuelto", "Editar cierre"]])("el det
     expect(cerrarTicketISO).not.toHaveBeenCalled();
 });
 
-test("el detalle agrupa datos, problema, plan y observaciones en ese orden", async () => {
+test("el detalle agrupa datos, problema, plan y resultados obtenidos en ese orden", async () => {
     obtenerTicketsISO.mockResolvedValue([ticket]);
     obtenerTicketISO.mockResolvedValue({ ...ticket, planes_accion: [{ id_plan: 1, numero: 1, resultado_plan_accion: "Validacion realizada", fecha_control: "2026-10-15" }],
         fecha_cierre: "2026-10-16T15:00:00Z", estado: "resuelto", creado_por_nombre: "Admin", solucion: "Solucion anterior" });
@@ -403,11 +649,11 @@ test("el detalle agrupa datos, problema, plan y observaciones en ese orden", asy
     await waitFor(() => expect(screen.getByRole("button", { name: "Editar ticket" })).toBeEnabled());
     const modal = within(screen.getByRole("dialog"));
     expect(modal.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent.trim())).toEqual([
-        "Datos del ticket", "Descripcion del problema", "Planes de accion (1)", "Cierre del caso", "Observaciones",
+        "Datos del ticket", "Descripcion del problema", "Accion inmediata", "Planes de accion (1)", "Cierre del caso", "Seguimiento del ticket", "Resultados obtenidos",
     ]);
     const datos = within(modal.getByRole("region", { name: "Datos del ticket" }));
     expect(datos.getByText("005 Soporte y posventa")).toBeInTheDocument();
-    expect(datos.getByText("Jorge")).toBeInTheDocument();
+    expect(within(modal.getByRole("region", { name: "Descripcion del problema" })).getByText("Jorge")).toBeInTheDocument();
     expect(datos.getByText("Fecha de recepcion")).toBeInTheDocument();
     expect(datos.queryByText("Fecha de cierre")).not.toBeInTheDocument();
     expect(within(modal.getByRole("region", { name: "Descripcion del problema" })).getByText(ticket.problema)).toBeInTheDocument();
@@ -418,7 +664,7 @@ test("el detalle agrupa datos, problema, plan y observaciones en ese orden", asy
     expect(cierre.getByText("16/10/2026")).toBeInTheDocument();
     expect(cierre.getByText("Fecha de cierre")).toBeInTheDocument();
     expect(plan.getByText("Solucion anterior")).toBeInTheDocument();
-    expect(within(modal.getByRole("region", { name: "Observaciones" })).getByText(ticket.observaciones)).toBeInTheDocument();
+    expect(within(modal.getByRole("region", { name: "Resultados obtenidos" })).getByText(ticket.observaciones)).toBeInTheDocument();
     expect(modal.getByText("Admin").closest("dl")).toHaveAccessibleName("Datos de registro");
     expect(modal.getAllByText("ISO-001")).toHaveLength(1);
     expect(modal.getAllByText("Resuelto")).toHaveLength(1);
@@ -436,14 +682,14 @@ test("el detalle sin plan muestra campos sin definir sin inventar resultados ni 
     const cierre = within(modal.getByRole("region", { name: "Cierre del caso" }));
     expect(cierre.getByText("Sin definir")).toBeInTheDocument();
     expect(cierre.getByText("Fecha de cierre prevista")).toBeInTheDocument();
-    expect(modal.getByText("Sin observaciones registradas.")).toBeInTheDocument();
+    expect(modal.getByText("Sin resultados obtenidos registrados.")).toBeInTheDocument();
     expect(modal.queryByText("Registrado por")).not.toBeInTheDocument();
 });
 
-test("el ingreso tiene nueve campos sin asunto, fecha sin hora y origen al lado del estado rojo", async () => {
+test("el ingreso incluye accion inmediata y seguimiento sin asunto, fecha sin hora y origen al lado del estado rojo", async () => {
     await iniciar();
     llenarNuevo();
-    expect(screen.getByRole("dialog").querySelectorAll("input, select, textarea")).toHaveLength(9);
+    expect(screen.getByRole("dialog").querySelectorAll("input, select, textarea")).toHaveLength(15);
     expect(screen.queryByLabelText("Asunto del procedimiento *")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Fecha de recepcion *")).toHaveAttribute("type", "date");
     expect(screen.getByLabelText("Estado *")).toHaveClass("pendiente");
@@ -528,14 +774,14 @@ test("Resumen mensual permite consultar otro mes y otro ano con los tickets guar
     expect(screen.getByLabelText("Recibidos en el mes: 0")).toBeInTheDocument();
 });
 
-test("permite escribir un responsable externo, anotar observaciones y guardar un cierre editable", async () => {
+test("permite escribir un responsable externo, anotar resultados obtenidos y guardar un cierre editable", async () => {
     const cerrado = { ...ticket, responsable_id: null, responsable: "Carolina proveedor externo", estado: "resuelto", fecha_cierre: "2026-10-16T15:00:00Z", observaciones: "Validado por auditoria" };
     crearTicketISO.mockResolvedValue(cerrado);
     await iniciar();
     llenarNuevo();
     expect(screen.getByRole("textbox", { name: "Responsable" })).toHaveAttribute("maxlength", "100");
     fireEvent.change(screen.getByLabelText("Responsable"), { target: { value: "Carolina proveedor externo" } });
-    fireEvent.change(screen.getByLabelText("Observaciones"), { target: { value: "Validado por auditoria" } });
+    fireEvent.change(screen.getByLabelText("Resultados obtenidos"), { target: { value: "Validado por auditoria" } });
     fireEvent.change(screen.getByLabelText("Estado *"), { target: { value: "resuelto" } });
     expect(screen.getByLabelText("Fecha de cierre *")).toBeEnabled();
     expect(screen.getByLabelText("Fecha de cierre *")).toBeRequired();
