@@ -420,7 +420,7 @@ function App() {
                         <Route
                             path="/configuraciones"
                             element={
-                              <PrivateRoute requiredPage="configuraciones" allowedRoles={['admin']} enforceAllowedRoles>
+                              <PrivateRoute requiredPage="configuraciones" allowedRoles={['admin']}>
                                     <Configuraciones />
                                 </PrivateRoute>
                             }

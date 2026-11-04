@@ -314,12 +314,12 @@ export const obtenerPaginasRol = async () => {
 };
 
 export const crearRol = async (payload) => {
-    const response = await axios.post(`${BASE_URL}/roles/`, payload);
+    const response = await axios.post(`${BASE_URL}/roles/`, payload, authHeaders());
     return response.data;
 };
 
 export const actualizarRol = async (idRole, payload) => {
-    const response = await axios.put(`${BASE_URL}/roles/${idRole}`, payload);
+    const response = await axios.put(`${BASE_URL}/roles/${idRole}`, payload, authHeaders());
     return response.data;
 };
 
