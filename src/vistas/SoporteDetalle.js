@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { cargarSoportes } from "../controllers/soporteControllers";
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import { obtenerMantencionPreventiva } from "../api";
+import IndicadoresSoporte from "../components/IndicadoresSoporte";
 import "./SoporteDetalle.css";
 
 const parseFechaLocal = (valor) => {
@@ -187,6 +188,7 @@ const SoporteDetalle = () => {
     }, []);
 
     useEffect(() => {
+        let activo = true;
         const fetchReinicios = async () => {
             setLoadingReinicios(true);
             try {
@@ -194,16 +196,17 @@ const SoporteDetalle = () => {
                     anio: Number(indicadorAnio),
                     mes: Number(indicadorMes) + 1
                 });
-                setReiniciosPreventivos(Array.isArray(data) ? data : []);
+                if (activo) setReiniciosPreventivos(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error("Error al cargar indicador de reinicios:", error);
-                setReiniciosPreventivos([]);
+                if (activo) setReiniciosPreventivos([]);
             } finally {
-                setLoadingReinicios(false);
+                if (activo) setLoadingReinicios(false);
             }
         };
 
         fetchReinicios();
+        return () => { activo = false; };
     }, [indicadorAnio, indicadorMes]);
 
     useEffect(() => {
@@ -310,21 +313,24 @@ const SoporteDetalle = () => {
         soportes.forEach((soporte) => {
             if (!soporte.fecha_soporte) return;
             const fecha = parseFechaLocal(soporte.fecha_soporte);
-            if (!Number.isNaN(fecha.getTime())) {
+            if (fecha && !Number.isNaN(fecha.getTime())) {
                 actuales.add(fecha.getFullYear());
             }
         });
         return Array.from(actuales).sort((a, b) => b - a);
     }, [soportes]);
 
-    const indicadorTickets15 = useMemo(() => {
-        const ticketsMes = soportesBaseIndicador.filter((soporte) => {
+    const soportesMesIndicador = useMemo(() => {
+        return soportesBaseIndicador.filter((soporte) => {
             if (!soporte.fecha_soporte) return false;
             const fecha = parseFechaLocal(soporte.fecha_soporte);
             if (!fecha) return false;
             return fecha.getFullYear() === Number(indicadorAnio) && fecha.getMonth() === Number(indicadorMes);
         });
+    }, [soportesBaseIndicador, indicadorAnio, indicadorMes]);
 
+    const indicadorTickets15 = useMemo(() => {
+        const ticketsMes = soportesMesIndicador;
         const toDateOnly = (valor) => {
             const fecha = parseFechaLocal(valor);
             if (!fecha) return null;
@@ -362,7 +368,7 @@ const SoporteDetalle = () => {
             porcentaje,
             nivel
         };
-    }, [soportesBaseIndicador, indicadorAnio, indicadorMes]);
+    }, [soportesMesIndicador]);
 
     const indicadorReinicios = useMemo(() => {
         const registrosPorCentro = new Map();
@@ -1067,8 +1073,9 @@ const SoporteDetalle = () => {
                 <div className="card-body">
                     <div className="row">
                         <div className="col-md-4 mb-3">
-                            <label>Cliente</label>
+                            <label htmlFor="soporte-detalle-cliente">Cliente</label>
                             <select
+                                id="soporte-detalle-cliente"
                                 className="form-control"
                                 value={clienteSeleccionado}
                                 onChange={(e) => setClienteSeleccionado(e.target.value)}
@@ -1177,156 +1184,14 @@ const SoporteDetalle = () => {
                 </div>
             </div>
 
-            <div className="row mb-3 metrics-top-row indicadores-row">
-                <div className="col-12 col-xl-6 mb-3 indicador-col">
-                    <div className="card indicador-card">
-                        <div className="card-body">
-                            <div className="d-flex flex-wrap justify-content-between align-items-center indicador-header mb-3">
-                                <div>
-                                    <h5 className="mb-1">Indicador: tickets cerrados en 15 dias</h5>
-                                    <small className="text-muted">
-                                        Formula: (tickets cerrados en 15 dias o menos / total tickets del mes) x 100
-                                    </small>
-                                </div>
-                                <div className="d-flex align-items-center indicador-selectores">
-                                    <select
-                                        className="form-control form-control-sm mr-2"
-                                        value={indicadorMes}
-                                        onChange={(e) => setIndicadorMes(Number(e.target.value))}
-                                    >
-                                        {MESES.map((mes, index) => (
-                                            <option key={mes} value={index}>
-                                                {mes}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        className="form-control form-control-sm"
-                                        value={indicadorAnio}
-                                        onChange={(e) => setIndicadorAnio(Number(e.target.value))}
-                                    >
-                                        {aniosIndicador.map((anio) => (
-                                            <option key={anio} value={anio}>
-                                                {anio}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="row indicador-metricas">
-                                <div className="col-md-6 col-lg-2 mb-2 mb-lg-0">
-                                    <span className="indicador-label">Tickets del mes</span>
-                                    <strong className="d-block indicador-valor">{indicadorTickets15.total}</strong>
-                                </div>
-                                <div className="col-md-6 col-lg-2 mb-2 mb-lg-0">
-                                    <span className="indicador-label">Tickets resueltos</span>
-                                    <strong className="d-block indicador-valor">{indicadorTickets15.cerradosTotales}</strong>
-                                </div>
-                                <div className="col-md-6 col-lg-3 mb-2 mb-lg-0">
-                                    <span className="indicador-label">Cerrados &lt;= 15 dias</span>
-                                    <strong className="d-block indicador-valor">{indicadorTickets15.cerradosEnPlazo}</strong>
-                                    <small className="text-muted d-block">Fuera de plazo: {indicadorTickets15.fueraDePlazo}</small>
-                                </div>
-                                <div className="col-md-6 col-lg-2 mb-2 mb-lg-0">
-                                    <span className="indicador-label">Cumplimiento</span>
-                                    <strong className="d-block indicador-valor">{indicadorTickets15.porcentaje.toFixed(1)}%</strong>
-                                </div>
-                                <div className="col-md-12 col-lg-3 d-flex align-items-end justify-content-lg-end">
-                                    <span className={`indicador-estado indicador-${indicadorTickets15.nivel}`}>
-                                        {indicadorTickets15.nivel === "ok"
-                                            ? "Sobre meta"
-                                            : indicadorTickets15.nivel === "alerta"
-                                                ? "En seguimiento"
-                                                : "Bajo meta"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-12 col-xl-6 mb-3 indicador-col">
-                    <div className="card indicador-card indicador-reinicios-card h-100">
-                        <div className="card-body">
-                            <div className="d-flex flex-wrap justify-content-between align-items-center indicador-header mb-3">
-                                <div>
-                                    <h5 className="mb-1">Indicador: reinicios de sistemas</h5>
-                                    <small className="text-muted">
-                                        Cumplimiento mensual por centros activos del periodo seleccionado.
-                                    </small>
-                                </div>
-                                <div className="d-flex flex-wrap align-items-center indicador-selectores reinicio-actions">
-                                    <select
-                                        className="form-control form-control-sm"
-                                        value={indicadorMes}
-                                        onChange={(e) => setIndicadorMes(Number(e.target.value))}
-                                    >
-                                        {MESES.map((mes, index) => (
-                                            <option key={`reinicio-${mes}`} value={index}>
-                                                {mes}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        className="form-control form-control-sm"
-                                        value={indicadorAnio}
-                                        onChange={(e) => setIndicadorAnio(Number(e.target.value))}
-                                    >
-                                        {aniosIndicador.map((anio) => (
-                                            <option key={`reinicio-${anio}`} value={anio}>
-                                                {anio}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-primary btn-sm"
-                                        onClick={() => setShowReiniciosModal(true)}
-                                    >
-                                        <i className="fas fa-list-ul mr-1"></i>
-                                        Ver detalle
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="row indicador-metricas">
-                                <div className="col-6 col-lg-3">
-                                    <span className="indicador-label">Centros</span>
-                                    <strong className="d-block indicador-valor">{indicadorReinicios.total}</strong>
-                                </div>
-                                <div className="col-6 col-lg-3">
-                                    <span className="indicador-label">Reiniciados</span>
-                                    <strong className="d-block indicador-valor text-success">{indicadorReinicios.reiniciados}</strong>
-                                </div>
-                                <div className="col-6 col-lg-3">
-                                    <span className="indicador-label">Pendientes</span>
-                                    <strong className="d-block indicador-valor text-warning">{indicadorReinicios.pendientes}</strong>
-                                </div>
-                                <div className="col-6 col-lg-3">
-                                    <span className="indicador-label">Vencidos</span>
-                                    <strong className="d-block indicador-valor text-danger">{indicadorReinicios.vencidos}</strong>
-                                </div>
-                                <div className="col-md-8 mt-1">
-                                    <span className="indicador-label">Cumplimiento</span>
-                                    <div className="reinicio-progress-wrap">
-                                        <div
-                                            className={`reinicio-progress-bar reinicio-progress-${indicadorReinicios.nivel}`}
-                                            style={{ width: `${Math.min(100, indicadorReinicios.porcentaje)}%` }}
-                                        ></div>
-                                    </div>
-                                    <small className="text-muted">
-                                        Por vencer: {indicadorReinicios.porVencer}
-                                    </small>
-                                </div>
-                                <div className="col-md-4 d-flex align-items-end justify-content-md-end mt-1">
-                                    <span className={`indicador-estado indicador-${indicadorReinicios.nivel}`}>
-                                        {loadingReinicios
-                                            ? "Cargando"
-                                            : `${indicadorReinicios.porcentaje.toFixed(1)}%`}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <IndicadoresSoporte tickets={indicadorTickets15} reinicios={indicadorReinicios}
+                cargandoReinicios={loadingReinicios} soportesMes={soportesMesIndicador}
+                mes={indicadorMes} anio={indicadorAnio} meses={MESES} anios={aniosIndicador}
+                onMes={setIndicadorMes} onAnio={setIndicadorAnio}
+                onVerReinicios={() => setShowReiniciosModal(true)}
+                cliente={clienteSeleccionado} centro={busquedaCentro} />
+
+            <div className="row mb-3 metrics-top-row">
                 <div className="col-md-3 mb-3 mb-md-0">
                     <div className="card metric-card incidentes-card">
                         <div className="card-body">

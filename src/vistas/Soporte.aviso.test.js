@@ -124,3 +124,43 @@ test('envio sin confirmar advierte que revise el buzon y no ofrece reenvio ciego
     expect(screen.queryByRole('button', { name: 'Reintentar solo el correo' })).not.toBeInTheDocument();
     expect(crearSoporte).toHaveBeenCalledTimes(1);
 });
+
+test('responsabilidad comienza por determinar y aparece junto al permiso de trabajo', async () => {
+    await abrirNuevo();
+    const responsabilidad = screen.getByLabelText('Responsabilidad de la falla');
+    expect(responsabilidad).toHaveValue('por_determinar');
+    expect(Array.from(responsabilidad.options).map((option) => option.textContent)).toEqual([
+        'Por determinar', 'Cliente', 'Orca', 'Terceros',
+    ]);
+    expect(responsabilidad.closest('.form-row')).toBe(screen.getByLabelText('Permiso trabajo').closest('.form-row'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); });
+    expect(crearSoporte).toHaveBeenCalledWith(expect.objectContaining({ responsabilidad_falla: 'por_determinar' }));
+});
+
+test.each(['cliente', 'orca', 'terceros'])('guarda responsabilidad %s sin cambiar el origen del reporte', async (responsabilidad) => {
+    await abrirNuevo();
+    fireEvent.change(screen.getByLabelText('Responsabilidad de la falla'), { target: { value: responsabilidad } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); });
+    expect(crearSoporte).toHaveBeenCalledWith(expect.objectContaining({ responsabilidad_falla: responsabilidad, origen: 'cliente' }));
+});
+
+test('editar recupera la responsabilidad guardada y permite corregirla', async () => {
+    obtenerSoportes.mockResolvedValue([{ ...soporte, responsabilidad_falla: 'terceros' }]);
+    render(<MemoryRouter><Soporte /></MemoryRouter>);
+    fireEvent.click(await screen.findByTitle('Editar soporte'));
+    expect(screen.getByLabelText('Responsabilidad de la falla')).toHaveValue('terceros');
+    fireEvent.change(screen.getByLabelText('Responsabilidad de la falla'), { target: { value: 'cliente' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Guardar' })); });
+    expect(actualizarSoporte).toHaveBeenCalledWith(11, expect.objectContaining({ responsabilidad_falla: 'cliente', origen: 'orca' }));
+    expect(enviarAvisoSoporteTerreno).not.toHaveBeenCalled();
+});
+
+test('soportes antiguos usan por determinar y crear otro no conserva la seleccion anterior', async () => {
+    render(<MemoryRouter><Soporte /></MemoryRouter>);
+    fireEvent.click(await screen.findByTitle('Editar soporte'));
+    expect(screen.getByLabelText('Responsabilidad de la falla')).toHaveValue('por_determinar');
+    fireEvent.change(screen.getByLabelText('Responsabilidad de la falla'), { target: { value: 'orca' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Soporte' }));
+    expect(screen.getByLabelText('Responsabilidad de la falla')).toHaveValue('por_determinar');
+});

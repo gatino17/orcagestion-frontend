@@ -263,6 +263,7 @@ const Soporte = () => {
     const [categoriaFalla, setCategoriaFalla] = useState("");
     const [subcategoriaFalla, setSubcategoriaFalla] = useState("");
     const [permisoTrabajo, setPermisoTrabajo] = useState(false);
+    const [responsabilidadFalla, setResponsabilidadFalla] = useState("por_determinar");
     const [cambioEquipo, setCambioEquipo] = useState(false);
     const [cantidadEquiposCambiados, setCantidadEquiposCambiados] = useState("");
     const [detalleEquiposCambiadosLista, setDetalleEquiposCambiadosLista] = useState([]);
@@ -572,6 +573,7 @@ const Soporte = () => {
         setCategoriaFalla("");
         setSubcategoriaFalla("");
         setPermisoTrabajo(false);
+        setResponsabilidadFalla("por_determinar");
         setCambioEquipo(false);
         setCantidadEquiposCambiados("");
         setDetalleEquiposCambiadosLista([]);
@@ -805,6 +807,7 @@ const Soporte = () => {
             categoria_falla: categoriaFalla || null,
             subcategoria_falla: subcategoriaFalla || null,
             permiso_trabajo: permisoTrabajo,
+            responsabilidad_falla: responsabilidadFalla,
             cambio_equipo: cambioEquipo,
             equipo_cambiado: cambioEquipo
                 ? construirDetalleCambioEquipo(cantidadEquiposCambiados, detalleEquiposCambiadosLista)
@@ -963,6 +966,7 @@ const Soporte = () => {
         setCategoriaFalla(categoriaResuelta.categoria);
         setSubcategoriaFalla(categoriaResuelta.subcategoria);
         setPermisoTrabajo(Boolean(soporte.permiso_trabajo));
+        setResponsabilidadFalla(soporte.responsabilidad_falla || "por_determinar");
         setCambioEquipo(soporte.cambio_equipo);
         setCaseCode(String(soporte.case_code || ""));
         setIsmaelIdOrigen(String(soporte.ismael_id_origen || ""));
@@ -2134,30 +2138,6 @@ const Soporte = () => {
                                         <div className="estado-preview mt-2">
                                             {renderEstado(estado)}
                                         </div>
-                                        <div className="form-row align-items-end mt-2">
-                                            <div className="form-group col-md-8 mb-0">
-                                                <label className="text-muted small font-weight-semibold">Case code</label>
-                                                <input
-                                                    placeholder="Ej: CS-2026-001"
-                                                    value={caseCode}
-                                                    onChange={(e) => setCaseCode(String(e.target.value || "").trim())}
-                                                    className="form-control"
-                                                />
-                                            </div>
-                                            <div className="form-group col-md-4 mb-0">
-                                                <label className="text-muted small font-weight-semibold d-block">Permiso trabajo</label>
-                                                <label className={`permiso-trabajo-toggle ${permisoTrabajo ? "activo" : "inactivo"}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={permisoTrabajo}
-                                                        onChange={(e) => setPermisoTrabajo(e.target.checked)}
-                                                    />
-                                                    <span className="permiso-trabajo-toggle-icon">
-                                                        <i className="fas fa-user-cog"></i>
-                                                    </span>
-                                                </label>
-                                            </div>
-                                        </div>
                                     </div>
                                     <div className="form-group col-md-6">
                                         <label className="text-muted small font-weight-semibold d-flex justify-content-between align-items-center">
@@ -2180,6 +2160,47 @@ const Soporte = () => {
                                         {errorFechaCierre && (
                                             <small className="text-danger d-block mt-1">{errorFechaCierre}</small>
                                         )}
+                                    </div>
+                                </div>
+
+                                <div className="form-row align-items-end">
+                                    <div className="form-group col-md-5">
+                                        <label className="text-muted small font-weight-semibold" htmlFor="soporte-case-code">Case code</label>
+                                        <input
+                                            id="soporte-case-code"
+                                            placeholder="Ej: CS-2026-001"
+                                            value={caseCode}
+                                            onChange={(e) => setCaseCode(String(e.target.value || "").trim())}
+                                            className="form-control"
+                                        />
+                                    </div>
+                                    <div className="form-group col-md-2">
+                                        <label className="text-muted small font-weight-semibold d-block" htmlFor="soporte-permiso-trabajo">Permiso trabajo</label>
+                                        <label className={`permiso-trabajo-toggle ${permisoTrabajo ? "activo" : "inactivo"}`}>
+                                            <input
+                                                id="soporte-permiso-trabajo"
+                                                type="checkbox"
+                                                checked={permisoTrabajo}
+                                                onChange={(e) => setPermisoTrabajo(e.target.checked)}
+                                            />
+                                            <span className="permiso-trabajo-toggle-icon">
+                                                <i className="fas fa-user-cog"></i>
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <div className="form-group col-md-5">
+                                        <label className="text-muted small font-weight-semibold" htmlFor="soporte-responsabilidad-falla">Responsabilidad de la falla</label>
+                                        <select
+                                            id="soporte-responsabilidad-falla"
+                                            value={responsabilidadFalla}
+                                            onChange={(e) => setResponsabilidadFalla(e.target.value)}
+                                            className="form-control"
+                                        >
+                                            <option value="por_determinar">Por determinar</option>
+                                            <option value="cliente">Cliente</option>
+                                            <option value="orca">Orca</option>
+                                            <option value="terceros">Terceros</option>
+                                        </select>
                                     </div>
                                 </div>
 

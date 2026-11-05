@@ -1,0 +1,61 @@
+.soporte-indicadores-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+.soporte-indicadores-header h4 { font-size: 1.05rem; margin: 0 0 0.2rem; color: #0f2942; }
+.soporte-indicadores-header p { margin: 0; color: #475569; font-size: 0.85rem; overflow-wrap: anywhere; }
+.soporte-indicadores-header small { color: #64748b; font-size: 0.75rem; }
+.soporte-indicadores-periodo { display: flex; gap: 0.6rem; }
+.soporte-indicadores-periodo label { margin: 0; font-size: 0.75rem; color: #475569; }
+.soporte-indicadores-periodo select { min-width: 95px; margin-top: 0.2rem; }
+.soporte-indicadores-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.85rem; }
+.soporte-indicador-compacto { min-width: 0; }
+.soporte-indicador-compacto .card-body { display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; }
+.soporte-indicador-compacto h5 { font-size: 0.95rem; font-weight: 700; color: #0f2942; margin: 0; }
+.soporte-indicador-principal { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.soporte-indicador-principal > strong { font-size: 1.85rem; line-height: 1.1; color: #075985; }
+.soporte-indicador-principal > strong small { font-size: 1rem; margin-left: 0.2rem; }
+.soporte-indicador-principal .indicador-estado { font-size: 0.65rem; padding: 0.3rem 0.6rem; background-color: #e2e8f0; }
+.soporte-indicador-principal .indicador-ok { background-color: #dcfce7; }
+.soporte-indicador-principal .indicador-alerta { background-color: #fef3c7; }
+.soporte-indicador-principal .indicador-critico { background-color: #fee2e2; }
+.soporte-indicador-datos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; }
+.soporte-indicador-datos span { display: block; font-size: 0.75rem; color: #64748b; }
+.soporte-indicador-datos strong { display: block; font-size: 1.15rem; color: #0f2942; }
+.soporte-indicador-formula { margin-top: auto; font-size: 0.75rem; color: #475569; }
+.soporte-indicador-formula summary { color: #0369a1; cursor: pointer; }
+.soporte-indicador-formula p { margin: 0.4rem 0 0; }
+.soporte-indicador-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; }
+.soporte-indicador-footer small { color: #64748b; }
+.soporte-responsabilidad-total { margin: 0; color: #64748b; font-size: 0.8rem; }
+.soporte-responsabilidad-total strong { color: #0f2942; }
+.soporte-responsabilidad-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.soporte-responsabilidad-opciones button { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; border: 1px solid #bae6fd; border-radius: 10px; padding: 0.65rem; background: #f0f9ff; color: #075985; text-align: left; cursor: pointer; }
+.soporte-responsabilidad-opciones span { font-size: 0.8rem; }
+.soporte-responsabilidad-opciones strong { font-size: 1.3rem; }
+.soporte-responsabilidad-opciones .responsabilidad-orca { background: #ecfeff; border-color: #a5f3fc; color: #155e75; }
+.soporte-responsabilidad-opciones .responsabilidad-terceros { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+.soporte-responsabilidad-opciones .responsabilidad-por_determinar { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.soporte-responsabilidad-opciones button:hover { border-color: currentColor; }
+.soporte-responsabilidad-opciones button:focus-visible { outline: 2px solid #0284c7; outline-offset: 3px; }
+.soporte-responsabilidad-ayuda { margin-top: auto; font-size: 0.75rem; color: #64748b; }
+.soporte-responsabilidad-modal { width: min(1100px, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid #dbeafe; border-radius: 16px; color: #0f2942; box-shadow: 0 24px 70px #0f172a40; }
+.soporte-responsabilidad-modal::backdrop { background: #0f172a99; }
+.soporte-responsabilidad-modal header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f8fafc, #e0f2fe); border-bottom: 1px solid #dbeafe; }
+.soporte-responsabilidad-modal header small { color: #0369a1; }
+.soporte-responsabilidad-modal h4 { font-size: 1.2rem; margin: 0.2rem 0; }
+.soporte-responsabilidad-modal header p { margin: 0; color: #64748b; font-size: 0.8rem; overflow-wrap: anywhere; }
+.soporte-responsabilidad-modal-body { padding: 1rem 1.25rem; }
+@media (max-width: 1199px) {
+    .soporte-indicadores-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .soporte-responsabilidad-card { grid-column: 1 / -1; }
+}
+@media (max-width: 767px) {
+    .soporte-indicadores-grid { grid-template-columns: minmax(0, 1fr); }
+    .soporte-indicadores-periodo { width: 100%; }
+    .soporte-indicadores-periodo label { flex: 1; }
+}
