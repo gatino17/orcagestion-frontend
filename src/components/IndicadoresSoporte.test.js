@@ -170,3 +170,25 @@ test("la descarga no se duplica y muestra un error recuperable si falla el servi
     expect(screen.getByRole('alert')).toHaveTextContent('Sesion expirada');
     await waitFor(() => expect(boton).not.toBeDisabled());
 });
+
+test("los casos con permiso de trabajo muestran su icono verde junto al numero", () => {
+    render(<IndicadoresSoporte {...props} soportesMes={[
+        { ...props.soportesMes[0], case_code: 'CASO-001', permiso_trabajo: true, estado: 'resuelto' },
+    ]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver casos de responsabilidad: Cliente (1)' }));
+    const modal = screen.getByRole('dialog');
+    const icono = within(modal).getByRole('img', { name: 'Permiso de trabajo' });
+    expect(icono).toHaveClass('soporte-responsabilidad-permiso');
+    expect(icono).toHaveAttribute('title', 'Requiere permiso de trabajo');
+    expect(icono.querySelector('i')).toHaveClass('fa-user-cog');
+    expect(within(icono.closest('td')).getByText('CASO-001')).toBeInTheDocument();
+    expect(within(modal).getByText('Resuelto')).toHaveClass('bg-success');
+});
+
+test.each([false, undefined, null, 'false'])("si el permiso es %j no muestra un icono de permiso", (permiso_trabajo) => {
+    render(<IndicadoresSoporte {...props} soportesMes={[{ ...props.soportesMes[0], permiso_trabajo }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver casos de responsabilidad: Cliente (1)' }));
+    const modal = screen.getByRole('dialog');
+    expect(within(modal).queryByRole('img', { name: 'Permiso de trabajo' })).not.toBeInTheDocument();
+    expect(within(modal).getByText('#1')).toBeInTheDocument();
+});

@@ -52,6 +52,9 @@
 .soporte-responsabilidad-modal h4 { font-size: 1.2rem; margin: 0.2rem 0; }
 .soporte-responsabilidad-modal header p { margin: 0; color: #64748b; font-size: 0.8rem; overflow-wrap: anywhere; }
 .soporte-responsabilidad-modal-body { padding: 1rem 1.25rem; }
+.soporte-responsabilidad-caso { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.soporte-responsabilidad-caso > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.soporte-responsabilidad-permiso { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; border: 1px solid #16a34a47; background: #dcfce7; color: #16a34a; font-size: 0.82rem; }
 .soporte-responsabilidad-estado { justify-content: center; gap: 0.35rem; flex-shrink: 0; white-space: nowrap; word-break: normal; overflow-wrap: normal; font-size: 0.75rem; line-height: 1.25; }
 .soporte-responsabilidad-estado i { flex-shrink: 0; }
 @media (max-width: 1199px) {

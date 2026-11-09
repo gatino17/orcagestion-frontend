@@ -20,7 +20,15 @@ function estadoDelCaso(valor) {
 }
 
 const columnasDetalle = [
-    { name: "Caso", selector: (row) => row.case_code || `#${row.id_soporte}`, sortable: true, minWidth: "110px", wrap: true },
+    { name: "Caso", selector: (row) => row.case_code || `#${row.id_soporte}`, sortable: true, minWidth: "150px", wrap: true,
+        cell: (row) => <div className="soporte-responsabilidad-caso">
+            <span>{row.case_code || `#${row.id_soporte}`}</span>
+            {row.permiso_trabajo === true && <span className="soporte-responsabilidad-permiso" role="img"
+                aria-label="Permiso de trabajo" title="Requiere permiso de trabajo">
+                <i className="fas fa-user-cog" aria-hidden="true" />
+            </span>}
+        </div>,
+    },
     { name: "Cliente", selector: (row) => row.centro?.cliente || "Sin cliente", sortable: true, wrap: true },
     { name: "Centro", selector: (row) => row.centro?.nombre || "Sin centro", sortable: true, wrap: true },
     { name: "Problema", selector: (row) => row.problema || "Sin descripcion", wrap: true, minWidth: "240px" },
