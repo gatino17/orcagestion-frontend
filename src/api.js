@@ -1437,6 +1437,13 @@ export const crearSoporte = async (soporteData) => {
 };
 
 // Obtener soportes
+export const obtenerExcelResponsabilidadSoporte = async ({ anio, cliente, centro }) => {
+    const response = await axios.get(`${BASE_URL}/soporte/responsabilidad/excel`, {
+        ...authHeaders(), params: { anio, cliente: cliente || undefined, centro: centro || undefined }, responseType: 'blob',
+    });
+    return response.data;
+};
+
 export const obtenerSoportes = async () => {
     try {
         const response = await axios.get(`${BASE_URL}/soporte/`, authHeaders());

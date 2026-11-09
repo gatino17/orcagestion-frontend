@@ -8,7 +8,7 @@ import { obtenerMantencionPreventiva } from "../api";
 
 jest.mock("../controllers/soporteControllers", () => ({ cargarSoportes: jest.fn() }));
 jest.mock("../controllers/centrosControllers", () => ({ cargarCentrosClientes: jest.fn() }));
-jest.mock("../api", () => ({ obtenerMantencionPreventiva: jest.fn() }));
+jest.mock("../api", () => ({ obtenerMantencionPreventiva: jest.fn(), obtenerExcelResponsabilidadSoporte: jest.fn() }));
 jest.mock("react-data-table-component", () => ({ data, noDataComponent }) => <div>{data.length ? data.map((row) => <p key={row.id_soporte}>{row.problema}</p>) : noDataComponent}</div>);
 
 const hoy = new Date();

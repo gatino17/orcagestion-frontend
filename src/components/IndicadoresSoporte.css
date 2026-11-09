@@ -32,6 +32,8 @@
 .soporte-indicador-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; }
 .soporte-indicador-footer small { color: #64748b; }
 .soporte-responsabilidad-total { margin: 0; color: #64748b; font-size: 0.8rem; }
+.soporte-responsabilidad-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.soporte-responsabilidad-excel { flex: 0 0 auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
 .soporte-responsabilidad-total strong { color: #0f2942; }
 .soporte-responsabilidad-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
 .soporte-responsabilidad-opciones button { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; border: 1px solid #bae6fd; border-radius: 10px; padding: 0.65rem; background: #f0f9ff; color: #075985; text-align: left; cursor: pointer; }
@@ -43,13 +45,15 @@
 .soporte-responsabilidad-opciones button:hover { border-color: currentColor; }
 .soporte-responsabilidad-opciones button:focus-visible { outline: 2px solid #0284c7; outline-offset: 3px; }
 .soporte-responsabilidad-ayuda { margin-top: auto; font-size: 0.75rem; color: #64748b; }
-.soporte-responsabilidad-modal { width: min(1100px, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid #dbeafe; border-radius: 16px; color: #0f2942; box-shadow: 0 24px 70px #0f172a40; }
+.soporte-responsabilidad-modal { width: min(1200px, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid #dbeafe; border-radius: 16px; color: #0f2942; box-shadow: 0 24px 70px #0f172a40; }
 .soporte-responsabilidad-modal::backdrop { background: #0f172a99; }
 .soporte-responsabilidad-modal header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #f8fafc, #e0f2fe); border-bottom: 1px solid #dbeafe; }
 .soporte-responsabilidad-modal header small { color: #0369a1; }
 .soporte-responsabilidad-modal h4 { font-size: 1.2rem; margin: 0.2rem 0; }
 .soporte-responsabilidad-modal header p { margin: 0; color: #64748b; font-size: 0.8rem; overflow-wrap: anywhere; }
 .soporte-responsabilidad-modal-body { padding: 1rem 1.25rem; }
+.soporte-responsabilidad-estado { justify-content: center; gap: 0.35rem; flex-shrink: 0; white-space: nowrap; word-break: normal; overflow-wrap: normal; font-size: 0.75rem; line-height: 1.25; }
+.soporte-responsabilidad-estado i { flex-shrink: 0; }
 @media (max-width: 1199px) {
     .soporte-indicadores-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .soporte-responsabilidad-card { grid-column: 1 / -1; }

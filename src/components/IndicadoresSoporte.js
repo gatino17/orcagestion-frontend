@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import DataTable from "react-data-table-component";
+import { obtenerExcelResponsabilidadSoporte } from "../api";
 import { agruparResponsabilidadFalla, RESPONSABILIDADES_FALLA } from "../utils/soporteResponsabilidad";
 import "./IndicadoresSoporte.css";
 
@@ -8,13 +9,31 @@ function fechaCorta(valor) {
     return match ? `${match[3]}/${match[2]}/${match[1]}` : "-";
 }
 
+function estadoDelCaso(valor) {
+    const key = String(valor || "pendiente").trim().toLowerCase() || "pendiente";
+    const estados = {
+        pendiente: { label: "Pendiente", clase: "bg-danger text-white", icono: "fa-exclamation-circle" },
+        en_proceso: { label: "En seguimiento", clase: "bg-warning text-dark", icono: "fa-exclamation-triangle" },
+        resuelto: { label: "Resuelto", clase: "bg-success text-white", icono: "fa-check-circle" },
+    };
+    return estados[key === "finalizado" ? "resuelto" : key] || { label: String(valor), clase: "bg-secondary text-white", icono: "fa-info-circle" };
+}
+
 const columnasDetalle = [
     { name: "Caso", selector: (row) => row.case_code || `#${row.id_soporte}`, sortable: true, minWidth: "110px", wrap: true },
     { name: "Cliente", selector: (row) => row.centro?.cliente || "Sin cliente", sortable: true, wrap: true },
     { name: "Centro", selector: (row) => row.centro?.nombre || "Sin centro", sortable: true, wrap: true },
     { name: "Problema", selector: (row) => row.problema || "Sin descripcion", wrap: true, minWidth: "240px" },
+    { name: "Solucion", selector: (row) => String(row.solucion || "").trim() || "Sin solucion registrada", wrap: true, minWidth: "240px" },
     { name: "Fecha", selector: (row) => row.fecha_soporte || "", cell: (row) => fechaCorta(row.fecha_soporte), sortable: true, width: "110px" },
-    { name: "Estado", selector: (row) => ({ pendiente: "Pendiente", en_proceso: "En seguimiento", resuelto: "Resuelto", finalizado: "Resuelto" }[row.estado] || row.estado || "Pendiente"), wrap: true },
+    { name: "Estado", selector: (row) => estadoDelCaso(row.estado).label, minWidth: "170px", grow: 0, center: true,
+        cell: (row) => {
+            const estado = estadoDelCaso(row.estado);
+            return <span className={`soporte-responsabilidad-estado d-inline-flex align-items-center px-2 py-1 rounded-pill font-weight-semibold ${estado.clase}`}>
+                <i className={`fas ${estado.icono}`} aria-hidden="true" />{estado.label}
+            </span>;
+        },
+    },
 ];
 
 function DetalleResponsabilidad({ categoria, registros, periodo, alcance, onCerrar }) {
@@ -56,11 +75,47 @@ function Dato({ nombre, valor, className = "" }) {
 export default function IndicadoresSoporte({ tickets, reinicios, cargandoReinicios, soportesMes, mes, anio, meses, anios,
     onMes, onAnio, onVerReinicios, cliente, centro }) {
     const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
+    const [exportando, setExportando] = useState(false);
+    const [errorExcel, setErrorExcel] = useState("");
+    const descargaEnCurso = useRef(false);
     const grupos = useMemo(() => agruparResponsabilidadFalla(soportesMes), [soportesMes]);
     const categoria = RESPONSABILIDADES_FALLA.find((item) => item.key === categoriaSeleccionada);
     const alcance = [cliente || "Todos los clientes", centro ? `Centro: ${centro}` : "Todos los centros"].join(" / ");
     const periodo = `${meses[mes]} ${anio}`;
     const estadoTickets = !tickets.total ? "Sin tickets" : tickets.nivel === "ok" ? "Sobre meta" : tickets.nivel === "alerta" ? "En seguimiento" : "Bajo meta";
+
+    const descargarExcel = async () => {
+        if (descargaEnCurso.current) return;
+        descargaEnCurso.current = true;
+        setExportando(true);
+        setErrorExcel("");
+        try {
+            const archivo = await obtenerExcelResponsabilidadSoporte({ anio, cliente, centro });
+            if (!(archivo instanceof Blob) || !archivo.size || archivo.type.includes('json') || archivo.type.includes('text/')) {
+                throw new Error('Respuesta Excel invalida');
+            }
+            const url = URL.createObjectURL(archivo);
+            const enlace = document.createElement('a');
+            try {
+                enlace.href = url;
+                enlace.download = `Responsabilidad-fallas-${anio}.xlsx`;
+                document.body.appendChild(enlace);
+                enlace.click();
+            } finally {
+                enlace.remove();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+        } catch (error) {
+            let mensaje = error.response?.data?.error;
+            if (error.response?.data instanceof Blob) {
+                try { mensaje = JSON.parse(await error.response.data.text()).error; } catch { /* Keep the safe fallback for non-JSON errors. */ }
+            }
+            setErrorExcel(typeof mensaje === 'string' ? mensaje : 'No se pudo descargar el Excel. Intenta nuevamente.');
+        } finally {
+            descargaEnCurso.current = false;
+            setExportando(false);
+        }
+    };
 
     return <section className="soporte-indicadores mb-3" aria-label="Indicadores mensuales de soporte">
         <div className="soporte-indicadores-header">
@@ -122,7 +177,15 @@ export default function IndicadoresSoporte({ tickets, reinicios, cargandoReinici
             </article>
             <article className="card indicador-card soporte-indicador-compacto soporte-responsabilidad-card" aria-labelledby="soporte-indicador-responsabilidad">
                 <div className="card-body">
-                    <h5 id="soporte-indicador-responsabilidad">Responsabilidad de la falla</h5>
+                    <div className="soporte-responsabilidad-heading">
+                        <h5 id="soporte-indicador-responsabilidad">Responsabilidad de la falla</h5>
+                        <button type="button" className="btn btn-outline-success btn-sm soporte-responsabilidad-excel"
+                            onClick={descargarExcel} disabled={exportando} aria-busy={exportando}
+                            aria-label="Descargar Excel de responsabilidad de la falla"
+                            title={`Descargar Excel ${anio}: resumen mensual y detalle por cliente (todo el ano)`}>
+                            <i className={`fas ${exportando ? 'fa-spinner fa-spin' : 'fa-file-excel'}`} aria-hidden="true" />
+                        </button>
+                    </div>
                     <p className="soporte-responsabilidad-total"><strong>{soportesMes.length}</strong> casos del mes</p>
                     <div className="soporte-responsabilidad-opciones">
                         {RESPONSABILIDADES_FALLA.map(({ key, label }) => <button type="button" key={key} className={`responsabilidad-${key}`}
@@ -131,6 +194,7 @@ export default function IndicadoresSoporte({ tickets, reinicios, cargandoReinici
                         </button>)}
                     </div>
                     <small className="soporte-responsabilidad-ayuda">Selecciona una categoria para ver sus casos.</small>
+                    {errorExcel && <small className="text-danger" role="alert">{errorExcel}</small>}
                 </div>
             </article>
         </div>

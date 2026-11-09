@@ -1,8 +1,16 @@
-import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import React, { act } from "react";
+import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import IndicadoresSoporte from "./IndicadoresSoporte";
+import { obtenerExcelResponsabilidadSoporte } from "../api";
 
-jest.mock("react-data-table-component", () => ({ data, noDataComponent }) => <div>{data.length ? data.map((row) => <p key={row.id_soporte}>{row.problema}</p>) : noDataComponent}</div>);
+jest.mock("../api", () => ({ obtenerExcelResponsabilidadSoporte: jest.fn() }));
+
+jest.mock("react-data-table-component", () => ({ columns, data, noDataComponent }) => data.length ? <table>
+    <thead><tr>{columns.map((column) => <th key={column.name}>{column.name}</th>)}</tr></thead>
+    <tbody>{data.map((row) => <tr key={row.id_soporte}>{columns.map((column) => <td key={column.name}>
+        {column.cell ? column.cell(row) : column.selector(row)}
+    </td>)}</tr>)}</tbody>
+</table> : <div>{noDataComponent}</div>);
 
 beforeAll(() => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
@@ -80,4 +88,85 @@ test("cambiar el periodo actualiza los conteos y el detalle abierto", () => {
     expect(within(screen.getByRole("dialog")).queryByText("Falla cliente")).not.toBeInTheDocument();
     expect(screen.getByText("Febrero 2026 / Aqua / Centro: Lin Lin")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ver casos de responsabilidad: Cliente (0)" })).toBeInTheDocument();
+});
+
+test("el detalle muestra la solucion guardada junto al problema del caso", () => {
+    const solucion = 'Se reemplazo el cable y se verifico la conexion.';
+    render(<IndicadoresSoporte {...props} soportesMes={[
+        { ...props.soportesMes[0], solucion },
+        { ...props.soportesMes[1], solucion: 'Solucion de otra responsabilidad' },
+    ]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver casos de responsabilidad: Cliente (1)" }));
+    const modal = screen.getByRole("dialog");
+    expect(within(modal).getByRole("columnheader", { name: "Solucion" })).toBeInTheDocument();
+    const fila = within(modal).getByText('Falla cliente').closest('tr');
+    expect(within(fila).getByText(solucion)).toBeInTheDocument();
+    expect(within(modal).queryByText('Solucion de otra responsabilidad')).not.toBeInTheDocument();
+});
+
+test.each([undefined, null, '', '  '])("si la solucion es %j indica que aun no esta registrada", (solucion) => {
+    render(<IndicadoresSoporte {...props} soportesMes={[{ ...props.soportesMes[0], solucion }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver casos de responsabilidad: Cliente (1)" }));
+    expect(within(screen.getByRole("dialog")).getByText('Sin solucion registrada')).toBeInTheDocument();
+});
+
+test.each([
+    ['resuelto', 'Resuelto', 'bg-success', 'text-white'],
+    ['finalizado', 'Resuelto', 'bg-success', 'text-white'],
+    [' RESUELTO ', 'Resuelto', 'bg-success', 'text-white'],
+    ['pendiente', 'Pendiente', 'bg-danger', 'text-white'],
+    [null, 'Pendiente', 'bg-danger', 'text-white'],
+    ['', 'Pendiente', 'bg-danger', 'text-white'],
+    ['  ', 'Pendiente', 'bg-danger', 'text-white'],
+    ['en_proceso', 'En seguimiento', 'bg-warning', 'text-dark'],
+    ['otro', 'otro', 'bg-secondary', 'text-white'],
+])('el estado %j muestra %s con su color correspondiente', (estado, label, fondo, texto) => {
+    render(<IndicadoresSoporte {...props} soportesMes={[{ ...props.soportesMes[0], estado }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver casos de responsabilidad: Cliente (1)" }));
+    const celda = within(screen.getByRole('dialog')).getByRole('cell', { name: label });
+    expect(within(celda).getByText(label)).toHaveClass(fondo, texto, 'rounded-pill', 'soporte-responsabilidad-estado');
+});
+
+test("el boton Excel muestra solo el icono y descarga el ano completo con los filtros activos", async () => {
+    jest.useFakeTimers();
+    const crearURL = URL.createObjectURL;
+    const revocarURL = URL.revokeObjectURL;
+    URL.createObjectURL = jest.fn(() => 'blob:excel-prueba');
+    URL.revokeObjectURL = jest.fn();
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+        const archivo = new Blob(['xlsx-test'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        obtenerExcelResponsabilidadSoporte.mockResolvedValueOnce(archivo);
+        render(<IndicadoresSoporte {...props} />);
+        const boton = screen.getByRole('button', { name: 'Descargar Excel de responsabilidad de la falla' });
+        expect(boton.textContent).toBe('');
+        expect(boton.querySelector('i')).toHaveClass('fa-file-excel');
+        expect(boton).toHaveAttribute('title', expect.stringContaining('todo el ano'));
+        await act(async () => { fireEvent.click(boton); });
+        expect(obtenerExcelResponsabilidadSoporte).toHaveBeenCalledWith({ anio: 2026, cliente: 'Aqua', centro: 'Lin Lin' });
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(click.mock.instances[0].download).toBe('Responsabilidad-fallas-2026.xlsx');
+        expect(document.querySelector('a[download]')).not.toBeInTheDocument();
+        act(() => jest.runOnlyPendingTimers());
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:excel-prueba');
+    } finally {
+        click.mockRestore();
+        URL.createObjectURL = crearURL;
+        URL.revokeObjectURL = revocarURL;
+        jest.useRealTimers();
+    }
+});
+
+test("la descarga no se duplica y muestra un error recuperable si falla el servidor", async () => {
+    let rechazar;
+    obtenerExcelResponsabilidadSoporte.mockReturnValueOnce(new Promise((_, reject) => { rechazar = reject; }));
+    render(<IndicadoresSoporte {...props} />);
+    const boton = screen.getByRole('button', { name: 'Descargar Excel de responsabilidad de la falla' });
+    fireEvent.click(boton);
+    fireEvent.click(boton);
+    expect(boton).toBeDisabled();
+    expect(obtenerExcelResponsabilidadSoporte).toHaveBeenCalledTimes(1);
+    await act(async () => { rechazar({ response: { data: { error: 'Sesion expirada' } } }); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Sesion expirada');
+    await waitFor(() => expect(boton).not.toBeDisabled());
 });
