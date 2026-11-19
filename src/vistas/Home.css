@@ -872,7 +872,8 @@ button.metric-card.active {
     color: #1d4ed8;
 }
 
-.support-priority-chip {
+.support-priority-chip,
+.support-responsibility-chip {
     display: inline-flex;
     align-items: center;
     border-radius: 999px;
@@ -896,6 +897,20 @@ button.metric-card.active {
 .support-priority-chip.priority-baja {
     background: #dcfce7;
     color: #166534;
+}
+
+.support-responsibility-chip {
+    white-space: nowrap;
+}
+
+.support-responsibility-chip.responsibility-cliente {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.support-responsibility-chip.responsibility-terceros {
+    background: #e2e8f0;
+    color: #334155;
 }
 
 .support-priority-days {

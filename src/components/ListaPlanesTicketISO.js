@@ -1,7 +1,7 @@
 import React from "react";
 import { formatearFechaHoraTicketISO, formatearFechaTicketISO } from "../utils/ticketISO";
 
-export default function ListaPlanesTicketISO({ planes = [] }) {
+export default function ListaPlanesTicketISO({ planes = [], onEliminar, planEliminarId, onCancelarEliminar, onConfirmarEliminar, eliminando = false }) {
     if (!planes.length) return <p className="ticketiso-detail-text">Aun no hay planes de accion registrados.</p>;
     return <div className="ticketiso-plans-list">
         {planes.map((plan, index) => <details className="ticketiso-plan-entry" key={plan.id_plan} open={index === 0}>
@@ -18,6 +18,17 @@ export default function ListaPlanesTicketISO({ planes = [] }) {
                     <div><dt>Registrado</dt><dd>{formatearFechaHoraTicketISO(plan.created_at)}</dd></div>
                     {plan.creado_por_nombre && <div><dt>Registrado por</dt><dd>{plan.creado_por_nombre}</dd></div>}
                 </dl>
+                {onEliminar && (planEliminarId === plan.id_plan ? (
+                    <div className="ticketiso-plan-delete-confirm" role="group" aria-label={`Confirmar eliminacion del plan ${plan.numero || planes.length - index}`}>
+                        <p>Eliminar este plan de accion? Esta accion no se puede deshacer. El ticket y los demas planes se conservaran.</p>
+                        <div className="ticketiso-toolbar-actions">
+                            <button type="button" className="ticketiso-button secondary" disabled={eliminando} onClick={onCancelarEliminar}>Cancelar eliminacion</button>
+                            <button type="button" className="ticketiso-button danger" disabled={eliminando} onClick={onConfirmarEliminar}><i className={`fas ${eliminando ? "fa-spinner fa-spin" : "fa-trash-alt"}`} aria-hidden="true" /> {eliminando ? "Eliminando..." : "Confirmar eliminacion del plan"}</button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="ticketiso-plan-actions"><button type="button" className="ticketiso-button danger" disabled={eliminando} onClick={() => onEliminar(plan)} aria-label={`Eliminar plan ${plan.numero || planes.length - index}`}><i className="fas fa-trash-alt" aria-hidden="true" /> Eliminar plan</button></div>
+                ))}
             </div>
         </details>)}
     </div>;

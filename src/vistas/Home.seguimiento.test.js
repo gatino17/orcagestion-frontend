@@ -216,3 +216,57 @@ test('linked installation shows installers separately and not as a duplicate wor
   expect(within(tarjeta()).getByText('Armado: Jorge')).toBeInTheDocument();
   expect(within(tarjeta()).getByText('Instaladores: Instalador de terreno')).toBeInTheDocument();
 });
+
+const eventoHome = (id, cambios = {}) => ({
+  id_soporte: id, centro: { id_centro: id, nombre: `Centro evento ${id}`, cliente: 'Cliente prueba', area: 'Zona prueba' },
+  fecha_soporte: fechaHoyChile(), estado: 'pendiente', tipo: 'terreno', prioridad: 'media',
+  problema: `Evento de prueba ${id}`, ...cambios,
+});
+
+test('el resumen dice Total eventos abiertos y conserva el conteo de soportes abiertos', async () => {
+  obtenerSoportes.mockResolvedValue([
+    eventoHome(1, { responsabilidad_falla: 'cliente' }),
+    eventoHome(2, { estado: 'en_proceso', responsabilidad_falla: 'orca' }),
+    eventoHome(3, { estado: 'resuelto', fecha_cierre: fechaHoyChile() }),
+  ]);
+  render(<Home />);
+  const resumen = screen.getByText('Total eventos abiertos').closest('button');
+  await waitFor(() => expect(within(resumen).getByRole('heading', { name: '2' })).toBeInTheDocument());
+  expect(screen.queryByText('Total fallas abiertas')).not.toBeInTheDocument();
+});
+
+test.each([
+  ['cliente', 'Cliente', 'media', 'orca'],
+  ['terceros', 'Terceros', 'baja', 'cliente'],
+  [' TERCEROS ', 'Terceros', 'alta', 'orca'],
+])('la responsabilidad %s aparece junto a la prioridad sin confundirse con el origen', async (responsabilidad_falla, label, prioridad, origen) => {
+  obtenerSoportes.mockResolvedValue([eventoHome(1, { responsabilidad_falla, prioridad, origen })]);
+  render(<Home />);
+  const etiqueta = await screen.findByTitle(`Responsabilidad de la falla: ${label}`);
+  const evento = etiqueta.closest('.support-priority-item');
+  expect(within(evento).getByText('Evento de prueba 1')).toBeInTheDocument();
+  expect(etiqueta).toHaveTextContent(label);
+  expect(etiqueta.previousElementSibling).toHaveClass('support-priority-chip', `priority-${prioridad}`);
+  expect(etiqueta.previousElementSibling).toHaveTextContent(prioridad);
+});
+
+test.each(['orca', 'por_determinar', undefined, null, ''])('la responsabilidad %j conserva el evento sin agregar una etiqueta', async (responsabilidad_falla) => {
+  obtenerSoportes.mockResolvedValue([eventoHome(1, { responsabilidad_falla, origen: 'cliente' })]);
+  render(<Home />);
+  const problema = await screen.findByText('Evento de prueba 1');
+  const evento = problema.closest('.support-priority-item');
+  expect(evento).toBeInTheDocument();
+  expect(evento.querySelector('.support-responsibility-chip')).not.toBeInTheDocument();
+  expect(evento.querySelector('.support-priority-chip')).toHaveTextContent('media');
+});
+
+test('las etiquetas de responsabilidad no filtran los eventos de Soporte operativo', async () => {
+  obtenerSoportes.mockResolvedValue(['cliente', 'terceros', 'orca', 'por_determinar'].map(
+    (responsabilidad_falla, index) => eventoHome(index + 1, { responsabilidad_falla }),
+  ));
+  const { container } = render(<Home />);
+  await waitFor(() => expect(container.querySelectorAll('.support-priority-item')).toHaveLength(4));
+  expect(container.querySelectorAll('.support-responsibility-chip')).toHaveLength(2);
+  expect(screen.getByTitle('Responsabilidad de la falla: Cliente')).toBeInTheDocument();
+  expect(screen.getByTitle('Responsabilidad de la falla: Terceros')).toBeInTheDocument();
+});

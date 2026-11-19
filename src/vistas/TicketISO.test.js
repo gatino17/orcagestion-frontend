@@ -1,12 +1,13 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { actualizarPlanAccionTicketISO, actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerPDFTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
+import { actualizarPlanAccionTicketISO, actualizarTicketISO, cerrarTicketISO, crearTicketISO, eliminarPlanAccionTicketISO, eliminarTicketISO, guardarPlanAccionTicketISO, obtenerCatalogosTicketISO, obtenerPDFTicketISO, obtenerTicketISO, obtenerTicketsISO } from "../api";
 import TicketISO from "./TicketISO";
 
 jest.mock("../api", () => ({
     actualizarTicketISO: jest.fn(), crearTicketISO: jest.fn(), eliminarTicketISO: jest.fn(), obtenerCatalogosTicketISO: jest.fn(),
     actualizarPlanAccionTicketISO: jest.fn(), guardarPlanAccionTicketISO: jest.fn(), cerrarTicketISO: jest.fn(),
+    eliminarPlanAccionTicketISO: jest.fn(),
     obtenerTicketISO: jest.fn(), obtenerTicketsISO: jest.fn(), obtenerPDFTicketISO: jest.fn(),
 }));
 jest.mock("react-chartjs-2", () => ({ Chart: ({ data, options, ...props }) => <canvas {...props} /> }));
@@ -87,6 +88,96 @@ test("un ticket sin lista de planes muestra cero y la tabla vacia conserva sus d
     expect(screen.getAllByRole("columnheader")).toHaveLength(10);
     fireEvent.change(screen.getByLabelText("Buscar ticket"), { target: { value: "No existe" } });
     expect(screen.getByText("Sin resultados para estos filtros").closest("td")).toHaveAttribute("colspan", "10");
+});
+
+const iniciarDetalleConPlanes = async (rol = "admin", cantidad = 7) => {
+    localStorage.setItem("token", `e30.${btoa(JSON.stringify({ rol }))}.test`);
+    const planes = Array.from({ length: cantidad }, (_, index) => ({ id_plan: cantidad - index, numero: cantidad - index,
+        resultado_plan_accion: `Resultado ${cantidad - index}`, fecha_control: "2026-10-15" }));
+    const completo = { ...ticket, estado: "resuelto", fecha_cierre: "2026-10-20T15:00:00Z", planes_accion: planes };
+    obtenerTicketsISO.mockResolvedValue([completo]);
+    obtenerTicketISO.mockResolvedValue(completo);
+    await iniciar();
+    fireEvent.click(screen.getByRole("button", { name: "Ver ticket ISO-001" }));
+    await screen.findByRole("region", { name: `Planes de accion (${cantidad})` });
+    return completo;
+};
+
+test.each(["admin", "ticket iso", "ticket_iso", "Ticket-ISO"])("%s confirma la eliminacion de un plan sin borrar el ticket ni cerrar el detalle", async (rol) => {
+    const completo = await iniciarDetalleConPlanes(rol);
+    eliminarPlanAccionTicketISO.mockResolvedValue({ ...completo, planes_accion: completo.planes_accion.slice(1) });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar plan 7" }));
+    expect(screen.getByRole("group", { name: "Confirmar eliminacion del plan 7" })).toHaveTextContent("Esta accion no se puede deshacer");
+    expect(eliminarPlanAccionTicketISO).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion del plan" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Plan de accion eliminado correctamente.");
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Detalle del ticket");
+    const region = screen.getByRole("region", { name: "Planes de accion (6)" });
+    expect(region.querySelectorAll("details")).toHaveLength(6);
+    expect(within(region).queryByText("Resultado 7")).not.toBeInTheDocument();
+    expect(within(region).getAllByText("Resultado 6")).toHaveLength(2);
+    expect(screen.getByRole("cell", { name: "6 planes de accion" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Resuelto" })).toBeInTheDocument();
+    expect(eliminarPlanAccionTicketISO).toHaveBeenCalledTimes(1);
+    expect(eliminarPlanAccionTicketISO).toHaveBeenCalledWith(1, 7);
+    expect(eliminarTicketISO).not.toHaveBeenCalled();
+    expect(cerrarTicketISO).not.toHaveBeenCalled();
+});
+
+test("cancelar la eliminacion conserva el plan y no llama al servidor", async () => {
+    await iniciarDetalleConPlanes();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar plan 7" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar eliminacion" }));
+    expect(screen.getByRole("button", { name: "Eliminar plan 7" })).toBeEnabled();
+    expect(screen.getByRole("region", { name: "Planes de accion (7)" })).toBeInTheDocument();
+    expect(eliminarPlanAccionTicketISO).not.toHaveBeenCalled();
+});
+
+test("otros roles con acceso no ven eliminar plan", async () => {
+    const completo = await iniciarDetalleConPlanes("encargado_tickets");
+    const entries = screen.getByRole("region", { name: "Planes de accion (7)" }).querySelectorAll("details");
+    entries.forEach((entry) => { entry.open = true; });
+    expect(completo.planes_accion).toHaveLength(7);
+    expect(screen.queryByRole("button", { name: /Eliminar plan/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar plan", exact: true })).toBeEnabled();
+});
+
+test("el error al eliminar mantiene el plan y la confirmacion disponible para reintentar", async () => {
+    await iniciarDetalleConPlanes();
+    eliminarPlanAccionTicketISO.mockRejectedValue({ response: { data: { error: "No se pudo eliminar este plan." } } });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar plan 7" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion del plan" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo eliminar este plan.");
+    expect(screen.getByRole("region", { name: "Planes de accion (7)" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "7 planes de accion" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar eliminacion del plan" })).toBeEnabled();
+});
+
+test("durante la eliminacion bloquea cambios de vista y evita solicitudes duplicadas", async () => {
+    const completo = await iniciarDetalleConPlanes();
+    let resolver;
+    eliminarPlanAccionTicketISO.mockReturnValue(new Promise((resolve) => { resolver = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar plan 7" }));
+    const confirmar = screen.getByRole("button", { name: "Confirmar eliminacion del plan" });
+    fireEvent.click(confirmar);
+    fireEvent.click(confirmar);
+    expect(screen.getByRole("button", { name: "Eliminando..." })).toBeDisabled();
+    for (const name of ["Cerrar ventana", "Agregar plan", "Editar plan", "Editar cierre", "Editar ticket", "Cancelar eliminacion"]) {
+        expect(screen.getByRole("button", { name, exact: true })).toBeDisabled();
+    }
+    expect(eliminarPlanAccionTicketISO).toHaveBeenCalledTimes(1);
+    resolver({ ...completo, planes_accion: completo.planes_accion.slice(1) });
+    await screen.findByRole("region", { name: "Planes de accion (6)" });
+});
+
+test("eliminar el ultimo plan muestra el estado vacio y deshabilita Editar plan", async () => {
+    const completo = await iniciarDetalleConPlanes("admin", 1);
+    eliminarPlanAccionTicketISO.mockResolvedValue({ ...completo, planes_accion: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar plan 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminacion del plan" }));
+    expect(await screen.findByRole("region", { name: "Planes de accion (0)" })).toHaveTextContent("Aun no hay planes de accion registrados.");
+    expect(screen.getByRole("cell", { name: "0 planes de accion" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar plan", exact: true })).toBeDisabled();
 });
 
 test("el mas amarillo agrega un plan vacio sin copiar los anteriores ni mostrar el cierre", async () => {

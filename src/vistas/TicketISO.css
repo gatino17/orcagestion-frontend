@@ -964,6 +964,10 @@
 .ticketiso-plan-entry[open] summary { border-bottom: 1px solid #efe9dc; }
 .ticketiso-plan-entry[open] summary i { transform: rotate(180deg); }
 .ticketiso-plan-content { padding: 0.85rem; }
+.ticketiso-plan-actions { display: flex; justify-content: flex-end; margin-top: 0.85rem; }
+.ticketiso-plan-delete-confirm { margin-top: 0.85rem; padding: 0.85rem; border: 1px solid #fecaca; border-radius: 8px; background: #fff7f7; }
+.ticketiso-plan-delete-confirm p { margin: 0 0 0.75rem; color: #991b1b; font-size: 0.8rem; }
+.ticketiso-plan-delete-confirm .ticketiso-toolbar-actions { flex-wrap: wrap; }
 
 .ticketiso-detail-fields {
     display: grid;

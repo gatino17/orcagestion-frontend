@@ -10,6 +10,7 @@ import './Home.css';
 import LineaTiempoArmado from '../components/LineaTiempoArmado';
 import ConfirmarInstalacionArmado from '../components/ConfirmarInstalacionArmado';
 import { construirLineaTiempoArmado, mostrarArmadoEnCurso } from '../utils/seguimientoArmado';
+import { normalizarResponsabilidadFalla } from '../utils/soporteResponsabilidad';
 
 import { cargarActividades, modificarActividad, agregarActividad } from '../controllers/actividadesControllers';
 import { cargarEncargados } from '../controllers/encargadosControllers';
@@ -1073,7 +1074,7 @@ const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual 
 	                    className={`metric-card support-kpi-card support-kpi-open ${filtroSoporteHome === "todos" ? "active" : ""}`}
 	                    onClick={() => seleccionarKpiSoporte("todos")}
 	                >
-	                    <span>Total fallas abiertas</span>
+	                    <span>Total eventos abiertos</span>
 	                    <h3>{totalSoportesAbiertos}</h3>
 	                    <small>Soportes pendientes de cierre</small>
 	                </button>
@@ -1288,6 +1289,8 @@ const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual 
 		                            const esAlerta = String(soporte.estado || "").toLowerCase() === "en_proceso";
 		                            const esRemoto = String(soporte.tipo || "").toLowerCase() === "remoto";
 		                            const prioridad = String(soporte.prioridad || "media").toLowerCase();
+		                            const responsabilidad = normalizarResponsabilidadFalla(soporte.responsabilidad_falla);
+		                            const etiquetaResponsabilidad = responsabilidad === "cliente" ? "Cliente" : responsabilidad === "terceros" ? "Terceros" : "";
 		                            const ubicacionArea = obtenerUbicacionAreaCentro(soporte);
 		                            const actividadAsignada = actividadAsignadaPorSoporte.get(Number(soporte.id_soporte || 0));
 		                            const tecnicosActividad = obtenerTecnicosActividad(actividadAsignada);
@@ -1305,6 +1308,12 @@ const trabajosVisibles = trabajosCursoHoyOperativos.slice((paginaTrabajosActual 
 			                                            <span className={`support-priority-chip priority-${prioridad}`}>
 			                                                {prioridad}
 			                                            </span>
+                                                    {etiquetaResponsabilidad && (
+                                                        <span className={`support-responsibility-chip responsibility-${responsabilidad}`}
+                                                            title={`Responsabilidad de la falla: ${etiquetaResponsabilidad}`}>
+                                                            {etiquetaResponsabilidad}
+                                                        </span>
+                                                    )}
 			                                        </div>
 	                                            <small className="support-priority-client-date">
 	                                                {soporte.centro?.cliente || "Cliente sin nombre"} - {formatearFecha(soporte.fecha_soporte)}
