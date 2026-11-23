@@ -10,6 +10,17 @@ import {
 import DocumentosInstalacionCentro, { useDocumentosInstalacionCentro } from '../components/DocumentosInstalacionCentro';
 import './ConsultaCentro.css';
 
+const compararFecha = (campo) => (a, b) => {
+  const fechaA = Date.parse(a?.[campo]);
+  const fechaB = Date.parse(b?.[campo]);
+  if (!Number.isFinite(fechaA) && !Number.isFinite(fechaB)) return 0;
+  if (!Number.isFinite(fechaA)) return -1;
+  if (!Number.isFinite(fechaB)) return 1;
+  return fechaA - fechaB;
+};
+
+const esSoporteTerreno = (soporte) => String(soporte?.tipo || '').trim().toLowerCase() === 'terreno';
+
 const ConsultaCentro = () => {
   const [clientes, setClientes] = useState([]);
   const [centros, setCentros] = useState([]);
@@ -129,18 +140,19 @@ const ConsultaCentro = () => {
     return fechaFormateada.replace(',', '').replace(/\//g, '/') + '.';
   };
 
+  const soportesOrdenados = (historial?.historial?.soportes || []).slice().sort(compararFecha('fecha_soporte'));
   const historialData = {
     levantamientos: historial?.historial?.levantamientos || [],
     instalaciones: historial?.historial?.instalaciones || [],
-    mantenciones: historial?.historial?.mantenciones || [],
-    soportes: (historial?.historial?.soportes || []).slice().sort((a, b) => {
-      const fechaA = a?.fecha_soporte ? new Date(a.fecha_soporte) : null;
-      const fechaB = b?.fecha_soporte ? new Date(b.fecha_soporte) : null;
-      if (!fechaA && !fechaB) return 0;
-      if (!fechaA) return -1;
-      if (!fechaB) return 1;
-      return fechaA - fechaB;
-    }),
+    mantenciones: [
+      ...(historial?.historial?.mantenciones || []),
+      ...soportesOrdenados.filter(esSoporteTerreno).map((soporte) => ({
+        ...soporte,
+        fecha_mantencion: soporte.fecha_soporte,
+        es_soporte_terreno: true,
+      })),
+    ].sort(compararFecha('fecha_mantencion')),
+    soportes: soportesOrdenados.filter((soporte) => !esSoporteTerreno(soporte)),
     traslados: historial?.historial?.traslados || [],
     ceses: historial?.historial?.ceses || [],
     retiros: historial?.historial?.retiros || []
@@ -223,6 +235,14 @@ const ConsultaCentro = () => {
 
   const renderExtraInfo = (sectionKey, item) => {
     switch (sectionKey) {
+      case 'mantenciones':
+        if (item.es_soporte_terreno) return renderExtraInfo('soportes', item);
+        return (
+          <>
+            {item.responsable && <p><strong>Responsable:</strong> {item.responsable}</p>}
+            {item.observacion && <p><strong>Observacion:</strong> {item.observacion}</p>}
+          </>
+        );
       case 'instalaciones':
         return (
           <p>
@@ -490,7 +510,7 @@ const ConsultaCentro = () => {
                     section.items.map((item) => (
                       <div
                         className="timeline-item"
-                        key={`${section.key}-${item[section.idField] || Math.random()}`}
+                        key={`${section.key}-${item.es_soporte_terreno ? `soporte-${item.id_soporte}` : item[section.idField] || Math.random()}`}
                       >
                         <span className="timeline-date">
                           {formatearFecha(item[section.dateField])}
