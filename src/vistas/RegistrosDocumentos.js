@@ -5,6 +5,7 @@ import { agregarServicio, modificarServicio, borrarServicio } from '../controlle
 import { cargarTodasRazonesSociales } from '../controllers/razonSocialControllers';
 import { cargarClientes } from '../controllers/actasControllers';
 import ModalActividad from '../modales/ModalActividad';
+import { ResumenIntervencionesMantencion } from '../components/IntervencionesMantencion';
 import './RegistrosDocumentos.css';
 
 
@@ -368,7 +369,7 @@ function RegistrosDocumentos() {
         </div>
     );
 
-    const renderMantencionesSection = (cantidadManual, ultimaFechaManual, cantidadSistema, ultimaFechaSistema, onOpen) => (
+    const renderMantencionesSection = (cantidadManual, ultimaFechaManual, cantidadSistema, ultimaFechaSistema, onOpen, resumen) => (
         <div
             className={`registro-doc-section registro-doc-section--mantencion ${onOpen ? 'registro-doc-section--clickable' : ''}`}
             role={onOpen ? 'button' : undefined}
@@ -381,6 +382,7 @@ function RegistrosDocumentos() {
                 </span>
                 <strong>Mantenciones</strong>
             </div>
+            <ResumenIntervencionesMantencion resumen={resumen} />
             <div className="registro-mantencion-stack">
                 <div className="registro-mantencion-row">
                     <div className="registro-mantencion-row__head">
@@ -521,13 +523,14 @@ function RegistrosDocumentos() {
         },
         {
             name: 'Mantenciones',
-            selector: (row) => row.ultima_fecha_mantencion_referencia || row.ultima_fecha_mantencion || row.ultima_fecha_mantencion_sistema,
+            selector: (row) => row.resumen_intervenciones_mantencion?.ultima_fecha || row.ultima_fecha_mantencion_referencia || row.ultima_fecha_mantencion || row.ultima_fecha_mantencion_sistema,
             cell: (row) => renderMantencionesSection(
                 row.cantidad_mantenciones,
                 row.ultima_fecha_mantencion,
                 row.cantidad_mantenciones_sistema,
                 row.ultima_fecha_mantencion_sistema,
-                () => handleDetallesActividad(row, 'mantencion')
+                () => handleDetallesActividad(row, 'mantencion'),
+                row.resumen_intervenciones_mantencion
             ),
             grow: 0.1,
             wrap: true,

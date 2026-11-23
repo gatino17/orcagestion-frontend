@@ -1362,7 +1362,7 @@ export const obtenerMantencionesActas = async (centroId) => {
 export const registrarMantencionActas = async (formData) => {
     try {
         const response = await axios.post(`${BASE_URL}/actas/mantenciones`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+            headers: { ...authHeaders().headers, 'Content-Type': 'multipart/form-data' }
         });
         return response.data;
     } catch (error) {
@@ -2229,6 +2229,19 @@ export const obtenerMantencionesTerreno = async (params = {}) => {
         console.error("Error al obtener mantenciones en terreno:", error);
         throw error;
     }
+};
+
+export const obtenerIntervencionesMantencion = async (centroId) => {
+    const response = await axios.get(`${BASE_URL}/intervenciones-mantencion/centros/${centroId}`, authHeaders());
+    return response.data;
+};
+export const vincularDocumentoMantencion = async (soporteId, payload) => {
+    const response = await axios.post(`${BASE_URL}/intervenciones-mantencion/soportes/${soporteId}/documentos`, payload, authHeaders());
+    return response.data;
+};
+export const desvincularDocumentoMantencion = async (soporteId, vinculoId) => {
+    const response = await axios.delete(`${BASE_URL}/intervenciones-mantencion/soportes/${soporteId}/documentos/${vinculoId}`, authHeaders());
+    return response.data;
 };
 
 export const crearMantencionTerreno = async (payload) => {

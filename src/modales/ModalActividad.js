@@ -29,6 +29,9 @@ import { cargarCentrosActas } from '../controllers/actasControllers';
 
 
 
+import IntervencionesMantencion from '../components/IntervencionesMantencion';
+import { useRef } from 'react';
+
 function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'levantamiento' }) {
     const [tipoActividad, setTipoActividad] = useState('levantamiento');
     const [fecha, setFecha] = useState('');
@@ -53,11 +56,45 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     const [documentoMantencion, setDocumentoMantencion] = useState(null);
     const [responsableMantencion, setResponsableMantencion] = useState('');
     const [observacionMantencion, setObservacionMantencion] = useState('');
+    const [mostrarFormularioMantencion, setMostrarFormularioMantencion] = useState(false);
+    const [soporteAdjunto, setSoporteAdjunto] = useState(null);
+    const [guardandoMantencion, setGuardandoMantencion] = useState(false);
+    const [errorGuardarMantencion, setErrorGuardarMantencion] = useState('');
+    const [avisoMantencion, setAvisoMantencion] = useState('');
+    const [revisionMantencion, setRevisionMantencion] = useState(0);
+    const formularioMantencionRef = useRef(null);
+
+    useEffect(() => {
+        if (mostrarFormularioMantencion) {
+            formularioMantencionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }
+    }, [mostrarFormularioMantencion, soporteAdjunto]);
+
+    const abrirFormularioMantencion = (soporte = null) => {
+        setSoporteAdjunto(soporte);
+        setFechaMantencion('');
+        setDocumentoMantencion(null);
+        setResponsableMantencion('');
+        setObservacionMantencion('');
+        setErrorFechaMantencion(false);
+        setErrorDocumentoMantencion(false);
+        setErrorResponsableMantencion(false);
+        setErrorObservacionMantencion(false);
+        setErrorGuardarMantencion('');
+        setAvisoMantencion('');
+        setMostrarFormularioMantencion(true);
+    };
 
     const [errorFechaMantencion, setErrorFechaMantencion] = useState(false);
     const [errorDocumentoMantencion, setErrorDocumentoMantencion] = useState(false);
     const [errorResponsableMantencion, setErrorResponsableMantencion] = useState(false);
     const [errorObservacionMantencion, setErrorObservacionMantencion] = useState(false);
+
+    useEffect(() => {
+        setMostrarFormularioMantencion(false);
+        setSoporteAdjunto(null);
+        setAvisoMantencion('');
+    }, [actividad.id_centro, tipoActividad]);
 
     
 
@@ -189,74 +226,46 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     
     // Agregar nueva mantenciÃ³n
     const handleAgregarMantencion = async () => {
-        let hasError = false;
-    
-        // Validaciones para cada campo
-        if (!fechaMantencion) {
-            setErrorFechaMantencion(true);
-            hasError = true;
-        } else {
-            setErrorFechaMantencion(false);
-        }
-    
-        if (!documentoMantencion) {
-            setErrorDocumentoMantencion(true);
-            hasError = true;
-        } else {
-            setErrorDocumentoMantencion(false);
-        }
-    
-        if (!responsableMantencion) {
-            setErrorResponsableMantencion(true);
-            hasError = true;
-        } else {
-            setErrorResponsableMantencion(false);
-        }
-    
-        if (!observacionMantencion) {
-            setErrorObservacionMantencion(true);
-            hasError = true;
-        } else {
-            setErrorObservacionMantencion(false);
-        }
-    
-        // Si hay algÃºn error, no enviamos la solicitud
-        if (hasError) {
-            alert("Todos los campos son obligatorios.");
+        if (guardandoMantencion) return;
+        setErrorFechaMantencion(!fechaMantencion);
+        setErrorDocumentoMantencion(!documentoMantencion);
+        setErrorResponsableMantencion(!responsableMantencion.trim());
+        setErrorObservacionMantencion(!observacionMantencion.trim());
+        if (!fechaMantencion || !documentoMantencion || !responsableMantencion.trim() || !observacionMantencion.trim()) {
+            setErrorGuardarMantencion('Completa la fecha, el responsable, la observacion y adjunta el documento.');
             return;
         }
-    
+        setGuardandoMantencion(true);
+        setErrorGuardarMantencion('');
         try {
             const formData = new FormData();
             formData.append('centro_id', actividad.id_centro);
             formData.append('fecha_mantencion', fechaMantencion);
             formData.append('documento_mantencion', documentoMantencion);
-            formData.append('responsable', responsableMantencion);
-            formData.append('observacion', observacionMantencion);
-    
-            await guardarMantencionActas(formData);
-    
-            alert("MantenciÃ³n agregada exitosamente.");
-    
-            // Limpia los campos despuÃ©s de agregar
+            formData.append('responsable', responsableMantencion.trim());
+            formData.append('observacion', observacionMantencion.trim());
+            if (soporteAdjunto) formData.append('soporte_id', soporteAdjunto.id_soporte);
+            const resultado = await guardarMantencionActas(formData);
+            if (!resultado?.success) throw resultado?.error || new Error('No se pudo guardar el documento.');
+            setAvisoMantencion(soporteAdjunto
+                ? `Documento guardado y vinculado al soporte #${soporteAdjunto.id_soporte}.`
+                : 'Mantencion guardada sin soporte asociado.');
             setFechaMantencion('');
             setDocumentoMantencion(null);
             setResponsableMantencion('');
             setObservacionMantencion('');
-    
-            // Recargar datos y cerrar modal
+            setMostrarFormularioMantencion(false);
+            setSoporteAdjunto(null);
+            setRevisionMantencion((valor) => valor + 1);
+            cargarMantencionesActas(setMantenciones, actividad.id_centro);
             recargarDatos();
-            onClose();
         } catch (error) {
-            console.error("Error al agregar la mantenciÃ³n:", error);
-            alert("Hubo un error al agregar la mantenciÃ³n.");
+            setErrorGuardarMantencion(error.response?.data?.error || 'No se pudo guardar el documento. Revisa los datos e intenta nuevamente.');
+        } finally {
+            setGuardandoMantencion(false);
         }
     };
-    
-    
-    
 
-    // Eliminar una mantenciÃ³n
     const handleEliminarMantencion = async (idMantencion) => {
         try {
             await eliminarMantencionActas(idMantencion);  // Elimina la mantenciÃ³n en la base de datos
@@ -303,7 +312,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                 <div className="modal-content">
                     <div className="modal-header">
                         <h5 className="modal-title">Editar/Agregar Actividad</h5>
-                        <button type="button" className="close" onClick={onClose}>
+                        <button type="button" className="close" onClick={onClose} disabled={guardandoMantencion}>
                             <span>&times;</span>
                         </button>
                     </div>
@@ -313,6 +322,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             <select 
                                 className="form-control"
                                 value={tipoActividad}
+                                disabled={guardandoMantencion}
                                 onChange={(e) => setTipoActividad(e.target.value)}
                             >
                                 <option value="levantamiento">Levantamiento</option>
@@ -559,10 +569,22 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                     {/* Mostrar campos específicos para mantenciones */}
                     {tipoActividad === 'mantencion' && (
                         <>
+                            <IntervencionesMantencion centroId={actividad.id_centro} onChange={recargarDatos}
+                                onAdjuntar={abrirFormularioMantencion} revision={revisionMantencion} bloqueado={guardandoMantencion || mostrarFormularioMantencion} />
+                            {avisoMantencion && <p className="alert alert-success mt-3" role="status">{avisoMantencion}</p>}
+                            {!mostrarFormularioMantencion && <button type="button" className="btn btn-outline-secondary mt-3"
+                                onClick={() => abrirFormularioMantencion()}>Registrar mantencion sin soporte</button>}
+                            {mostrarFormularioMantencion && <fieldset ref={formularioMantencionRef} disabled={guardandoMantencion}
+                                className="border rounded p-3 mt-3" aria-label="Adjuntar documento de mantencion">
+                            <h5>{soporteAdjunto ? `Adjuntar documento - Soporte #${soporteAdjunto.id_soporte}` : 'Registrar mantencion sin soporte'}</h5>
+                            <p className="text-muted">{soporteAdjunto
+                                ? `El documento quedara asociado a este soporte: ${soporteAdjunto.problema}`
+                                : 'Usa esta opcion solo para una mantencion que no tenga un soporte registrado.'}</p>
                             <div className="form-group">
-                                <label>Fecha de Mantención</label>
+                                <label htmlFor="fecha-documento-mantencion">Fecha de Mantención</label>
                                 <input 
                                     type="date" 
+                                    id="fecha-documento-mantencion"
                                     className={`form-control ${errorFechaMantencion ? 'is-invalid' : ''}`}
                                     value={fechaMantencion}
                                     onChange={(e) => {
@@ -574,9 +596,10 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </div>
 
                             <div className="form-group">
-                                <label>Responsable</label>
+                                <label htmlFor="responsable-documento-mantencion">Responsable</label>
                                 <input
                                     type="text"
+                                    id="responsable-documento-mantencion"
                                     className={`form-control ${errorResponsableMantencion ? 'is-invalid' : ''}`}
                                     value={responsableMantencion}
                                     onChange={(e) => {
@@ -588,8 +611,9 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </div>
 
                             <div className="form-group">
-                                <label>Observación</label>
+                                <label htmlFor="observacion-documento-mantencion">Observación</label>
                                 <textarea
+                                    id="observacion-documento-mantencion"
                                     className={`form-control ${errorObservacionMantencion ? 'is-invalid' : ''}`}
                                     value={observacionMantencion}
                                     onChange={(e) => {
@@ -601,9 +625,11 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </div>
 
                             <div className="form-group">
-                                <label>Documento</label>
+                                <label htmlFor="archivo-documento-mantencion">Documento</label>
                                 <input 
                                     type="file" 
+                                    id="archivo-documento-mantencion"
+                                    accept=".pdf,.png,.jpg,.jpeg"
                                     className={`form-control ${errorDocumentoMantencion ? 'is-invalid' : ''}`} 
                                     onChange={(e) => {
                                         setDocumentoMantencion(e.target.files[0]);
@@ -613,13 +639,16 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                 {errorDocumentoMantencion && <small className="text-danger">Debes subir un documento.</small>}
                             </div>
 
-                            <button className="btn btn-success" onClick={handleAgregarMantencion}>
-                                <i className="fas fa-plus"></i> Agregar Mantención
+                            {errorGuardarMantencion && <p className="text-danger" role="alert">{errorGuardarMantencion}</p>}
+                            <button type="button" className="btn btn-success mr-2" onClick={handleAgregarMantencion}>
+                                {guardandoMantencion ? 'Guardando documento...' : soporteAdjunto ? 'Guardar y vincular documento' : 'Guardar mantencion sin soporte'}
                             </button>
+                            <button type="button" className="btn btn-outline-secondary" onClick={() => setMostrarFormularioMantencion(false)}>Cancelar adjunto</button>
+                            </fieldset>}
 
                             <div className="mt-4">
                                 <div className="d-flex align-items-center justify-content-between mb-2">
-                                    <h5 className="mb-0">Mantenciones manuales</h5>
+                                    <h5 className="mb-0">Documentos manuales de mantencion</h5>
                                     <span className="badge badge-success">{mantenciones.length}</span>
                                 </div>
                                 <ul className="list-group">
@@ -657,7 +686,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
 
                             <div className="mt-4">
                                 <div className="d-flex align-items-center justify-content-between mb-2">
-                                    <h5 className="mb-0">Mantenciones sistema</h5>
+                                    <h5 className="mb-0">Informes de mantencion por sistema</h5>
                                     <span className="badge badge-primary">{mantencionesSistema.length}</span>
                                 </div>
                                 <ul className="list-group">
@@ -727,8 +756,8 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
 
 
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cerrar</button>
-                        <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={guardandoMantencion}>Cerrar</button>
+                        {tipoActividad !== 'mantencion' && <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>}
                     </div>
                 </div>
             </div>

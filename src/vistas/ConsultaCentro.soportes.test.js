@@ -100,3 +100,21 @@ test('un historial sin soportes mantiene las secciones vacias', async () => {
   expect(within(secciones.soportes).getByText('Sin registros')).toBeInTheDocument();
   expect(screen.getByText('0 eventos')).toBeInTheDocument();
 });
+
+test('usa la intervencion agrupada del backend sin volver a contar su documento', async () => {
+  obtenerHistorialCentro.mockImplementation((id, ok) => ok({
+    centro: { id_centro: 21, nombre: 'Isla Colorada' },
+    historial: { soportes: [terreno], mantenciones: [manual], intervenciones_mantencion: [{
+      ...terreno, es_soporte_terreno: true, historial_key: 'soporte-2', fecha_mantencion: terreno.fecha_soporte,
+      documentos: [{ tipo: 'manual', id: 2, centro_id: 21, disponible: true }],
+    }] },
+  }));
+  render(<ConsultaCentro />);
+  fireEvent.change(screen.getByLabelText('Seleccionar cliente'), { target: { value: '1' } });
+  fireEvent.change(screen.getByLabelText('Seleccionar centro'), { target: { value: '21' } });
+  await screen.findByText('Documentacion disponible');
+  await screen.findByText('Sin actas del sistema registradas.');
+  expect(screen.getByText('1 eventos')).toBeInTheDocument();
+  expect(screen.queryByText('Falta documento')).not.toBeInTheDocument();
+  expect(screen.getByText(terreno.problema)).toBeInTheDocument();
+});

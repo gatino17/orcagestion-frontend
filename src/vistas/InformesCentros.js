@@ -465,16 +465,16 @@ function InformesCentros() {
     const [loadingCentros, setLoadingCentros] = useState(true);
     const [loadingActas, setLoadingActas] = useState(false);
     const [savingActa, setSavingActa] = useState(false);
-    const [subcategoria, setSubcategoria] = useState("acta_entrega");
+    const [subcategoria, setSubcategoria] = useState(() => new URLSearchParams(window.location.search).get('mantencion') ? 'mantencion' : 'acta_entrega');
     const [mostrarEditorActa, setMostrarEditorActa] = useState(false);
     const [mostrarEditorPermiso, setMostrarEditorPermiso] = useState(false);
 
     // filtros de listado actas
-    const [filtroCentroId, setFiltroCentroId] = useState("");
+    const [filtroCentroId, setFiltroCentroId] = useState(() => new URLSearchParams(window.location.search).get('centro_id') || '');
     const [filtroCliente, setFiltroCliente] = useState("all");
     const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
     const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
-    const [filtroCorrelativo, setFiltroCorrelativo] = useState("");
+    const [filtroCorrelativo, setFiltroCorrelativo] = useState(() => new URLSearchParams(window.location.search).get('mantencion') || '');
 
     // formulario acta de entrega
     const [editandoId, setEditandoId] = useState(null);
@@ -849,10 +849,10 @@ function InformesCentros() {
     const cambiarTabDetallePermiso = (tab) => setDetallePermisoTab(tab);
 
     useEffect(() => {
-        if (!filtroCentroId) return;
+        if (loadingCentros || !filtroCentroId) return;
         const exists = centrosFiltroCliente.some((c) => String(c.id || c.id_centro) === String(filtroCentroId));
         if (!exists) setFiltroCentroId("");
-    }, [filtroCliente, centrosFiltroCliente, filtroCentroId]);
+    }, [filtroCliente, centrosFiltroCliente, filtroCentroId, loadingCentros]);
 
     useEffect(() => {
         setActaPage(1);

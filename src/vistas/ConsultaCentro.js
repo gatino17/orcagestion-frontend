@@ -9,6 +9,7 @@ import {
 } from '../controllers/consultaCentroControllers';
 import DocumentosInstalacionCentro, { useDocumentosInstalacionCentro } from '../components/DocumentosInstalacionCentro';
 import './ConsultaCentro.css';
+import { DocumentosIntervencion } from '../components/IntervencionesMantencion';
 
 const compararFecha = (campo) => (a, b) => {
   const fechaA = Date.parse(a?.[campo]);
@@ -144,7 +145,7 @@ const ConsultaCentro = () => {
   const historialData = {
     levantamientos: historial?.historial?.levantamientos || [],
     instalaciones: historial?.historial?.instalaciones || [],
-    mantenciones: [
+    mantenciones: historial?.historial?.intervenciones_mantencion || [
       ...(historial?.historial?.mantenciones || []),
       ...soportesOrdenados.filter(esSoporteTerreno).map((soporte) => ({
         ...soporte,
@@ -510,12 +511,16 @@ const ConsultaCentro = () => {
                     section.items.map((item) => (
                       <div
                         className="timeline-item"
-                        key={`${section.key}-${item.es_soporte_terreno ? `soporte-${item.id_soporte}` : item[section.idField] || Math.random()}`}
+                        key={`${section.key}-${item.historial_key || (item.es_soporte_terreno ? `soporte-${item.id_soporte}` : item[section.idField] || Math.random())}`}
                       >
                         <span className="timeline-date">
                           {formatearFecha(item[section.dateField])}
                         </span>
-                        {renderDocumento(item.documento)}
+                        {section.key === 'mantenciones' && (item.es_soporte_terreno || item.documentos)
+                          ? <>
+                            {item.es_soporte_terreno && <p><strong>Mantencion en terreno · Soporte #{item.id_soporte}</strong></p>}
+                            <DocumentosIntervencion documentos={item.documentos || []} />
+                          </> : renderDocumento(item.documento)}
                         {renderExtraInfo(section.key, item)}
                       </div>
                     ))
