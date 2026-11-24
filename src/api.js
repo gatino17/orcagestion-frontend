@@ -406,7 +406,7 @@ export const eliminarEncargado = async (id) => {
 // funcion crear
 export const crearActividad = async (actividadData) => {
     try {
-        const response = await axios.post(`${BASE_URL}/actividades/`, actividadData);
+        const response = await axios.post(`${BASE_URL}/actividades/`, actividadData, authHeaders());
         return response.data;
     } catch (error) {
         throw error;
@@ -424,7 +424,7 @@ export const obtenerActividades = async () => {
 
 export const actualizarActividad = async (id, actividadData) => {
     try {
-        const response = await axios.put(`${BASE_URL}/actividades/${id}`, actividadData);
+        const response = await axios.put(`${BASE_URL}/actividades/${id}`, actividadData, authHeaders());
         return response.data;
     } catch (error) {
         throw error;
@@ -1893,7 +1893,7 @@ export const eliminarBultoArmadoAdmin = async (id, caja) => {
 
 export const crearArmado = async (armadoData) => {
     try {
-        const response = await axios.post(`${BASE_URL}/armados/`, armadoData);
+        const response = await axios.post(`${BASE_URL}/armados/`, armadoData, authHeaders());
         return response.data;
     } catch (error) {
         console.error("Error al crear armado:", error);

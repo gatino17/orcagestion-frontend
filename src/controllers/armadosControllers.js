@@ -26,10 +26,12 @@ export const cargarArmados = async (setArmados, params = {}) => {
 
 export const agregarArmado = async (armadoData, callback) => {
     try {
-        await crearArmado(armadoData);
-        callback?.();
+        const resultado = await crearArmado(armadoData);
+        callback?.(resultado);
+        return resultado;
     } catch (error) {
         console.error("Error al crear armado:", error);
+        return { success: false, error };
     }
 };
 

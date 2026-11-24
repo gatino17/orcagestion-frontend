@@ -51,6 +51,18 @@ const prioridadOptions = [
 const tipoActividadOptions = ["Mantencion", "Instalacion", "Reapuntamiento", "Retiro", "Levantamiento"];
 const CHECKLIST_ARMADO_TOTAL_ITEMS = 57;
 
+const OpcionCorreoAsignacion = ({ id, checked, onChange }) => (
+  <div className="col-12">
+    <div className="border rounded p-3" style={{ background: '#f1f8ff', borderColor: '#cfe4f6' }}>
+      <div className="form-check">
+        <input id={id} type="checkbox" className="form-check-input" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <label htmlFor={id} className="form-check-label font-weight-bold">Notificar por correo a los asignados</label>
+      </div>
+      <small className="text-muted d-block mt-1">Se usara el correo de la cuenta vinculada de cada tecnico. El aviso de la app movil se mantiene.</small>
+    </div>
+  </div>
+);
+
 const getClientTone = (cliente) => {
   const value = String(cliente || "").trim().toLowerCase();
   if (!value) return "disp-client-0";
@@ -240,6 +252,9 @@ function Calendario() {
   const [encargadoId, setEncargadoId] = useState("");
   const [ayudanteId, setAyudanteId] = useState("");
   const [tecnicosAdicionalesIds, setTecnicosAdicionalesIds] = useState([]);
+  const [notificarActividadCorreo, setNotificarActividadCorreo] = useState(false);
+  const [notificarArmadoCorreo, setNotificarArmadoCorreo] = useState(false);
+  const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
   const [soporteActividadId, setSoporteActividadId] = useState("");
   const [armadoActividadId, setArmadoActividadId] = useState("");
   const [bloqueoTecnicoId, setBloqueoTecnicoId] = useState("");
@@ -266,6 +281,16 @@ function Calendario() {
   const [armadoFechaTermino, setArmadoFechaTermino] = useState("");
   const [armadoObservacion, setArmadoObservacion] = useState("");
   const [toastAsignacion, setToastAsignacion] = useState("");
+  const [toastAsignacionTipo, setToastAsignacionTipo] = useState('success');
+
+  const mostrarResultadoAsignacion = (resultado, mensaje, notificar) => {
+    const aviso = resultado?.aviso_correo;
+    const advertencia = notificar && (!aviso || aviso.estado !== 'enviado' || aviso.sin_correo?.length);
+    setToastAsignacionTipo(advertencia ? 'warning' : 'success');
+    setToastAsignacion(mensaje + (notificar
+      ? ` ${aviso?.mensaje || 'El servidor no confirmo el aviso de correo. Comprueba que el backend este actualizado.'}`
+      : ''));
+  };
   const [disponibilidadOffsetDias, setDisponibilidadOffsetDias] = useState(0);
 
   const esAdmin = useMemo(() => {
@@ -466,6 +491,7 @@ function Calendario() {
   };
 
   const handleEditarActividad = (actividad) => {
+    setNotificarActividadCorreo(false);
     setArmadoActividadId(actividad.armado_id ? String(actividad.armado_id) : '');
     setEditarActividad(actividad);
     setNombreActividad(actividad.nombre_actividad || "");
@@ -492,6 +518,7 @@ function Calendario() {
   };
 
   const handleGuardarActividad = async () => {
+    if (guardandoAsignacion) return;
     const parseDateOnly = (valor) => {
       if (!valor) return null;
       const [y, m, d] = String(valor).split("-").map(Number);
@@ -578,26 +605,33 @@ function Calendario() {
       estado: estadoActividad || null,
       centro_id: centroId ? parseInt(centroId, 10) : null,
       soporte_id: soporteActividadId ? parseInt(soporteActividadId, 10) : null,
-      armado_id: armadoActividadId ? Number(armadoActividadId) : null
+      armado_id: armadoActividadId ? Number(armadoActividadId) : null,
+      notificar_por_correo: notificarActividadCorreo
     };
 
+    setGuardandoAsignacion(true);
     try {
-      if (editarActividad) {
-        await modificarActividad(editarActividad.id_actividad, payload);
-      } else {
-        await agregarActividad(payload);
-      }
-
-      const actividadesActualizadas = await cargarActividades();
-      setActividades(actividadesActualizadas);
+      const resultado = editarActividad
+        ? await modificarActividad(editarActividad.id_actividad, payload)
+        : await agregarActividad(payload);
+      mostrarResultadoAsignacion(resultado, 'Actividad guardada correctamente.', notificarActividadCorreo);
       setShowModal(false);
       resetForm();
+      try {
+        setActividades(await cargarActividades());
+      } catch {
+        setToastAsignacionTipo('warning');
+        setToastAsignacion('La actividad quedo guardada, pero no se pudo actualizar el listado. Recarga la pagina; no vuelvas a crearla.');
+      }
     } catch (error) {
       alert(`Error al guardar la actividad: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setGuardandoAsignacion(false);
     }
   };
 
   const resetForm = () => {
+    setNotificarActividadCorreo(false);
     setArmadoActividadId('');
     setNombreActividad("");
     setFechaReclamo("");
@@ -737,6 +771,7 @@ function Calendario() {
   };
 
   const resetArmadoForm = () => {
+    setNotificarArmadoCorreo(false);
     const ultimoTecnico = localStorage.getItem(LAST_ARMADO_TEC_KEY) || "";
     setArmadoClienteId("");
     setArmadoCentroId("");
@@ -749,6 +784,7 @@ function Calendario() {
   };
 
   const handleGuardarArmadoDesdeCalendario = async () => {
+    if (guardandoAsignacion) return;
     if (!armadoCentroId || !armadoTecnicoId) {
       alert("Selecciona centro y tecnico para asignar el armado.");
       return;
@@ -767,19 +803,27 @@ function Calendario() {
       fecha_inicio: armadoFechaInicio || null,
       fecha_cierre: armadoFechaTermino || null,
       observacion: armadoObservacion || null,
+      notificar_por_correo: notificarArmadoCorreo,
     };
 
-    await agregarArmado(payload, async () => {
-      await cargarArmadosOperativosCalendario();
+    setGuardandoAsignacion(true);
+    try {
+      const resultado = await agregarArmado(payload);
+      if (!resultado?.id_armado) throw resultado?.error || new Error('No se pudo guardar la asignacion.');
       localStorage.setItem(LAST_ARMADO_TEC_KEY, String(armadoTecnicoId));
-      setToastAsignacion("Armado asignado correctamente.");
-      setTimeout(() => setToastAsignacion(""), 2500);
+      mostrarResultadoAsignacion(resultado, 'Armado asignado correctamente.', notificarArmadoCorreo);
       setShowArmadoModal(false);
       resetArmadoForm();
-    });
+      await cargarArmadosOperativosCalendario();
+    } catch (error) {
+      alert(`Error al asignar el armado: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setGuardandoAsignacion(false);
+    }
   };
 
   const handleProgramarDesdeSoporte = (soporte) => {
+    setNotificarActividadCorreo(false);
     setArmadoActividadId('');
     const clienteKey = buildClienteKey(null, soporte?.centro?.cliente);
     setEditarActividad(null);
@@ -802,6 +846,7 @@ function Calendario() {
   useEffect(() => {
     const payload = location.state?.programarSoporte;
     if (!payload) return;
+    setNotificarActividadCorreo(false);
     setArmadoActividadId('');
     const clienteKey = buildClienteKey(null, payload?.centro?.cliente);
     setEditarActividad(null);
@@ -2875,12 +2920,12 @@ function Calendario() {
                   <i className={`fas ${editarActividad ? "fa-edit" : "fa-calendar-plus"} me-2`} />
                   {editarActividad ? "Editar actividad" : "Crear actividad"}
                 </h5>
-                <button type="button" className="close" onClick={() => setShowModal(false)}>
+                <button type="button" className="close" onClick={() => setShowModal(false)} disabled={guardandoAsignacion}>
                   &times;
                 </button>
               </div>
               <div className="modal-body scheduler-modal">
-                <form className="row g-3 scheduler-modal-form">
+                <fieldset disabled={guardandoAsignacion} className="row g-3 scheduler-modal-form">
                   <div className="col-md-12">
                     <label>Nombre de la actividad</label>
                     <input className="form-control" value={nombreActividad} onChange={(e) => setNombreActividad(e.target.value)} />
@@ -3011,16 +3056,17 @@ function Calendario() {
                       </small>
                     )}
                   </div>
-                </form>
+                  <OpcionCorreoAsignacion id="correo-actividad" checked={notificarActividadCorreo} onChange={setNotificarActividadCorreo} />
+                </fieldset>
               </div>
               <div className="modal-footer scheduler-modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                <button className="btn btn-secondary" onClick={() => setShowModal(false)} disabled={guardandoAsignacion}>
                   <i className="fas fa-times me-1" />
                   Cerrar
                 </button>
-                <button className="btn btn-primary" onClick={handleGuardarActividad}>
+                <button className="btn btn-primary" onClick={handleGuardarActividad} disabled={guardandoAsignacion}>
                   <i className="fas fa-save me-1" />
-                  Guardar cambios
+                  {guardandoAsignacion ? (notificarActividadCorreo ? 'Guardando y enviando correo...' : 'Guardando...') : 'Guardar cambios'}
                 </button>
               </div>
             </div>
@@ -3037,12 +3083,12 @@ function Calendario() {
                   <i className="fas fa-tools me-2" />
                   Asignar armado
                 </h5>
-                <button type="button" className="close" onClick={() => setShowArmadoModal(false)}>
+                <button type="button" className="close" onClick={() => setShowArmadoModal(false)} disabled={guardandoAsignacion}>
                   &times;
                 </button>
               </div>
               <div className="modal-body scheduler-modal">
-                <form className="row g-3 scheduler-modal-form">
+                <fieldset disabled={guardandoAsignacion} className="row g-3 scheduler-modal-form">
                   <div className="col-md-6">
                     <label>Cliente</label>
                     <select
@@ -3142,16 +3188,17 @@ function Calendario() {
                       onChange={(e) => setArmadoObservacion(e.target.value)}
                     />
                   </div>
-                </form>
+                  <OpcionCorreoAsignacion id="correo-armado" checked={notificarArmadoCorreo} onChange={setNotificarArmadoCorreo} />
+                </fieldset>
               </div>
               <div className="modal-footer scheduler-modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowArmadoModal(false)}>
+                <button className="btn btn-secondary" onClick={() => setShowArmadoModal(false)} disabled={guardandoAsignacion}>
                   <i className="fas fa-times me-1" />
                   Cerrar
                 </button>
-                <button className="btn btn-primary" onClick={handleGuardarArmadoDesdeCalendario}>
+                <button className="btn btn-primary" onClick={handleGuardarArmadoDesdeCalendario} disabled={guardandoAsignacion}>
                   <i className="fas fa-save me-1" />
-                  Guardar asignacion
+                  {guardandoAsignacion ? (notificarArmadoCorreo ? 'Guardando y enviando correo...' : 'Guardando...') : 'Guardar asignacion'}
                 </button>
               </div>
             </div>
@@ -3161,18 +3208,21 @@ function Calendario() {
 
       {toastAsignacion && (
         <div
-          className="alert alert-success"
+          className={`alert alert-${toastAsignacionTipo}`}
+          role="status"
           style={{
             position: "fixed",
             right: 16,
             bottom: 16,
             zIndex: 2000,
             marginBottom: 0,
+            maxWidth: 'min(560px, calc(100vw - 32px))',
             boxShadow: "0 10px 24px rgba(15,23,42,.18)"
           }}
         >
-          <i className="fas fa-check-circle me-2" />
+          <i className={`fas ${toastAsignacionTipo === 'warning' ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-2`} />
           {toastAsignacion}
+          <button type="button" className="close ml-2" aria-label="Cerrar aviso de asignacion" onClick={() => setToastAsignacion('')}>&times;</button>
         </div>
       )}
     </div>
