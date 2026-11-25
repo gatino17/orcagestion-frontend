@@ -26,6 +26,7 @@ import { agregarEquipo, modificarEquipo, borrarEquipo } from "../controllers/equ
 import EstadoRegistroEquipoArmado from "../components/EstadoRegistroEquipoArmado";
 import CerrarBultoAdmin from "../components/CerrarBultoAdmin";
 import EstadoBultosArmado from "../components/EstadoBultosArmado";
+import ModalObservacionArmado from '../modales/ModalObservacionArmado';
 import "./ArmadoTecnico.css";
 
 const estadosOptions = [
@@ -879,7 +880,7 @@ const ArmadoTecnico = () => {
     const [cajasResumenLoading, setCajasResumenLoading] = useState(false);
     const [cajasResumenError, setCajasResumenError] = useState("");
     const [cajasResumenData, setCajasResumenData] = useState([]);
-    const [observacionDetalle, setObservacionDetalle] = useState({ open: false, armadoId: null, centro: "", texto: "", saving: false });
+    const [observacionDetalle, setObservacionDetalle] = useState({ open: false, armadoId: null, centro: "" });
     const [historialTab, setHistorialTab] = useState("resumen");
     const [checklistOpen, setChecklistOpen] = useState(false);
     const [checklistArmado, setChecklistArmado] = useState(null);
@@ -2202,8 +2203,6 @@ const ArmadoTecnico = () => {
                                         open: true,
                                         armadoId: row?.id_armado || row?.id || null,
                                         centro: row?.centro?.nombre || row?.centro_nombre || "Armado",
-                                        texto: String(row?.observacion || "").trim(),
-                                        saving: false
                                     })
                                 }
                                 title="Ver observación"
@@ -2384,30 +2383,14 @@ const ArmadoTecnico = () => {
         }
     };
 
-    const handleGuardarObservacionArmado = async () => {
-        const armadoId = Number(observacionDetalle?.armadoId || 0);
-        if (!armadoId) return;
-        try {
-            setObservacionDetalle((prev) => ({ ...prev, saving: true }));
-            await modificarArmado(armadoId, { observacion: observacionDetalle.texto || "" });
-            setArmados((prev) =>
-                prev.map((item) =>
-                    Number(item?.id_armado || item?.id || 0) === armadoId
-                        ? { ...item, observacion: observacionDetalle.texto || "" }
-                        : item
-                )
-            );
-            setArmadoActivo((prev) =>
-                Number(prev?.id_armado || prev?.id || 0) === armadoId
-                    ? { ...prev, observacion: observacionDetalle.texto || "" }
-                    : prev
-            );
-            setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false });
-        } catch (err) {
-            console.error("Error al guardar observación del armado:", err);
-            alert("No se pudo guardar la observación.");
-            setObservacionDetalle((prev) => ({ ...prev, saving: false }));
-        }
+    const handleObservacionGuardada = (resultado) => {
+        const armadoId = Number(resultado.id_armado);
+        const actualizar = (item) => Number(item?.id_armado || item?.id || 0) === armadoId
+            ? { ...item, observacion: resultado.observacion, imagenes_observacion: resultado.imagenes }
+            : item;
+        setArmados((prev) => prev.map(actualizar));
+        setArmadoActivo((prev) => actualizar(prev));
+        setObservacionDetalle({ open: false, armadoId: null, centro: '' });
     };
 
     const handleEliminarArmado = async (row) => {
@@ -4377,52 +4360,13 @@ const ArmadoTecnico = () => {
             )}
 
             {observacionDetalle.open && (
-                <div className="modal show d-block" tabIndex="-1" role="dialog">
-                    <div className="modal-dialog" role="document">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">
-                                    <i className="fas fa-comment-alt mr-2" />
-                                    Observacion - {observacionDetalle.centro || "Armado"}
-                                </h5>
-                                <button
-                                    type="button"
-                                    className="close"
-                                    onClick={() => setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false })}
-                                >
-                                    <span>&times;</span>
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                <label className="mb-2 font-weight-bold">Texto de observacion</label>
-                                <textarea
-                                    className="form-control"
-                                    rows="6"
-                                    value={observacionDetalle.texto}
-                                    onChange={(e) => setObservacionDetalle((prev) => ({ ...prev, texto: e.target.value }))}
-                                    placeholder="Escribe la observacion del armado..."
-                                />
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setObservacionDetalle({ open: false, armadoId: null, centro: "", texto: "", saving: false })}
-                                >
-                                    Cerrar
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={handleGuardarObservacionArmado}
-                                    disabled={observacionDetalle.saving}
-                                >
-                                    {observacionDetalle.saving ? "Guardando..." : "Guardar observacion"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <ModalObservacionArmado
+                    key={observacionDetalle.armadoId}
+                    armadoId={observacionDetalle.armadoId}
+                    centro={observacionDetalle.centro}
+                    onClose={() => setObservacionDetalle({ open: false, armadoId: null, centro: '' })}
+                    onSaved={handleObservacionGuardada}
+                />
             )}
 
             {checklistOpen && (

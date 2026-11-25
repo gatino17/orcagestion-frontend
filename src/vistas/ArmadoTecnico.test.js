@@ -8,14 +8,16 @@ import { cargarDetallesCentro } from "../controllers/centrosControllers";
 import { obtenerClientes } from "../controllers/consultaCentroControllers";
 import { cargarUsuarios } from "../controllers/usuariosControllers";
 import { agregarEquipo, modificarEquipo } from "../controllers/equiposControllers";
-import { validarSerieEquipo, cerrarBultoArmadoAdmin, abrirBultoArmadoAdmin, eliminarBultoArmadoAdmin, obtenerMovimientosArmado } from "../api";
+import { validarSerieEquipo, cerrarBultoArmadoAdmin, abrirBultoArmadoAdmin, eliminarBultoArmadoAdmin, obtenerMovimientosArmado,
+    obtenerObservacionArmado, guardarObservacionArmado, obtenerImagenObservacionArmado } from "../api";
 
 jest.mock("../controllers/armadosControllers");
 jest.mock("../controllers/centrosControllers");
 jest.mock("../controllers/consultaCentroControllers");
 jest.mock("../controllers/usuariosControllers");
 jest.mock("../controllers/equiposControllers");
-jest.mock("../api", () => ({ validarSerieEquipo: jest.fn(), cerrarBultoArmadoAdmin: jest.fn(), abrirBultoArmadoAdmin: jest.fn(), eliminarBultoArmadoAdmin: jest.fn(), obtenerHistorialEquiposArmado: jest.fn(), obtenerMovimientosArmado: jest.fn() }));
+jest.mock("../api", () => ({ validarSerieEquipo: jest.fn(), cerrarBultoArmadoAdmin: jest.fn(), abrirBultoArmadoAdmin: jest.fn(), eliminarBultoArmadoAdmin: jest.fn(), obtenerHistorialEquiposArmado: jest.fn(), obtenerMovimientosArmado: jest.fn(),
+    obtenerObservacionArmado: jest.fn(), guardarObservacionArmado: jest.fn(), obtenerImagenObservacionArmado: jest.fn() }));
 jest.mock("socket.io-client", () => ({ io: () => ({ on: jest.fn(), off: jest.fn(), disconnect: jest.fn() }) }));
 jest.mock("react-data-table-component", () => ({ columns, data = [] }) => <div>{data.map((item, index) => <div key={index}>{columns.find((col) => col.name === "Total bultos")?.cell(item)}{columns.find((col) => col.name === "Planilla")?.cell(item)}</div>)}</div>);
 
@@ -49,6 +51,36 @@ const abrirPlanilla = async () => {
     await screen.findByRole("button", { name: "Editar equipo Equipo prueba" });
     return within(screen.getByRole("dialog"));
 };
+
+test('el boton de observacion permite guardar dos imagenes y recuperarlas al reabrir', async () => {
+    URL.createObjectURL = jest.fn(() => 'blob:respaldo');
+    URL.revokeObjectURL = jest.fn();
+    let actual = { id_armado: 8, observacion: 'Original', imagenes: [] };
+    obtenerObservacionArmado.mockImplementation(async () => actual);
+    obtenerImagenObservacionArmado.mockResolvedValue(new Blob(['foto']));
+    guardarObservacionArmado.mockImplementation(async (id, form) => {
+        actual = { id_armado: id, observacion: form.get('observacion'), imagenes: [
+            { id_imagen: 10, posicion: 1, nombre: 'uno.jpg' }, { id_imagen: 11, posicion: 2, nombre: 'dos.jpg' },
+        ] };
+        return actual;
+    });
+    render(<MemoryRouter><ArmadoTecnico /></MemoryRouter>);
+    fireEvent.click(await screen.findByTitle(/Ver observ/));
+    await waitFor(() => expect(screen.getByLabelText('Texto de observacion')).toHaveValue('Original'));
+    fireEvent.change(screen.getByLabelText('Texto de observacion'), { target: { value: 'Respaldo del armado' } });
+    fireEvent.change(screen.getByLabelText('Imagen 1 (opcional)'), { target: { files: [new File(['foto'], 'uno.jpg')] } });
+    fireEvent.change(screen.getByLabelText('Imagen 2 (opcional)'), { target: { files: [new File(['foto'], 'dos.jpg')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar observacion' }));
+    await waitFor(() => expect(screen.queryByLabelText('Texto de observacion')).not.toBeInTheDocument());
+    expect(guardarObservacionArmado.mock.calls[0][0]).toBe(8);
+    expect(guardarObservacionArmado.mock.calls[0][1].get('imagen_2').name).toBe('dos.jpg');
+    fireEvent.click(screen.getByTitle(/Ver observ/));
+    await waitFor(() => expect(screen.getByLabelText('Texto de observacion')).toHaveValue('Respaldo del armado'));
+    expect(await screen.findByAltText('Imagen 2 de la observacion')).toBeInTheDocument();
+    expect(obtenerObservacionArmado).toHaveBeenCalledTimes(2);
+    expect(obtenerImagenObservacionArmado).toHaveBeenCalledWith(8, 10);
+    expect(obtenerImagenObservacionArmado).toHaveBeenCalledWith(8, 11);
+});
 
 test("la planilla tiene ventana amplia y acciones fijas en su propio contenedor", async () => {
     const planilla = await abrirPlanilla();

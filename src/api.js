@@ -1911,6 +1911,23 @@ export const actualizarArmado = async (id, armadoData) => {
     }
 };
 
+export const obtenerObservacionArmado = async (id) => {
+    const response = await axios.get(`${BASE_URL}/armados/${id}/observacion`, authHeaders());
+    return response.data;
+};
+
+export const guardarObservacionArmado = async (id, formData) => {
+    const response = await axios.put(`${BASE_URL}/armados/${id}/observacion`, formData,
+        { headers: { ...authHeaders().headers, 'Content-Type': 'multipart/form-data' } });
+    return response.data;
+};
+
+export const obtenerImagenObservacionArmado = async (id, imagenId) => {
+    const response = await axios.get(`${BASE_URL}/armados/${id}/observacion/imagenes/${imagenId}`,
+        { ...authHeaders(), responseType: 'blob' });
+    return response.data;
+};
+
 export const eliminarArmado = async (id) => {
     try {
         const response = await axios.delete(`${BASE_URL}/armados/${id}`);
