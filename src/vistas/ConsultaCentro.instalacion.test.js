@@ -69,6 +69,20 @@ test('manual installations and original documents remain available', async () =>
   expect(screen.getByText('3 eventos')).toBeInTheDocument();
 });
 
+test.each(['/api/filtro/documento/Instalaciones/7', 'http://localhost:5000/api/filtro/documento/Instalaciones/7'])(
+  'normaliza el documento manual para abrirlo con la API actual: %s', async (documento) => {
+    obtenerHistorialCentro.mockImplementation((id, ok) => ok({ ...historial(id), historial: { instalaciones: [
+      { id_instalacion: 7, fecha_instalacion: '2026-11-20', inicio_monitoreo: '2026-11-21', documento },
+    ] } }));
+    render(<ConsultaCentro />);
+    seleccionarCentro();
+    await screen.findByText('Acta #22');
+    expect(screen.getByRole('link', { name: 'Ver documento' })).toHaveAttribute('href', '/api/filtro/documento/Instalaciones/7');
+    expect(screen.getByRole('link', { name: 'Ver documento' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Inicio de monitoreo:')).toBeInTheDocument();
+  }
+);
+
 test('ignores responses from a previous center even when they arrive last', async () => {
   let resolverAnterior;
   obtenerActasEntrega.mockImplementation(({ centro_id }) => centro_id === '21'

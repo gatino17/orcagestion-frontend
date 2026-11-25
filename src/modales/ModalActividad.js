@@ -6,8 +6,6 @@ import { guardarLevantamientoActas,
          guardarRetiroActas,
          guardarTrasladoActas,
          cargarActasEntregaSistema,
-         cargarInstalacionesActas,
-         guardarInstalacionActas,
          guardarMantencionActas,
          cargarMantencionesActas,
          cargarMantencionesSistema,
@@ -30,6 +28,7 @@ import { cargarCentrosActas } from '../controllers/actasControllers';
 
 
 import IntervencionesMantencion from '../components/IntervencionesMantencion';
+import RegistroInstalacionManual from '../components/RegistroInstalacionManual';
 import { useRef } from 'react';
 
 function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'levantamiento' }) {
@@ -45,7 +44,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     const [fechaMonitoreo, setFechaMonitoreo] = useState('');
     const [tipoTraslado, setTipoTraslado] = useState('');
     const [errorFecha, setErrorFecha] = useState(false);
-    const [instalaciones, setInstalaciones] = useState([]);
+    const [guardandoInstalacion, setGuardandoInstalacion] = useState(false);
     const [actasEntregaSistema, setActasEntregaSistema] = useState([]);
     const [permisosTrabajoSistema, setPermisosTrabajoSistema] = useState([]);
 
@@ -121,36 +120,23 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         setTipoActividad(tipoInicial || 'levantamiento');
     }, [tipoInicial]);
 
-    useEffect(() => {
-        if (!actividad || tipoActividad !== 'instalacion') return;
-        if (!fecha) {
-            const fechaCentro = actividad.instalacion_fecha || actividad.centro_fecha_instalacion || actividad.fecha_instalacion;
-            if (fechaCentro) {
-                setFecha(formatDateInput(fechaCentro));
-            }
-        }
-        if (!fechaMonitoreo && actividad.inicio_monitoreo) {
-            setFechaMonitoreo(formatDateInput(actividad.inicio_monitoreo));
-        }
-    }, [actividad, tipoActividad]);
-
     const handleGuardar = async () => {
-        // Verificar si el campo de fecha estÃ¡ vacÃ­o para los tipos de actividad que lo requieren
+        // Verificar si el campo de fecha está vacío para los tipos de actividad que lo requieren
         if ((tipoActividad === 'levantamiento' || tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado' || tipoActividad === 'instalacion') && !fecha) {
             setErrorFecha(true);  // Activar el error para mostrar en el campo
-            return;  // Salir de la funciÃ³n para evitar que se cierre el modal
+            return;  // Salir de la función para evitar que se cierre el modal
         }
 
-        setErrorFecha(false);  // Resetear el error si la fecha estÃ¡ completa
+        setErrorFecha(false);  // Resetear el error si la fecha está completa
         
         if (!actividad || !actividad.id_centro) {
-            console.error("Actividad no vÃ¡lida o falta id_centro:", actividad);
+            console.error("Actividad no válida o falta id_centro:", actividad);
             alert("No se puede guardar porque falta el ID del centro.");
             return;
         }
     
         const formData = new FormData();
-        formData.append('centro_id', actividad.id_centro);  // AsegÃºrate que es 'actividad', no 'actividadSeleccionada'
+        formData.append('centro_id', actividad.id_centro);  // Asegúrate que es 'actividad', no 'actividadSeleccionada'
     
         if (tipoActividad === 'levantamiento') {
             if (fecha) formData.append('fecha_levantamiento', fecha);
@@ -178,12 +164,6 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
             formData.append('centro_origen_id', actividad.id_centro);  // Centro de origen es el actual
             formData.append('centro_destino_id', centroDestino);       // Centro de destino seleccionado
             await guardarTrasladoActas(formData);
-        } else if (tipoActividad === 'instalacion') {
-            if (fecha) formData.append('fecha_instalacion', fecha);  // âž¤ FECHA DE INSTALACIÃ“N
-            if (fechaMonitoreo) formData.append('inicio_monitoreo', fechaMonitoreo);  // âž¤ FECHA DE MONITOREO
-            if (documento) formData.append('documento_acta', documento);
-            if (observacion) formData.append('observacion', observacion);
-            await guardarInstalacionActas(formData);  // âž¤ GUARDAR INSTALACIÃ“N
         }
         
     
@@ -196,15 +176,15 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     
     const handleEliminar = async () => {
         if (tipoActividad === 'levantamiento') {
-            // AsegÃºrate de que esta condiciÃ³n estÃ¡ revisando id_centro y no id_levantamiento
+            // Asegúrate de que esta condición está revisando id_centro y no id_levantamiento
             if (!actividad.id_centro) {
-                alert('No se encontrÃ³ el ID del centro para eliminar los levantamientos.');
+                alert('No se encontró el ID del centro para eliminar los levantamientos.');
                 return;
             }
             await eliminarLevantamientosPorCentro(actividad.id_centro);  // Eliminar todos los levantamientos del centro
         } else if (tipoActividad === 'inventario') {
             if (!actividad.id_centro) {
-                alert('No se encontrÃ³ el ID del inventario para eliminar.');
+                alert('No se encontró el ID del inventario para eliminar.');
                 return;
             }
             await eliminarInventariosPorCentro(actividad.id_centro);
@@ -215,7 +195,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         } else if (tipoActividad === 'traslado') {
             await eliminarTrasladosPorCentro(actividad.id_centro);
         } else if (tipoActividad === 'instalacion') {
-            await eliminarInstalacionesPorCentro(actividad.id_centro);  // âž¤ ELIMINAR INSTALACIÃ“N
+            await eliminarInstalacionesPorCentro(actividad.id_centro);
         }
         
     
@@ -224,7 +204,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         onClose();
     };
     
-    // Agregar nueva mantenciÃ³n
+    // Agregar nueva mantención
     const handleAgregarMantencion = async () => {
         if (guardandoMantencion) return;
         setErrorFechaMantencion(!fechaMantencion);
@@ -268,14 +248,14 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
 
     const handleEliminarMantencion = async (idMantencion) => {
         try {
-            await eliminarMantencionActas(idMantencion);  // Elimina la mantenciÃ³n en la base de datos
-            alert("MantenciÃ³n eliminada exitosamente.");
+            await eliminarMantencionActas(idMantencion);  // Elimina la mantención en la base de datos
+            alert("Mantención eliminada exitosamente.");
             
             recargarDatos(); // Recarga la lista de actividades para actualizar la tabla
             onClose(); // Cierra el modal
         } catch (error) {
-            console.error("Error al eliminar la mantenciÃ³n:", error);
-            alert("Hubo un error al eliminar la mantenciÃ³n.");
+            console.error("Error al eliminar la mantención:", error);
+            alert("Hubo un error al eliminar la mantención.");
         }
     };
     
@@ -292,7 +272,6 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     
     useEffect(() => {
         if (tipoActividad === 'instalacion') {
-            cargarInstalacionesActas(setInstalaciones, actividad.id_centro);
             cargarActasEntregaSistema(setActasEntregaSistema, actividad.id_centro);
             cargarPermisosTrabajoSistema(setPermisosTrabajoSistema, actividad.id_centro);
         }
@@ -312,7 +291,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                 <div className="modal-content">
                     <div className="modal-header">
                         <h5 className="modal-title">Editar/Agregar Actividad</h5>
-                        <button type="button" className="close" onClick={onClose} disabled={guardandoMantencion}>
+                        <button type="button" className="close" onClick={onClose} disabled={guardandoMantencion || guardandoInstalacion}>
                             <span>&times;</span>
                         </button>
                     </div>
@@ -322,22 +301,22 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             <select 
                                 className="form-control"
                                 value={tipoActividad}
-                                disabled={guardandoMantencion}
+                                disabled={guardandoMantencion || guardandoInstalacion}
                                 onChange={(e) => setTipoActividad(e.target.value)}
                             >
                                 <option value="levantamiento">Levantamiento</option>
-                                <option value="instalacion">InstalaciÃ³n</option> 
+                                <option value="instalacion">Instalación</option>
                                 <option value="mantencion">Mantencion</option>
                                 <option value="inventario">Inventario</option>
                                 <option value="cese">Cese</option>
                                 <option value="retiro">Retiro</option>
                                 <option value="traslado">Traslado</option>
                                 
-                                {/* AquÃ­ agregaremos los otros tipos mÃ¡s adelante */}
+                                {/* Aquí agregaremos los otros tipos más adelante */}
                             </select>
                         </div>
 
-                        {/* Mostrar campos segÃºn el tipo de actividad */}
+                        {/* Mostrar campos según el tipo de actividad */}
                         {(tipoActividad === 'levantamiento' || tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado') && (
                             <div className="form-group">
                                 <label>Fecha</label>
@@ -356,7 +335,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
 
                         {/* campo documento formulario general para las demas actividades */}
-                        {tipoActividad !== 'mantencion' && (
+                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && (
                             <div className="form-group">
                                 <label>Documento General</label>
                                 <input 
@@ -369,17 +348,17 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
 
 
-                           {/* Mostrar campos especÃ­ficos para Retiro */}
+                           {/* Mostrar campos específicos para Retiro */}
                         {tipoActividad === 'retiro' && (
                             <>
                                 <div className="form-group">
-                                    <label>ObservaciÃ³n</label>
+                                    <label>Observación</label>
                                     <input 
                                         type="text" 
                                         className="form-control" 
                                         value={observacion} 
                                         onChange={(e) => setObservacion(e.target.value)} 
-                                        placeholder="Ingrese una observaciÃ³n"
+                                        placeholder="Ingrese una observación"
                                     />
                                 </div>
 
@@ -396,7 +375,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             </>
                         )}
 
-                        {/* Mostrar campos especÃ­ficos para traslado */}
+                        {/* Mostrar campos específicos para traslado */}
                         {tipoActividad === 'traslado' && (
                             <>
                                 <div className="form-group">
@@ -456,13 +435,13 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                                 </div>
 
                                 <div className="form-group">
-                                    <label>ObservaciÃ³n</label>
+                                    <label>Observación</label>
                                     <input 
                                         type="text" 
                                         className="form-control" 
                                         value={observacion} 
                                         onChange={(e) => setObservacion(e.target.value)} 
-                                        placeholder="Ingrese una observaciÃ³n"
+                                        placeholder="Ingrese una observación"
                                     />
                                 </div>
                             </>
@@ -472,60 +451,8 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                           {/* Mostrar campos específicos para instalaciones */}
                         {tipoActividad === 'instalacion' && (
                         <>
-                            <div className="form-group">
-                                <label>Fecha de Instalación</label>
-                                <input 
-                                    type="date" 
-                                    className={`form-control ${errorFecha ? 'is-invalid' : ''}`}
-                                    value={fecha}
-                                    onChange={(e) => {
-                                        setFecha(e.target.value);
-                                        if (e.target.value) setErrorFecha(false);
-                                    }}
-                                    required
-                                />
-                                {errorFecha && <small className="text-danger">Este campo es obligatorio.</small>}
-                            </div>
-
-                            <div className="form-group">
-                                <label>Inicio de Monitoreo</label>
-                                <input 
-                                    type="date" 
-                                    className="form-control"
-                                    value={fechaMonitoreo}
-                                    onChange={(e) => setFechaMonitoreo(e.target.value)}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Observación</label>
-                                <input 
-                                    type="text" 
-                                    className="form-control"
-                                    value={observacion}
-                                    onChange={(e) => setObservacion(e.target.value)}
-                                    placeholder="Ingrese una observación"
-                                />
-                            </div>
-
-                            <div className="mt-4">
-                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                    <h5 className="mb-0">Instalaciones manuales</h5>
-                                    <span className="badge badge-success">{instalaciones.length}</span>
-                                </div>
-                                <ul className="list-group">
-                                    {instalaciones.length ? instalaciones.map((instalacion, index) => (
-                                        <li key={`inst-man-${index}`} className="list-group-item">
-                                            <strong>Fecha:</strong> {formatDateDisplay(instalacion.fecha_instalacion)} <br />
-                                            <strong>Inicio monitoreo:</strong> {formatDateDisplay(instalacion.inicio_monitoreo)} <br />
-                                            <strong>Observación:</strong> {instalacion.observacion || '-'}
-                                        </li>
-                                    )) : (
-                                        <li className="list-group-item text-muted">Sin instalaciones manuales registradas.</li>
-                                    )}
-                                </ul>
-                            </div>
-
+                            <RegistroInstalacionManual key={actividad.id_centro} actividad={actividad}
+                                onSaved={recargarDatos} onBusyChange={setGuardandoInstalacion} />
                             <div className="mt-4">
                                 <div className="d-flex align-items-center justify-content-between mb-2">
                                     <h5 className="mb-0">Actas sistema</h5>
@@ -574,7 +501,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             {avisoMantencion && <p className="alert alert-success mt-3" role="status">{avisoMantencion}</p>}
                             {!mostrarFormularioMantencion && <button type="button" className="btn btn-outline-secondary mt-3"
                                 onClick={() => abrirFormularioMantencion()}>Registrar mantencion sin soporte</button>}
-                            {mostrarFormularioMantencion && <fieldset ref={formularioMantencionRef} disabled={guardandoMantencion}
+                            {mostrarFormularioMantencion && <fieldset ref={formularioMantencionRef} disabled={guardandoMantencion || guardandoInstalacion}
                                 className="border rounded p-3 mt-3" aria-label="Adjuntar documento de mantencion">
                             <h5>{soporteAdjunto ? `Adjuntar documento - Soporte #${soporteAdjunto.id_soporte}` : 'Registrar mantencion sin soporte'}</h5>
                             <p className="text-muted">{soporteAdjunto
@@ -720,44 +647,44 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         {tipoActividad === 'levantamiento' && actividad.levantamiento_documento && (
                             <>
                                 
-                                <button type="button" className="btn btn-danger" onClick={handleEliminar}><i className="fas fa-trash-alt">Levantamiento</i></button>
+                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}><i className="fas fa-trash-alt">Levantamiento</i></button>
                             </>
                         )}
 
                         {tipoActividad === 'inventario' && actividad.inventario_documento && (
                             <>
                                 
-                                <button type="button" className="btn btn-danger" onClick={handleEliminar}><i className="fas fa-trash-alt"> inventario</i></button>
+                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}><i className="fas fa-trash-alt"> inventario</i></button>
                             </>
                         )}
 
                         {tipoActividad === 'cese' && actividad.cese_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
                                 <i className="fas fa-trash-alt"> Cese</i>
                             </button>
                         )}
 
                         {tipoActividad === 'retiro' && actividad.retiro_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
                                 <i className="fas fa-trash-alt"> Retiro</i>
                             </button>
                         )}
 
                         {tipoActividad === 'traslado' && actividad.traslado_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
                                 <i className="fas fa-trash-alt"> Traslado</i>
                             </button>
                         )}
                          
-                         {tipoActividad === 'instalacion' && actividad.instalacion_documento && (  // âž¤ Cambiar 'traslado_documento' a 'instalacion_documento'
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar}>
-                                <i className="fas fa-trash-alt"> InstalaciÃ³n</i>  {/* âž¤ Cambiar texto de 'Traslado' a 'InstalaciÃ³n' */}
+                         {tipoActividad === 'instalacion' && actividad.instalacion_documento && (
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
+                                <i className="fas fa-trash-alt"> Instalación</i>
                             </button>
                         )}
 
 
-                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={guardandoMantencion}>Cerrar</button>
-                        {tipoActividad !== 'mantencion' && <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>}
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={guardandoMantencion || guardandoInstalacion}>Cerrar</button>
+                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>}
                     </div>
                 </div>
             </div>

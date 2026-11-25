@@ -10,6 +10,7 @@ import {
 import DocumentosInstalacionCentro, { useDocumentosInstalacionCentro } from '../components/DocumentosInstalacionCentro';
 import './ConsultaCentro.css';
 import { DocumentosIntervencion } from '../components/IntervencionesMantencion';
+import { resolverDocumentoInstalacion } from '../utils/documentosInstalacion';
 
 const compararFecha = (campo) => (a, b) => {
   const fechaA = Date.parse(a?.[campo]);
@@ -246,9 +247,12 @@ const ConsultaCentro = () => {
         );
       case 'instalaciones':
         return (
-          <p>
-            <strong>Observación:</strong> {item.observacion || 'Sin observación'}
-          </p>
+          <>
+            {item.inicio_monitoreo && <p><strong>Inicio de monitoreo:</strong> {formatearFecha(item.inicio_monitoreo)}</p>}
+            <p>
+              <strong>Observación:</strong> {item.observacion || 'Sin observación'}
+            </p>
+          </>
         );
       case 'traslados':
         return (
@@ -520,7 +524,8 @@ const ConsultaCentro = () => {
                           ? <>
                             {item.es_soporte_terreno && <p><strong>Mantencion en terreno · Soporte #{item.id_soporte}</strong></p>}
                             <DocumentosIntervencion documentos={item.documentos || []} />
-                          </> : renderDocumento(item.documento)}
+                          </> : renderDocumento(section.key === 'instalaciones'
+                            ? resolverDocumentoInstalacion(item.documento, item.id_instalacion) : item.documento)}
                         {renderExtraInfo(section.key, item)}
                       </div>
                     ))

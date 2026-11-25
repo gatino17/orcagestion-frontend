@@ -1298,7 +1298,7 @@ export const borrarTrasladosPorCentro = async (centroId) => {
 // ➤ OBTENER Instalaciones desde Actas
 export const obtenerInstalacionesActas = async (centroId) => {
     try {
-        const response = await axios.get(`${BASE_URL}/actas/instalaciones`, {
+        const response = await axios.get(`${BASE_URL}/instalaciones/`, {
             params: centroId ? { centro_id: centroId } : {},
         });
         return response.data;
