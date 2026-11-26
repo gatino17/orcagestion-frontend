@@ -892,17 +892,42 @@
     overscroll-behavior-x: contain;
 }
 
-.soporte-range-actions {
-    display: flex;
-    align-items: stretch;
-    gap: 0.5rem;
+.soporte-table-filters {
+    display: grid;
+    grid-template-columns: minmax(240px, 1.6fr) minmax(155px, .75fr) minmax(155px, .75fr) max-content;
+    align-items: end;
+    gap: 14px;
 }
 
-.soporte-range-actions .form-control {
+.soporte-table-filters > div, .soporte-table-filters .form-control {
     min-width: 0;
 }
 
-.soporte-range-actions .btn {
+.soporte-filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.soporte-pdf-export {
+    position: relative;
+}
+
+.soporte-pdf-export__error {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 2;
+    width: 280px;
+    padding: 8px 10px;
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 8px;
+    color: #9f1239;
+}
+
+.soporte-filter-buttons .btn {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -969,10 +994,20 @@
     padding: 0;
 }
 
-@media (max-width: 1100px) {
-    .soporte-range-actions {
-        align-items: stretch;
-        flex-direction: column;
+@media (max-width: 1250px) {
+    .soporte-table-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575px) {
+    .soporte-table-filters {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .soporte-pdf-export__error {
+        left: 0;
+        right: auto;
+        width: min(280px, calc(100vw - 70px));
     }
 }
 

@@ -14,6 +14,7 @@ import { admiteAvisoTerreno, notificarSoporteGuardado } from "../utils/soporteAv
 import { cargarCentrosClientes } from "../controllers/centrosControllers";
 import DiagramaLogicoViewer from "../components/DiagramaLogicoViewer";
 import VistaGeneralViewer from "../components/VistaGeneralViewer";
+import ExportarSoportesPDF, { fechaFiltroSoportePDF } from "../components/ExportarSoportesPDF";
 import "./Soporte.css";
 
 const CATEGORIAS_FALLA = [
@@ -1875,11 +1876,13 @@ const Soporte = () => {
                             Mostrando {datosOrdenados.length} resultado{datosOrdenados.length === 1 ? "" : "s"}
                         </small>
                     </div>
-                    <div className="row mb-3">
-                        <div className="col-lg-6">
-                            <small className="text-muted text-uppercase d-block mb-1">Buscar soporte</small>
+                    <div className="soporte-table-filters mb-3">
+                        <div>
+                            <label htmlFor="soporte-tabla-buscar" className="text-muted small text-uppercase d-block mb-1">Buscar soporte</label>
                             <input
+                                id="soporte-tabla-buscar"
                                 type="text"
+                                maxLength={500}
                                 className="form-control"
                                 placeholder={esAdmin
                                     ? "Centro, cliente, problema, case code, categoria o creador"
@@ -1888,34 +1891,42 @@ const Soporte = () => {
                                 onChange={(e) => setFiltroNombre(e.target.value)}
                             />
                         </div>
-                        <div className="col-lg-3 mt-3 mt-lg-0">
-                            <small className="text-muted text-uppercase d-block mb-1">Rango desde</small>
+                        <div>
+                            <label htmlFor="soporte-tabla-desde" className="text-muted small text-uppercase d-block mb-1">Rango desde</label>
                             <input
+                                id="soporte-tabla-desde"
                                 type="date"
                                 className="form-control"
                                 value={fechaInicioBusqueda}
                                 onChange={(e) => setFechaInicioBusqueda(e.target.value)}
                             />
                         </div>
-                        <div className="col-lg-3 mt-3 mt-lg-0">
-                            <small className="text-muted text-uppercase d-block mb-1">Rango hasta</small>
-                            <div className="soporte-range-actions">
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    value={fechaFinBusqueda}
-                                    onChange={(e) => setFechaFinBusqueda(e.target.value)}
-                                />
-                                <button
-                                    type="button"
-                                    className={`btn ${mostrarCambiosEquipo ? "btn-primary" : "btn-outline-primary"}`}
-                                    onClick={() => setMostrarCambiosEquipo((valor) => !valor)}
-                                    title={mostrarCambiosEquipo ? "Ocultar columnas de cambio de equipo" : "Ver cambios de equipo"}
-                                >
-                                    <i className={`fas ${mostrarCambiosEquipo ? "fa-eye-slash" : "fa-exchange-alt"}`}></i>
-                                    <span>{mostrarCambiosEquipo ? "Ocultar cambios" : "Ver cambios"}</span>
-                                </button>
-                            </div>
+                        <div>
+                            <label htmlFor="soporte-tabla-hasta" className="text-muted small text-uppercase d-block mb-1">Rango hasta</label>
+                            <input
+                                id="soporte-tabla-hasta"
+                                type="date"
+                                className="form-control"
+                                value={fechaFinBusqueda}
+                                onChange={(e) => setFechaFinBusqueda(e.target.value)}
+                            />
+                        </div>
+                        <div className="soporte-filter-buttons">
+                            {esAdmin && <ExportarSoportesPDF registros={datosOrdenados} disabled={loading} filtros={{
+                                busqueda: filtroNombre.trim(), periodo: descripcionPeriodo,
+                                desde: fechaInicioBusqueda, hasta: fechaFinBusqueda,
+                                periodo_desde: fechaFiltroSoportePDF(rangoFechas.inicio),
+                                periodo_hasta: fechaFiltroSoportePDF(rangoFechas.fin),
+                            }} />}
+                            <button
+                                type="button"
+                                className={`btn ${mostrarCambiosEquipo ? "btn-primary" : "btn-outline-primary"}`}
+                                onClick={() => setMostrarCambiosEquipo((valor) => !valor)}
+                                title={mostrarCambiosEquipo ? "Ocultar columnas de cambio de equipo" : "Ver cambios de equipo"}
+                            >
+                                <i className={`fas ${mostrarCambiosEquipo ? "fa-eye-slash" : "fa-exchange-alt"}`}></i>
+                                <span>{mostrarCambiosEquipo ? "Ocultar cambios" : "Ver cambios"}</span>
+                            </button>
                         </div>
                     </div>
 	                    <div

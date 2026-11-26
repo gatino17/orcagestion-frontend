@@ -1444,6 +1444,13 @@ export const obtenerExcelResponsabilidadSoporte = async ({ anio, cliente, centro
     return response.data;
 };
 
+export const obtenerPDFRegistrosSoporte = async (ids, filtros) => {
+    const response = await axios.post(`${BASE_URL}/soporte/registros/pdf`, { ids, filtros }, {
+        ...authHeaders(), responseType: 'blob',
+    });
+    return response.data;
+};
+
 export const obtenerSoportes = async () => {
     try {
         const response = await axios.get(`${BASE_URL}/soporte/`, authHeaders());
