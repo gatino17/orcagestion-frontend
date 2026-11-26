@@ -996,6 +996,17 @@ export const descargarDocumentofiltro = async (tipo, id) => {
 
 
 // Obtener todos los datos de actas con filtros
+export const obtenerExcelActividades = async (filtros = {}) => {
+    const response = await axios.get(`${BASE_URL}/actas/actividades/excel`, {
+        ...authHeaders(), responseType: 'blob',
+        params: {
+            cliente_id: filtros.id_cliente || filtros.cliente_id || undefined,
+            nombre_centro: filtros.nombre_centro || filtros.id_centro || undefined,
+        },
+    });
+    return response.data;
+};
+
 export const obtenerActas = async (filtros = {}) => {
     try {
         console.log("Enviando filtros:", filtros);

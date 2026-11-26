@@ -6,6 +6,7 @@ import { cargarTodasRazonesSociales } from '../controllers/razonSocialController
 import { cargarClientes } from '../controllers/actasControllers';
 import ModalActividad from '../modales/ModalActividad';
 import { ResumenIntervencionesMantencion } from '../components/IntervencionesMantencion';
+import ExportarActividadesExcel from '../components/ExportarActividadesExcel';
 import './RegistrosDocumentos.css';
 
 
@@ -875,8 +876,9 @@ function RegistrosDocumentos() {
             <div className="card registros-filters">
                     <div className="card-body registros-filter-grid">
                         <div>
-                            <label>Cliente</label>
+                            <label htmlFor="registros-filtro-cliente">Cliente</label>
                             <select
+                                id="registros-filtro-cliente"
                                 className="form-control"
                                 name="id_cliente"
                                 value={filtros.id_cliente}
@@ -891,8 +893,9 @@ function RegistrosDocumentos() {
                             </select>
                         </div>
                         <div>
-                            <label>Centro</label>
+                            <label htmlFor="registros-filtro-centro">Centro</label>
                             <input
+                                id="registros-filtro-centro"
                                 type="text"
                                 className="form-control"
                                 name="nombre_centro"
@@ -903,9 +906,12 @@ function RegistrosDocumentos() {
                         </div>
                         <div className="filter-actions">
                             <label>&nbsp;</label>
-                            <button className="btn btn-outline-primary w-100" onClick={limpiarBusqueda}>
-                                <i className="fas fa-sync"></i> Limpiar filtros
-                            </button>
+                            <div className="registros-filter-buttons">
+                                <button type="button" className="btn btn-outline-primary" onClick={limpiarBusqueda}>
+                                    <i className="fas fa-sync" aria-hidden="true"></i> Limpiar filtros
+                                </button>
+                                <ExportarActividadesExcel filtros={filtros} disabled={loading || !actividades.length} />
+                            </div>
                         </div>
                     </div>
                 </div>

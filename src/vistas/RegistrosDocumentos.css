@@ -213,6 +213,29 @@
   justify-content: flex-end;
 }
 
+.registros-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.registros-filter-buttons > .btn,
+.registros-excel-export {
+  flex: 1 1 auto;
+}
+
+.registros-filter-buttons .btn {
+  white-space: nowrap;
+}
+
+.registros-excel-error {
+  display: block;
+  max-width: 290px;
+  margin-top: 0.45rem;
+  color: #a61b2b;
+}
+
 .registros-section-header {
   display: flex;
   justify-content: space-between;
