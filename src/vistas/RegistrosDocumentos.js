@@ -107,6 +107,7 @@ function RegistrosDocumentos() {
                                     cantidad_permisos_sistema: Number(act.cantidad_permisos_sistema || 0),
                                     ultima_fecha_permiso_sistema: act.ultima_fecha_permiso_sistema || null,
                                     cantidad_mantenciones: 0,
+                                    mantencion_tiene_documento: false,
                                     ultima_fecha_mantencion: null,
                                     cantidad_mantenciones_sistema: Number(act.cantidad_mantenciones_sistema || 0),
                                     ultima_fecha_mantencion_sistema: act.ultima_fecha_mantencion_sistema || null
@@ -133,6 +134,7 @@ function RegistrosDocumentos() {
                             });
                         }
 
+                                acc[key].mantencion_tiene_documento ||= Boolean(act.mantencion_documento);
                                 if (act.mantencion_fecha) {
                                     const registro = acc[key];
                                     registro.cantidad_mantenciones += 1;
@@ -331,6 +333,13 @@ function RegistrosDocumentos() {
 
     const getTextoFecha = (fecha) => (fecha ? formatearFechaConDia(fecha) : 'Sin registro');
 
+    const renderIconoDocumento = (icono, tieneDocumento) => (
+        <span className={`registro-doc-section__icon${tieneDocumento ? '' : ' registro-doc-section__icon--missing'}`}
+            title={tieneDocumento ? 'Respaldo disponible' : 'Sin documento'}>
+            <i className={`fas ${icono}`} aria-hidden="true" />
+        </span>
+    );
+
     const renderDocumentoSection = (titulo, fecha, documento, icono, toneClass = '', onOpen) => (
         <div
             className={`registro-doc-section ${toneClass} ${onOpen ? 'registro-doc-section--clickable' : ''}`}
@@ -339,9 +348,7 @@ function RegistrosDocumentos() {
             onClick={onOpen}
         >
             <div className="registro-doc-section__header">
-                <span className="registro-doc-section__icon">
-                    <i className={`fas ${icono}`} />
-                </span>
+                {renderIconoDocumento(icono, Boolean(documento))}
                 <strong>{titulo}</strong>
             </div>
             <div className="registro-doc-section__content">
@@ -370,7 +377,7 @@ function RegistrosDocumentos() {
         </div>
     );
 
-    const renderMantencionesSection = (cantidadManual, ultimaFechaManual, cantidadSistema, ultimaFechaSistema, onOpen, resumen) => (
+    const renderMantencionesSection = (cantidadManual, ultimaFechaManual, cantidadSistema, ultimaFechaSistema, onOpen, resumen, documentoManual) => (
         <div
             className={`registro-doc-section registro-doc-section--mantencion ${onOpen ? 'registro-doc-section--clickable' : ''}`}
             role={onOpen ? 'button' : undefined}
@@ -378,9 +385,7 @@ function RegistrosDocumentos() {
             onClick={onOpen}
         >
             <div className="registro-doc-section__header">
-                <span className="registro-doc-section__icon">
-                    <i className="fas fa-tools" />
-                </span>
+                {renderIconoDocumento('fa-tools', (documentoManual || cantidadSistema > 0 || resumen?.documentados > 0) && !(resumen?.sin_documento > 0))}
                 <strong>Mantenciones</strong>
             </div>
             <ResumenIntervencionesMantencion resumen={resumen} />
@@ -413,9 +418,7 @@ function RegistrosDocumentos() {
             onClick={onOpen}
         >
             <div className="registro-doc-section__header">
-                <span className="registro-doc-section__icon">
-                    <i className="fas fa-hard-hat" />
-                </span>
+                {renderIconoDocumento('fa-hard-hat', Boolean(row.instalacion_documento || row.cantidad_actas_sistema > 0 || row.cantidad_permisos_sistema > 0))}
                 <strong>Instalacion</strong>
             </div>
             <div className="registro-mantencion-stack">
@@ -531,7 +534,8 @@ function RegistrosDocumentos() {
                 row.cantidad_mantenciones_sistema,
                 row.ultima_fecha_mantencion_sistema,
                 () => handleDetallesActividad(row, 'mantencion'),
-                row.resumen_intervenciones_mantencion
+                row.resumen_intervenciones_mantencion,
+                row.mantencion_tiene_documento
             ),
             grow: 0.1,
             wrap: true,

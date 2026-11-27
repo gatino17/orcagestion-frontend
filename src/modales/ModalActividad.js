@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 
-import { guardarLevantamientoActas, 
+import {
          guardarInventarioActas,
          guardarCeseActas,
          guardarRetiroActas,
@@ -29,10 +29,11 @@ import { cargarCentrosActas } from '../controllers/actasControllers';
 
 import IntervencionesMantencion from '../components/IntervencionesMantencion';
 import RegistroInstalacionManual from '../components/RegistroInstalacionManual';
+import RegistroLevantamientoManual from '../components/RegistroLevantamientoManual';
 import { useRef } from 'react';
 
 function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'levantamiento' }) {
-    const [tipoActividad, setTipoActividad] = useState('levantamiento');
+    const [tipoActividad, setTipoActividad] = useState(tipoInicial || 'levantamiento');
     const [fecha, setFecha] = useState('');
     const [documento, setDocumento] = useState(null);
 
@@ -44,7 +45,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
     const [fechaMonitoreo, setFechaMonitoreo] = useState('');
     const [tipoTraslado, setTipoTraslado] = useState('');
     const [errorFecha, setErrorFecha] = useState(false);
-    const [guardandoInstalacion, setGuardandoInstalacion] = useState(false);
+    const [guardandoDocumento, setGuardandoDocumento] = useState(false);
     const [actasEntregaSistema, setActasEntregaSistema] = useState([]);
     const [permisosTrabajoSistema, setPermisosTrabajoSistema] = useState([]);
 
@@ -138,11 +139,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         const formData = new FormData();
         formData.append('centro_id', actividad.id_centro);  // Asegúrate que es 'actividad', no 'actividadSeleccionada'
     
-        if (tipoActividad === 'levantamiento') {
-            if (fecha) formData.append('fecha_levantamiento', fecha);
-            if (documento) formData.append('documento_asociado', documento);
-            await guardarLevantamientoActas(formData);
-        } else if (tipoActividad === 'inventario') {
+        if (tipoActividad === 'inventario') {
             if (documento) formData.append('documento', documento);
             await guardarInventarioActas(formData);
         } else if (tipoActividad === 'cese') {
@@ -291,7 +288,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                 <div className="modal-content">
                     <div className="modal-header">
                         <h5 className="modal-title">Editar/Agregar Actividad</h5>
-                        <button type="button" className="close" onClick={onClose} disabled={guardandoMantencion || guardandoInstalacion}>
+                        <button type="button" className="close" onClick={onClose} disabled={guardandoMantencion || guardandoDocumento}>
                             <span>&times;</span>
                         </button>
                     </div>
@@ -301,7 +298,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             <select 
                                 className="form-control"
                                 value={tipoActividad}
-                                disabled={guardandoMantencion || guardandoInstalacion}
+                                disabled={guardandoMantencion || guardandoDocumento}
                                 onChange={(e) => setTipoActividad(e.target.value)}
                             >
                                 <option value="levantamiento">Levantamiento</option>
@@ -317,7 +314,9 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         </div>
 
                         {/* Mostrar campos según el tipo de actividad */}
-                        {(tipoActividad === 'levantamiento' || tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado') && (
+                        {tipoActividad === 'levantamiento' && <RegistroLevantamientoManual key={actividad.id_centro} actividad={actividad}
+                            onSaved={recargarDatos} onBusyChange={setGuardandoDocumento} />}
+                        {(tipoActividad === 'cese' || tipoActividad === 'retiro' || tipoActividad === 'traslado') && (
                             <div className="form-group">
                                 <label>Fecha</label>
                                 <input 
@@ -335,7 +334,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
 
                         {/* campo documento formulario general para las demas actividades */}
-                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && (
+                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && tipoActividad !== 'levantamiento' && (
                             <div className="form-group">
                                 <label>Documento General</label>
                                 <input 
@@ -452,7 +451,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         {tipoActividad === 'instalacion' && (
                         <>
                             <RegistroInstalacionManual key={actividad.id_centro} actividad={actividad}
-                                onSaved={recargarDatos} onBusyChange={setGuardandoInstalacion} />
+                                onSaved={recargarDatos} onBusyChange={setGuardandoDocumento} />
                             <div className="mt-4">
                                 <div className="d-flex align-items-center justify-content-between mb-2">
                                     <h5 className="mb-0">Actas sistema</h5>
@@ -501,7 +500,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                             {avisoMantencion && <p className="alert alert-success mt-3" role="status">{avisoMantencion}</p>}
                             {!mostrarFormularioMantencion && <button type="button" className="btn btn-outline-secondary mt-3"
                                 onClick={() => abrirFormularioMantencion()}>Registrar mantencion sin soporte</button>}
-                            {mostrarFormularioMantencion && <fieldset ref={formularioMantencionRef} disabled={guardandoMantencion || guardandoInstalacion}
+                            {mostrarFormularioMantencion && <fieldset ref={formularioMantencionRef} disabled={guardandoMantencion || guardandoDocumento}
                                 className="border rounded p-3 mt-3" aria-label="Adjuntar documento de mantencion">
                             <h5>{soporteAdjunto ? `Adjuntar documento - Soporte #${soporteAdjunto.id_soporte}` : 'Registrar mantencion sin soporte'}</h5>
                             <p className="text-muted">{soporteAdjunto
@@ -647,44 +646,44 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         {tipoActividad === 'levantamiento' && actividad.levantamiento_documento && (
                             <>
                                 
-                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}><i className="fas fa-trash-alt">Levantamiento</i></button>
+                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}><i className="fas fa-trash-alt" aria-hidden="true" /> Levantamiento</button>
                             </>
                         )}
 
                         {tipoActividad === 'inventario' && actividad.inventario_documento && (
                             <>
                                 
-                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}><i className="fas fa-trash-alt"> inventario</i></button>
+                                <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}><i className="fas fa-trash-alt"> inventario</i></button>
                             </>
                         )}
 
                         {tipoActividad === 'cese' && actividad.cese_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}>
                                 <i className="fas fa-trash-alt"> Cese</i>
                             </button>
                         )}
 
                         {tipoActividad === 'retiro' && actividad.retiro_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}>
                                 <i className="fas fa-trash-alt"> Retiro</i>
                             </button>
                         )}
 
                         {tipoActividad === 'traslado' && actividad.traslado_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}>
                                 <i className="fas fa-trash-alt"> Traslado</i>
                             </button>
                         )}
                          
                          {tipoActividad === 'instalacion' && actividad.instalacion_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoInstalacion}>
+                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}>
                                 <i className="fas fa-trash-alt"> Instalación</i>
                             </button>
                         )}
 
 
-                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={guardandoMantencion || guardandoInstalacion}>Cerrar</button>
-                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>}
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={guardandoMantencion || guardandoDocumento}>Cerrar</button>
+                        {tipoActividad !== 'mantencion' && tipoActividad !== 'instalacion' && tipoActividad !== 'levantamiento' && <button type="button" className="btn btn-primary" onClick={handleGuardar}>Guardar</button>}
                     </div>
                 </div>
             </div>

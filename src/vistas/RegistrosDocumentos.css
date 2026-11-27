@@ -425,6 +425,11 @@
   color: #15803d;
 }
 
+.registro-doc-section .registro-doc-section__icon--missing {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
 .registro-doc-section--mantencion .registro-doc-badge {
   background: rgba(34, 197, 94, 0.15);
 }
