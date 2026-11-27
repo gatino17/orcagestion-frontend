@@ -4,7 +4,7 @@ import RegistrosDocumentos from './RegistrosDocumentos';
 import { cargarActas, cargarClientes } from '../controllers/actasControllers';
 import { cargarTodasRazonesSociales } from '../controllers/razonSocialControllers';
 
-jest.mock('../api', () => ({}));
+jest.mock('../api', () => ({ API_BASE_URL: 'https://orca.example/api' }));
 jest.mock('../controllers/actasControllers', () => ({ cargarActas: jest.fn(), cargarClientes: jest.fn() }));
 jest.mock('../controllers/razonSocialControllers', () => ({ cargarTodasRazonesSociales: jest.fn() }));
 jest.mock('../controllers/servicios_adicionalesControllers', () => ({ agregarServicio: jest.fn(), modificarServicio: jest.fn(), borrarServicio: jest.fn() }));
@@ -72,6 +72,14 @@ test('tener una fecha de instalacion no equivale a tener documento', async () =>
   filas = [{ ...centro, instalacion_fecha: '2026-11-26', centro_fecha_instalacion: '2026-11-26' }];
   await abrir();
   expect(icono('Instalacion')).toHaveClass('registro-doc-section__icon--missing');
+});
+
+test('muestra la cantidad de documentos manuales solo en instalacion', async () => {
+  filas = [{ ...centro, instalacion_documento: '/api/filtro/documento/Instalaciones/9', cantidad_documentos_instalacion: 3 }];
+  await abrir();
+  expect(within(screen.getByTestId('celda-Instalacion')).getByText('3 documentos')).toBeInTheDocument();
+  expect(within(screen.getByTestId('celda-Instalacion')).getByRole('link', { name: 'Abrir documento' })).toHaveAttribute('href', 'https://orca.example/api/filtro/documento/Instalaciones/9');
+  expect(within(screen.getByTestId('celda-Mantenciones')).queryByText('3 documentos')).not.toBeInTheDocument();
 });
 
 test('un respaldo de armado habilita levantamientos sin exigir otro documento manual', async () => {

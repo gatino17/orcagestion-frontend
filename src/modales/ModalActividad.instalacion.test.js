@@ -2,12 +2,14 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import ModalActividad from './ModalActividad';
 import { obtenerInstalacionesActas, registrarInstalacionActas } from '../api';
+import { eliminarInstalacionesPorCentro } from '../controllers/actasControllers';
 
 jest.mock('../api', () => ({
   obtenerInstalacionesActas: jest.fn(), registrarInstalacionActas: jest.fn(),
 }));
 jest.mock('../controllers/actasControllers', () => ({
   cargarActasEntregaSistema: jest.fn(), cargarPermisosTrabajoSistema: jest.fn(),
+  eliminarInstalacionesPorCentro: jest.fn(),
 }));
 
 test('integra un unico formulario de instalacion y bloquea el cierre durante el guardado', async () => {
@@ -38,4 +40,16 @@ test('los textos de observacion de la ventana mantienen sus acentos', () => {
   render(<ModalActividad actividad={{ id_centro: 21 }} tipoInicial="retiro" onClose={jest.fn()} recargarDatos={jest.fn()} />);
   expect(screen.getByText('Observaci\u00f3n')).toBeInTheDocument();
   expect(screen.getByPlaceholderText('Ingrese una observaci\u00f3n')).toBeInTheDocument();
+});
+
+test('advierte antes de eliminar todos los documentos manuales y permite cancelar', async () => {
+  obtenerInstalacionesActas.mockResolvedValue([]);
+  const confirmar = jest.spyOn(window, 'confirm').mockReturnValue(false);
+  try {
+    render(<ModalActividad actividad={{ id_centro: 21, instalacion_documento: '/acta.pdf' }} tipoInicial="instalacion" onClose={jest.fn()} recargarDatos={jest.fn()} />);
+    await screen.findByText('Nuevo documento de instalacion');
+    fireEvent.click(screen.getByTitle('Eliminar todos los documentos manuales de instalacion'));
+    expect(confirmar).toHaveBeenCalledWith(expect.stringContaining('todos los documentos manuales'));
+    expect(eliminarInstalacionesPorCentro).not.toHaveBeenCalled();
+  } finally { confirmar.mockRestore(); }
 });

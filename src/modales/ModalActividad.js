@@ -192,6 +192,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
         } else if (tipoActividad === 'traslado') {
             await eliminarTrasladosPorCentro(actividad.id_centro);
         } else if (tipoActividad === 'instalacion') {
+            if (!window.confirm('Se eliminaran todos los documentos manuales de instalacion de este centro. Las actas del sistema se conservan. Quieres continuar?')) return;
             await eliminarInstalacionesPorCentro(actividad.id_centro);
         }
         
@@ -676,7 +677,7 @@ function ModalActividad({ actividad, onClose, recargarDatos, tipoInicial = 'leva
                         )}
                          
                          {tipoActividad === 'instalacion' && actividad.instalacion_documento && (
-                            <button type="button" className="btn btn-danger" onClick={handleEliminar} disabled={guardandoDocumento}>
+                            <button type="button" className="btn btn-danger" title="Eliminar todos los documentos manuales de instalacion" onClick={handleEliminar} disabled={guardandoDocumento}>
                                 <i className="fas fa-trash-alt"> Instalación</i>
                             </button>
                         )}

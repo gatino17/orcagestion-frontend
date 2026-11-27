@@ -28,8 +28,20 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
   const [aviso, setAviso] = useState('');
   const archivoRef = useRef(null);
   const enviando = useRef(false);
-  const actual = registros[0];
+  const [seleccion, setSeleccion] = useState(null);
+  const seleccionRef = useRef(null);
+  const actual = registros.find((registro) => String(registro.id_instalacion) === String(seleccion));
   const centroId = actividad.id_centro;
+
+  const editar = (registro) => {
+    seleccionRef.current = registro?.id_instalacion ?? null;
+    setSeleccion(seleccionRef.current);
+    setFecha(fechaInput(registro?.fecha_instalacion));
+    setMonitoreo(fechaInput(registro?.inicio_monitoreo));
+    setObservacion(registro?.observacion || '');
+    setArchivo(null); setError(''); setAviso('');
+    if (archivoRef.current) archivoRef.current.value = '';
+  };
 
   useEffect(() => {
     let vigente = true;
@@ -40,8 +52,10 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
       const propios = (Array.isArray(data) ? data : [])
         .filter((item) => String(item.centro_id) === String(centroId))
         .sort((a, b) => a.id_instalacion - b.id_instalacion);
-      const primero = propios[0];
+      const primero = propios.find((registro) => String(registro.id_instalacion) === String(seleccionRef.current)) || propios[0];
       setRegistros(propios);
+      seleccionRef.current = primero?.id_instalacion ?? null;
+      setSeleccion(seleccionRef.current);
       setFecha(fechaInput(primero?.fecha_instalacion || actividad.instalacion_fecha || actividad.centro_fecha_instalacion || actividad.fecha_instalacion));
       setMonitoreo(fechaInput(primero?.inicio_monitoreo || actividad.inicio_monitoreo));
       setObservacion(primero?.observacion || '');
@@ -76,11 +90,14 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
     const data = new FormData();
     data.append('centro_id', centroId);
     data.append('fecha_instalacion', fecha);
+    if (actual) data.append('id_instalacion', actual.id_instalacion);
+    else data.append('nuevo_documento', '1');
     if (monitoreo) data.append('inicio_monitoreo', monitoreo);
     data.append('observacion', observacion.trim());
     if (archivo) data.append('documento_acta', archivo);
     try {
-      await registrarInstalacionActas(data);
+      const resultado = await registrarInstalacionActas(data);
+      seleccionRef.current = resultado.id_instalacion;
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo guardar. Tus datos se mantienen para reintentar.');
       return;
@@ -102,11 +119,16 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
         <span className="instalacion-manual__icon" aria-hidden="true"><i className="fas fa-file-upload" /></span>
         <div><span className="instalacion-manual__eyebrow">RESPALDO DOCUMENTAL</span>
           <h5>Instalacion manual</h5>
-          <p>Adjunta el acta o respaldo para consultarlo desde el historial del centro.</p></div>
+          <p>Agrega uno o mas respaldos de la instalacion, cada uno con su fecha y documento.</p></div>
       </header>
       {cargando && <p role="status">Cargando instalacion...</p>}
       {errorCarga && <div role="alert" className="alert alert-danger">{errorCarga} <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => setRevision((value) => value + 1)}>Reintentar</button></div>}
       <fieldset disabled={cargando || guardando || Boolean(errorCarga)} className="instalacion-manual__fields">
+        <div className="instalacion-manual__editor">
+          <strong>{actual ? `Editar documento #${actual.id_instalacion}` : 'Nuevo documento de instalacion'}</strong>
+          {registros.length > 0 && <button type="button" className="btn btn-outline-primary btn-sm" disabled={!actual}
+            onClick={() => editar(null)}><i className="fas fa-plus mr-1" aria-hidden="true" />Agregar documento</button>}
+        </div>
         <div className="instalacion-manual__dates">
           <div><label htmlFor="instalacion-fecha">Fecha de instalacion <span aria-hidden="true">*</span></label>
             <input id="instalacion-fecha" type="date" required className="form-control" value={fecha} onChange={(event) => setFecha(event.target.value)} /></div>
@@ -127,8 +149,11 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
         <label htmlFor="instalacion-observacion">Observaciones <small>Opcional</small></label>
         <textarea id="instalacion-observacion" className="form-control" rows="3" value={observacion} onChange={(event) => setObservacion(event.target.value)} placeholder="Detalles de la instalacion o del documento adjunto." />
         {error && <div className="alert alert-danger mt-3 mb-0" role="alert">{error}</div>}
-        <div className="instalacion-manual__actions"><small>{actual ? 'Los cambios actualizan el registro manual existente.' : 'Este registro es independiente de las actas del sistema.'}</small>
-          <button type="button" className="btn btn-primary" onClick={guardar}>{guardando ? 'Guardando...' : actual ? 'Guardar cambios' : 'Guardar instalacion'}</button></div>
+        <div className="instalacion-manual__actions"><small>{actual ? 'Los cambios actualizan solo el documento seleccionado.' : registros.length ? 'Se agrega otro respaldo sin reemplazar los anteriores ni cambiar la fecha principal del centro.' : 'Este registro es independiente de las actas del sistema.'}</small>
+          <div className="instalacion-manual__buttons">
+            {!actual && registros.length > 0 && <button type="button" className="btn btn-outline-secondary" onClick={() => editar(registros[0])}>Cancelar nuevo documento</button>}
+            <button type="button" className="btn btn-primary" onClick={guardar}>{guardando ? 'Guardando...' : actual ? 'Guardar cambios' : registros.length ? 'Guardar documento' : 'Guardar instalacion'}</button>
+          </div></div>
       </fieldset>
       {aviso && <div className="alert alert-success mb-0 mt-3" role="status">{aviso}</div>}
       {!cargando && !errorCarga && registros.length > 0 && <div className="instalacion-manual__records">
@@ -136,7 +161,11 @@ export default function RegistroInstalacionManual({ actividad, onSaved, onBusyCh
         {registros.map((registro) => <article key={registro.id_instalacion}>
           <div><strong>{fechaTexto(registro.fecha_instalacion)}</strong><small>Monitoreo: {fechaTexto(registro.inicio_monitoreo)}</small>
             {registro.observacion && <p>{registro.observacion}</p>}</div>
-          {registro.documento_acta ? <a className="btn btn-sm btn-outline-primary" href={urlDocumentoInstalacion(registro.id_instalacion)} target="_blank" rel="noopener noreferrer">Abrir documento</a> : <span className="text-muted">Sin documento</span>}
+          <div className="instalacion-manual__buttons">
+            {registro.documento_acta ? <a className="btn btn-sm btn-outline-primary" href={urlDocumentoInstalacion(registro.id_instalacion)} target="_blank" rel="noopener noreferrer">Abrir documento</a> : <span className="text-muted">Sin documento</span>}
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={guardando} aria-label={`Editar documento #${registro.id_instalacion}`}
+              onClick={() => editar(registro)}><i className="fas fa-pen mr-1" aria-hidden="true" />Editar</button>
+          </div>
         </article>)}
       </div>}
     </section>

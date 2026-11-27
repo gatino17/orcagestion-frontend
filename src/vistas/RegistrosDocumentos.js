@@ -7,6 +7,7 @@ import { cargarClientes } from '../controllers/actasControllers';
 import ModalActividad from '../modales/ModalActividad';
 import { ResumenIntervencionesMantencion } from '../components/IntervencionesMantencion';
 import ExportarActividadesExcel from '../components/ExportarActividadesExcel';
+import { resolverDocumentoCentro } from '../utils/documentosCentro';
 import './RegistrosDocumentos.css';
 
 
@@ -429,9 +430,12 @@ function RegistrosDocumentos() {
                 <div className="registro-mantencion-row">
                     <div className="registro-mantencion-row__head">
                         <small>Manual</small>
+                        {row.cantidad_documentos_instalacion > 0 && <span className="registro-doc-badge registro-doc-badge--system">
+                            {row.cantidad_documentos_instalacion} {row.cantidad_documentos_instalacion === 1 ? 'documento' : 'documentos'}
+                        </span>}
                         {row.instalacion_documento ? (
                             <a
-                                href={row.instalacion_documento}
+                                href={resolverDocumentoCentro(row.instalacion_documento)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="registro-doc-link registro-doc-link--icon"

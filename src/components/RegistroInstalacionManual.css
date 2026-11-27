@@ -5,6 +5,8 @@
 .instalacion-manual h5 { font-size: 19px; margin: 3px 0 5px; }
 .instalacion-manual__header p { font-size: 13px; margin: 0; color: #647c92; }
 .instalacion-manual__fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.instalacion-manual__editor { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; font-size: 13px; }
+.instalacion-manual__buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .instalacion-manual__fields label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 7px; }
 .instalacion-manual__fields label small { color: #73859a; font-weight: 400; margin-left: 5px; }
 .instalacion-manual__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }

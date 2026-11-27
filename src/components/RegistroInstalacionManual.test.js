@@ -64,6 +64,59 @@ test('permite modificar observaciones sin reemplazar el documento', async () => 
   await waitFor(() => expect(registrarInstalacionActas).toHaveBeenCalledTimes(1));
   expect(registrarInstalacionActas.mock.calls[0][0].has('documento_acta')).toBe(false);
   expect(registrarInstalacionActas.mock.calls[0][0].get('observacion')).toBe('');
+  expect(registrarInstalacionActas.mock.calls[0][0].get('id_instalacion')).toBe('7');
+});
+
+test('agrega otro documento con fecha propia sin enviar el id del anterior', async () => {
+  obtenerInstalacionesActas.mockResolvedValue([existente]);
+  registrarInstalacionActas.mockResolvedValue({ id_instalacion: 8 });
+  const { onSaved } = abrir();
+  fireEvent.click(await screen.findByRole('button', { name: 'Agregar documento' }));
+  expect(screen.getByLabelText(/Fecha de instalacion/)).toHaveValue('');
+  expect(screen.getByLabelText(/Observaciones/)).toHaveValue('');
+  expect(screen.queryByRole('link', { name: 'Abrir documento actual' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/Fecha de instalacion/), { target: { value: '2026-11-27' } });
+  adjuntar('permiso.pdf');
+  const segundo = { ...existente, id_instalacion: 8, fecha_instalacion: '2026-11-27', documento_acta: 'instalaciones_docs/permiso.pdf', observacion: '' };
+  obtenerInstalacionesActas.mockResolvedValue([existente, segundo]);
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar documento' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  const data = registrarInstalacionActas.mock.calls[0][0];
+  expect(data.get('nuevo_documento')).toBe('1');
+  expect(data.has('id_instalacion')).toBe(false);
+  expect(data.get('fecha_instalacion')).toBe('2026-11-27');
+  expect(data.get('documento_acta').name).toBe('permiso.pdf');
+  await screen.findByText('Editar documento #8');
+  expect(screen.getAllByRole('link', { name: 'Abrir documento' })).toHaveLength(2);
+  expect(screen.getByLabelText(/Fecha de instalacion/)).toHaveValue('2026-11-27');
+});
+
+test('cada respaldo puede editarse de forma independiente', async () => {
+  obtenerInstalacionesActas.mockResolvedValue([existente, { ...existente, id_instalacion: 9, fecha_instalacion: '2026-11-27', observacion: 'Segundo respaldo' }]);
+  abrir();
+  fireEvent.click(await screen.findByRole('button', { name: 'Editar documento #9' }));
+  expect(screen.getByLabelText(/Fecha de instalacion/)).toHaveValue('2026-11-27');
+  expect(screen.getByLabelText(/Observaciones/)).toHaveValue('Segundo respaldo');
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await waitFor(() => expect(registrarInstalacionActas).toHaveBeenCalledTimes(1));
+  const data = registrarInstalacionActas.mock.calls[0][0];
+  expect(data.get('id_instalacion')).toBe('9');
+  expect(data.has('nuevo_documento')).toBe(false);
+  expect(data.has('documento_acta')).toBe(false);
+});
+
+test('un nuevo documento requiere adjunto y puede cancelarse sin guardar', async () => {
+  obtenerInstalacionesActas.mockResolvedValue([existente]);
+  abrir();
+  fireEvent.click(await screen.findByRole('button', { name: 'Agregar documento' }));
+  fireEvent.change(screen.getByLabelText(/Fecha de instalacion/), { target: { value: '2026-11-27' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar documento' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Adjunta el documento');
+  expect(registrarInstalacionActas).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar nuevo documento' }));
+  expect(screen.getByLabelText(/Fecha de instalacion/)).toHaveValue('2026-11-20');
+  expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 test('un error conserva los datos y permite reintentar sin anunciar exito', async () => {
