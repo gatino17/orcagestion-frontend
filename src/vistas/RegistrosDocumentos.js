@@ -340,7 +340,7 @@ function RegistrosDocumentos() {
         </span>
     );
 
-    const renderDocumentoSection = (titulo, fecha, documento, icono, toneClass = '', onOpen) => (
+    const renderDocumentoSection = (titulo, fecha, documento, icono, toneClass = '', onOpen, respaldos = []) => (
         <div
             className={`registro-doc-section ${toneClass} ${onOpen ? 'registro-doc-section--clickable' : ''}`}
             role={onOpen ? 'button' : undefined}
@@ -348,13 +348,13 @@ function RegistrosDocumentos() {
             onClick={onOpen}
         >
             <div className="registro-doc-section__header">
-                {renderIconoDocumento(icono, Boolean(documento))}
+                {renderIconoDocumento(icono, Boolean(documento || respaldos.length))}
                 <strong>{titulo}</strong>
             </div>
             <div className="registro-doc-section__content">
                 <div>
-                    <small>Fecha</small>
-                    <p>{getTextoFecha(fecha)}</p>
+                    <small>{!fecha && respaldos.length ? 'Fecha del armado' : 'Fecha'}</small>
+                    <p>{getTextoFecha(fecha || respaldos[0]?.fecha_armado)}</p>
                 </div>
                 <div>
                     <small>Documento</small>
@@ -369,6 +369,10 @@ function RegistrosDocumentos() {
                         >
                             <i className="fas fa-external-link-alt" />
                         </a>
+                    ) : respaldos.length ? (
+                        <button type="button" className="btn btn-sm btn-outline-info" onClick={(event) => { event.stopPropagation(); onOpen(); }}>
+                            {respaldos.length} respaldo{respaldos.length === 1 ? '' : 's'} de armado
+                        </button>
                     ) : (
                         <span className="registro-doc-missing">Sin registro</span>
                     )}
@@ -474,7 +478,8 @@ function RegistrosDocumentos() {
                 row[campoDocumento],
                 icono,
                 toneClass,
-                () => handleDetallesActividad(row, tipoActividad)
+                () => handleDetallesActividad(row, tipoActividad),
+                tipoActividad === 'levantamiento' ? row.levantamiento_respaldos || [] : []
             ),
         grow: 1.2,
         wrap: true,

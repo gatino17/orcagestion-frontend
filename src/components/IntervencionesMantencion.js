@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { obtenerIntervencionesMantencion, vincularDocumentoMantencion, desvincularDocumentoMantencion, descargarDocumentoMantencionActas } from '../api';
 
-export function DocumentosIntervencion({ documentos = [] }) {
+export function DocumentosIntervencion({ documentos = [], onAbrir }) {
   const disponibles = documentos.filter((doc) => doc.disponible);
   return <div className="mb-2">
     <span className={`badge ${disponibles.length ? 'bg-success' : 'bg-danger'} text-white`}>
@@ -9,7 +9,9 @@ export function DocumentosIntervencion({ documentos = [] }) {
     </span>
     {disponibles.map((doc) => <div className="mt-1" key={`${doc.tipo}-${doc.id}`}>
       {doc.tipo === 'manual'
-        ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => descargarDocumentoMantencionActas(doc.id)}>Ver documento manual #{doc.id}</button>
+        ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onAbrir
+          ? onAbrir({ titulo: `Mantencion #${doc.id}`, url: `/api/filtro/documento/Mantenciones/${doc.id}` })
+          : descargarDocumentoMantencionActas(doc.id)}>Ver documento manual #{doc.id}</button>
         : <a className="btn btn-sm btn-outline-primary" href={`/informes-centros?mantencion=${doc.id}&centro_id=${doc.centro_id}`} target="_blank" rel="noopener noreferrer">Consultar informe sistema #{doc.id}</a>}
     </div>)}
   </div>;

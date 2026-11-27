@@ -1011,6 +1011,7 @@ export const obtenerActas = async (filtros = {}) => {
     try {
         console.log("Enviando filtros:", filtros);
         const response = await axios.get(`${BASE_URL}/actas/listar`, {
+            ...authHeaders(),
             params: filtros,
         });
         console.log("Respuesta recibida:", response.data); // Log para depuración
@@ -1026,6 +1027,7 @@ export const obtenerActas = async (filtros = {}) => {
 export const obtenerLevantamientosActas = async (centroId) => {
     try {
         const response = await axios.get(`${BASE_URL}/actas/levantamientos`, {
+            ...authHeaders(),
             params: centroId ? { centro_id: centroId } : {},
         });
         return response.data;
@@ -1946,6 +1948,19 @@ export const obtenerImagenObservacionArmado = async (id, imagenId) => {
     return response.data;
 };
 
+export const obtenerRespaldoLevantamientoArmado = async (id) => {
+    const response = await axios.get(`${BASE_URL}/actas/levantamientos/armado/${id}/documento`,
+        { ...authHeaders(), responseType: 'blob' });
+    return response.data;
+};
+
+export const obtenerDocumentoCentro = async (url) => {
+    // La sesion solo se envia a nuestra API, nunca a enlaces externos del historial.
+    const esApi = url.startsWith(`${BASE_URL.replace(/\/$/, '')}/`);
+    const response = await axios.get(url, { ...(esApi ? authHeaders() : {}), responseType: 'blob' });
+    return response.data;
+};
+
 export const eliminarArmado = async (id) => {
     try {
         const response = await axios.delete(`${BASE_URL}/armados/${id}`);
@@ -2187,7 +2202,7 @@ export const fetchCentrosPorCliente = async (clienteId) => {
 // Obtener historial y detalles de un centro
 export const fetchHistorialCentro = async (centroId) => {
     try {
-        const response = await axios.get(`${BASE_URL}/consultas_centro/centro_historial/${centroId}`);
+        const response = await axios.get(`${BASE_URL}/consultas_centro/centro_historial/${centroId}`, authHeaders());
         return response.data;
     } catch (error) {
         console.error('Error fetching center history:', error);

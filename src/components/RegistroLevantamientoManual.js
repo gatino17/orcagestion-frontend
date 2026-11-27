@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL, obtenerLevantamientosActas, registrarLevantamientoActas, modificarLevantamientoActas } from '../api';
 import './RegistroInstalacionManual.css';
+import RespaldoLevantamientoArmado from './RespaldoLevantamientoArmado';
 
 const fechaInput = (valor) => {
   if (!valor) return '';
@@ -12,6 +13,7 @@ const urlDocumento = (id) => `${(API_BASE_URL || '/api').replace(/\/$/, '')}/fil
 
 export default function RegistroLevantamientoManual({ actividad, onSaved, onBusyChange }) {
   const [registros, setRegistros] = useState([]);
+  const [respaldos, setRespaldos] = useState([]);
   const [actualId, setActualId] = useState(null);
   const [fecha, setFecha] = useState('');
   const [archivo, setArchivo] = useState(null);
@@ -34,8 +36,9 @@ export default function RegistroLevantamientoManual({ actividad, onSaved, onBusy
     obtenerLevantamientosActas(centroId).then((data) => {
       if (!vigente) return;
       if (!Array.isArray(data)) throw new Error('Listado invalido.');
-      const propios = data
-        .filter((item) => String(item.centro_id) === String(centroId))
+      const delCentro = data.filter((item) => String(item.centro_id) === String(centroId));
+      setRespaldos(delCentro.filter((item) => item.origen === 'armado'));
+      const propios = delCentro.filter((item) => item.origen !== 'armado')
         .sort((a, b) => b.id_levantamiento - a.id_levantamiento);
       const registro = propios.find((item) => item.id_levantamiento === seleccionado.current) || propios[0];
       setRegistros(propios);
@@ -102,6 +105,11 @@ export default function RegistroLevantamientoManual({ actividad, onSaved, onBusy
     </header>
     {cargando && <p role="status">Cargando levantamientos...</p>}
     {errorCarga && <div className="alert alert-danger" role="alert">{errorCarga} <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => setRevision((valor) => valor + 1)}>Reintentar</button></div>}
+    {!cargando && !errorCarga && respaldos.length > 0 && <div className="mb-4">
+      <h6>Respaldos desde Armado <span className="badge badge-info">{respaldos.length}</span></h6>
+      <p className="small text-muted">Estos archivos se administran desde la observacion del armado. No necesitas volver a cargarlos aqui.</p>
+      {respaldos.map((doc) => <RespaldoLevantamientoArmado key={doc.id_respaldo_armado} documento={doc} />)}
+    </div>}
     <fieldset className="instalacion-manual__fields" disabled={cargando || guardando || Boolean(errorCarga)}>
       <div className="instalacion-manual__dates"><div>
         <label htmlFor="levantamiento-fecha">Fecha del levantamiento <span aria-hidden="true">*</span></label>

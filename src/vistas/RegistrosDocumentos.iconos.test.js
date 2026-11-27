@@ -74,6 +74,14 @@ test('tener una fecha de instalacion no equivale a tener documento', async () =>
   expect(icono('Instalacion')).toHaveClass('registro-doc-section__icon--missing');
 });
 
+test('un respaldo de armado habilita levantamientos sin exigir otro documento manual', async () => {
+  filas = [{ ...centro, levantamiento_respaldos: [{ id_respaldo_armado: 21, nombre: 'Plano', fecha_armado: '2026-11-27' }] }];
+  await abrir();
+  expect(icono('Levantamiento')).not.toHaveClass('registro-doc-section__icon--missing');
+  expect(screen.getByRole('button', { name: '1 respaldo de armado' })).toBeInTheDocument();
+  expect(screen.getByText('Fecha del armado')).toBeInTheDocument();
+});
+
 test('mantenciones conserva respaldo manual aunque provenga de otra fila agrupada', async () => {
   filas = [{ ...centro, mantencion_fecha: '2026-11-25' },
     { ...centro, mantencion_fecha: '2026-11-26', mantencion_documento: '/mantencion.pdf' }];

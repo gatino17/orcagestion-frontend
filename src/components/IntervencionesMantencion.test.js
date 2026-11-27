@@ -91,6 +91,14 @@ test('resumen identifica un soporte sin documento con indicador rojo', () => {
   expect(screen.getByText('Falta documento: 1')).toHaveClass('bg-danger');
 });
 
+test('delega documentos manuales al visor cuando se proporciona onAbrir', () => {
+  const onAbrir = jest.fn();
+  render(<DocumentosIntervencion documentos={[doc]} onAbrir={onAbrir} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ver documento manual #11' }));
+  expect(onAbrir).toHaveBeenCalledWith({ titulo: 'Mantencion #11', url: '/api/filtro/documento/Mantenciones/11' });
+  expect(descargarDocumentoMantencionActas).not.toHaveBeenCalled();
+});
+
 test('ofrece adjuntar al soporte y no muestra un vinculo deshabilitado si no hay documentos', async () => {
   obtenerIntervencionesMantencion.mockResolvedValue({ ...sinDoc, disponibles: [] });
   const adjuntar = jest.fn();

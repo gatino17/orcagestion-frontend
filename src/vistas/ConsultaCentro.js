@@ -12,6 +12,8 @@ import './ConsultaCentro.css';
 import { DocumentosIntervencion } from '../components/IntervencionesMantencion';
 import { resolverDocumentoInstalacion } from '../utils/documentosInstalacion';
 import { resolverDocumentoCentro } from '../utils/documentosCentro';
+import RespaldoLevantamientoArmado from '../components/RespaldoLevantamientoArmado';
+import VisorDocumentoCentro from '../components/VisorDocumentoCentro';
 
 const compararFecha = (campo) => (a, b) => {
   const fechaA = Date.parse(a?.[campo]);
@@ -32,9 +34,11 @@ const ConsultaCentro = () => {
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [selectedCentro, setSelectedCentro] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [documentoVisor, setDocumentoVisor] = useState(null);
   const [inventario, setInventario] = useState([]);
   const [rolUsuario, setRolUsuario] = useState('');
   const documentosInstalacion = useDocumentosInstalacionCentro(selectedCentro);
+  useEffect(() => { setDocumentoVisor(null); }, [selectedCliente, selectedCentro]);
 
   // Cargar rol del usuario desde el token
   useEffect(() => {
@@ -229,7 +233,7 @@ const ConsultaCentro = () => {
 
   const renderDocumento = (documento) =>
     documento ? (
-      <a href={documento} target="_blank" rel="noopener noreferrer" className="timeline-link">
+      <a href={documento} className="timeline-link" onClick={(event) => { event.preventDefault(); setDocumentoVisor({ titulo: 'Documento del centro', url: documento }); }}>
         Ver documento
       </a>
     ) : (
@@ -473,7 +477,7 @@ const ConsultaCentro = () => {
               {inventario.length > 0 ? (
                 <button
                   className="btn btn-warning"
-                  onClick={() => window.open(resolverDocumentoCentro(inventario[0].documento), '_blank')}
+                  onClick={() => setDocumentoVisor({ titulo: 'Inventario del centro', url: resolverDocumentoCentro(inventario[0].documento) })}
                 >
                   <i className="fas fa-clipboard-list mr-2" />
                   Ver inventario
@@ -521,10 +525,12 @@ const ConsultaCentro = () => {
                         <span className="timeline-date">
                           {formatearFecha(item[section.dateField])}
                         </span>
-                        {section.key === 'mantenciones' && (item.es_soporte_terreno || item.documentos)
+                        {section.key === 'levantamientos' && item.origen === 'armado'
+                          ? <RespaldoLevantamientoArmado documento={item} onAbrir={setDocumentoVisor} />
+                          : section.key === 'mantenciones' && (item.es_soporte_terreno || item.documentos)
                           ? <>
                             {item.es_soporte_terreno && <p><strong>Mantencion en terreno · Soporte #{item.id_soporte}</strong></p>}
-                            <DocumentosIntervencion documentos={item.documentos || []} />
+                            <DocumentosIntervencion documentos={item.documentos || []} onAbrir={setDocumentoVisor} />
                           </> : renderDocumento(resolverDocumentoCentro(section.key === 'instalaciones'
                             ? resolverDocumentoInstalacion(item.documento, item.id_instalacion) : item.documento))}
                         {renderExtraInfo(section.key, item)}
@@ -551,6 +557,7 @@ const ConsultaCentro = () => {
       )}
 
       {/* MODAL IPs */}
+      {documentoVisor && <VisorDocumentoCentro documento={documentoVisor} onClose={() => setDocumentoVisor(null)} />}
       {showModal && (
         <div className="modal" style={{ display: 'block' }}>
           <div className="modal-dialog modal-dialog-scrollable">

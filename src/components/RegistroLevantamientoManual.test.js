@@ -40,6 +40,17 @@ test('precarga solo el centro propio y usa el servidor configurado para abrir el
   expect(screen.getByLabelText('Documento del levantamiento')).toHaveAttribute('accept', '.ppt,.pptx,.pdf,.jpg,.jpeg,.png');
 });
 
+test('los respaldos de armado se muestran aparte y no se editan como levantamientos manuales', async () => {
+  obtenerLevantamientosActas.mockResolvedValue([{ origen: 'armado', centro_id: 21, id_armado: 8,
+    id_respaldo_armado: 31, nombre: 'Plano compartido', tipo_documento: 'pdf' }]);
+  abrir();
+  expect(await screen.findByText('Plano compartido')).toBeInTheDocument();
+  expect(screen.getByText(/se administran desde la observacion/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Guardar levantamiento' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument();
+});
+
 test.each(['plano.ppt', 'plano.PPTX'])('guarda PowerPoint %s y actualiza sin cerrar ni duplicar', async (nombre) => {
   const { onSaved, onBusyChange } = abrir();
   await completar();

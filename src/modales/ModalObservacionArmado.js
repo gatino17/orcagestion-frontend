@@ -5,6 +5,7 @@ import './ModalObservacionArmado.css';
 const MAX_IMAGEN = 5 * 1024 * 1024;
 
 function VistaPrevia({ archivo, imagen, armadoId, posicion }) {
+  const esPdf = /\.pdf$/i.test(archivo?.name || '') || (!archivo && imagen?.tipo === 'pdf');
   const [url, setUrl] = useState('');
   const [error, setError] = useState(false);
   const [intento, setIntento] = useState(0);
@@ -28,8 +29,9 @@ function VistaPrevia({ archivo, imagen, armadoId, posicion }) {
   if (error) return <button type="button" className="armado-adjunto__preview armado-adjunto__retry" title="No se pudo cargar la imagen. Reintentar."
     aria-label={`Reintentar imagen ${posicion}`} onClick={() => setIntento((n) => n + 1)}><i className="fas fa-redo" aria-hidden="true" /></button>;
   if (!url) return <div className="armado-adjunto__preview armado-adjunto__loading" role="status"><span className="spinner-border spinner-border-sm" /><span className="sr-only">Cargando imagen {posicion}...</span></div>;
-  return <a className="armado-adjunto__preview" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Ver imagen ${posicion} ampliada`} title="Ampliar imagen">
-    <img src={url} alt={`Imagen ${posicion} de la observacion`} />
+  return <a className="armado-adjunto__preview" href={url} target="_blank" rel="noopener noreferrer" aria-label={esPdf ? `Ver PDF ${posicion}` : `Ver imagen ${posicion} ampliada`} title={esPdf ? 'Abrir PDF' : 'Ampliar imagen'}>
+    {esPdf ? <span aria-label={`Ver PDF ${posicion}`}><i className="fas fa-file-pdf text-danger" aria-hidden="true" /> PDF</span>
+      : <img src={url} alt={`Imagen ${posicion} de la observacion`} />}
   </a>;
 }
 
@@ -65,8 +67,8 @@ export default function ModalObservacionArmado({ armadoId, centro, onClose, onSa
   const seleccionar = (posicion, input) => {
     const file = input.files?.[0];
     if (!file) return;
-    if (!/\.(jpe?g|png|webp)$/i.test(file.name) || file.size > MAX_IMAGEN) {
-      setError('Adjunta imagenes JPG, PNG o WebP de hasta 5 MB cada una.');
+    if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name) || !file.size || file.size > MAX_IMAGEN) {
+      setError('Adjunta una imagen JPG, PNG o WebP, o un PDF, con contenido y de hasta 5 MB.');
       input.value = '';
       return;
     }
@@ -108,8 +110,8 @@ export default function ModalObservacionArmado({ armadoId, centro, onClose, onSa
           <fieldset disabled={cargando || !cargado || guardando}>
             <label htmlFor="texto-observacion-armado" className="mb-2 font-weight-bold">Texto de observacion</label>
             <textarea id="texto-observacion-armado" className="form-control" rows={4} maxLength={10000} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe la observacion del armado..." />
-            <section className="armado-adjuntos" aria-label="Imagenes de respaldo">
-              <div className="armado-adjuntos__header"><span>Imagenes de respaldo <span className="armado-adjuntos__count" aria-label={`${cantidadImagenes} de 2 imagenes adjuntas`}>{cantidadImagenes}/2</span></span><small>JPG, PNG o WebP. Hasta 5 MB.</small></div>
+            <section className="armado-adjuntos" aria-label="Imagenes o PDF de respaldo">
+              <div className="armado-adjuntos__header"><span>Imagenes o PDF de respaldo <span className="armado-adjuntos__count" aria-label={`${cantidadImagenes} de 2 archivos adjuntos`}>{cantidadImagenes}/2</span></span><small>JPG, PNG, WebP o PDF. Hasta 5 MB por archivo.</small></div>
               <div className="armado-adjuntos__grid">
               {[1, 2].map((posicion) => {
                 const imagen = imagenes.find((i) => i.posicion === posicion);
@@ -118,18 +120,18 @@ export default function ModalObservacionArmado({ armadoId, centro, onClose, onSa
                 const nombre = titulos[posicion] || archivo?.name || imagen?.nombre;
                 return <div className={`armado-adjunto${tieneImagen ? ' armado-adjunto--filled' : ''}${eliminar[posicion] ? ' armado-adjunto--removed' : ''}`} key={posicion}>
                   <input ref={(input) => { inputsRef.current[posicion] = input; }} key={archivo ? archivo.name : `vacio-${posicion}`}
-                    id={`imagen-observacion-${posicion}`} aria-label={`Imagen ${posicion} (opcional)`} type="file" tabIndex={-1}
-                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="armado-adjunto__input" onChange={(e) => seleccionar(posicion, e.target)} />
+                    id={`imagen-observacion-${posicion}`} aria-label={`Archivo ${posicion} (opcional)`} type="file" tabIndex={-1}
+                    accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" className="armado-adjunto__input" onChange={(e) => seleccionar(posicion, e.target)} />
                   {tieneImagen ? <>
                     <VistaPrevia archivo={archivo} imagen={imagen} armadoId={armadoId} posicion={posicion} />
                     <div className="armado-adjunto__details">
-                      <span className="armado-adjunto__label">Imagen {posicion}{archivo && <span className="armado-adjunto__new">Nueva</span>}</span>
-                      <input type="text" className="armado-adjunto__title" aria-label={`Titulo de imagen ${posicion}`} title={nombre}
+                      <span className="armado-adjunto__label">Archivo {posicion}{archivo && <span className="armado-adjunto__new">Nuevo</span>}</span>
+                      <input type="text" className="armado-adjunto__title" aria-label={`Titulo de archivo ${posicion}`} title={nombre}
                         value={titulos[posicion] || ''} maxLength={200} placeholder="Ej. Plano del sistema"
                         onChange={(e) => setTitulos((prev) => ({ ...prev, [posicion]: e.target.value }))} />
                       <div className="armado-adjunto__actions">
-                        <button type="button" aria-label={`Reemplazar imagen ${posicion}`} title="Reemplazar imagen" onClick={() => inputsRef.current[posicion]?.click()}><i className="fas fa-pen" aria-hidden="true" /></button>
-                        <button type="button" className="armado-adjunto__remove" aria-label={archivo ? `Descartar nueva imagen ${posicion}` : `Quitar imagen ${posicion}`}
+                        <button type="button" aria-label={`Reemplazar archivo ${posicion}`} title="Reemplazar archivo" onClick={() => inputsRef.current[posicion]?.click()}><i className="fas fa-pen" aria-hidden="true" /></button>
+                        <button type="button" className="armado-adjunto__remove" aria-label={archivo ? `Descartar nuevo archivo ${posicion}` : `Quitar archivo ${posicion}`}
                           title={archivo ? 'Descartar seleccion' : 'Quitar imagen'} onClick={() => archivo
                             ? setArchivos((prev) => ({ ...prev, [posicion]: null }))
                             : setEliminar((prev) => ({ ...prev, [posicion]: true }))}><i className={`fas ${archivo ? 'fa-times' : 'fa-trash-alt'}`} aria-hidden="true" /></button>
@@ -137,9 +139,9 @@ export default function ModalObservacionArmado({ armadoId, centro, onClose, onSa
                     </div>
                   </> : eliminar[posicion] ? <div className="armado-adjunto__removed">
                     <i className="far fa-image" aria-hidden="true" /><span>Se quitara al guardar</span>
-                    <button type="button" aria-label={`Conservar imagen ${posicion}`} onClick={() => setEliminar((prev) => ({ ...prev, [posicion]: false }))}>Deshacer</button>
-                  </div> : <button type="button" className="armado-adjunto__upload" aria-label={`Adjuntar imagen ${posicion}`} onClick={() => inputsRef.current[posicion]?.click()}>
-                    <span className="armado-adjunto__upload-icon"><i className="fas fa-plus" aria-hidden="true" /></span><span><strong>Adjuntar imagen</strong><small>Opcional</small></span>
+                    <button type="button" aria-label={`Conservar archivo ${posicion}`} onClick={() => setEliminar((prev) => ({ ...prev, [posicion]: false }))}>Deshacer</button>
+                  </div> : <button type="button" className="armado-adjunto__upload" aria-label={`Adjuntar archivo ${posicion}`} onClick={() => inputsRef.current[posicion]?.click()}>
+                    <span className="armado-adjunto__upload-icon"><i className="fas fa-plus" aria-hidden="true" /></span><span><strong>Adjuntar archivo</strong><small>Imagen o PDF</small></span>
                   </button>}
                 </div>;
               })}
