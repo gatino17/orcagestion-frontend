@@ -428,11 +428,14 @@ function RegistrosDocumentos() {
             </div>
             <div className="registro-mantencion-stack">
                 <div className="registro-mantencion-row">
-                    <div className="registro-mantencion-row__head">
-                        <small>Manual</small>
-                        {row.cantidad_documentos_instalacion > 0 && <span className="registro-doc-badge registro-doc-badge--system">
-                            {row.cantidad_documentos_instalacion} {row.cantidad_documentos_instalacion === 1 ? 'documento' : 'documentos'}
-                        </span>}
+                    <div className="registro-mantencion-row__head registro-instalacion-manual__head">
+                        <div className="registro-instalacion-manual__label">
+                            <small>Manual</small>
+                            <span className={`registro-doc-badge ${row.instalacion_documento ? '' : 'registro-doc-badge--empty'}`}
+                                aria-label="Documentos manuales de instalacion">
+                                {row.cantidad_documentos_instalacion ?? (row.instalacion_documento ? 1 : 0)}
+                            </span>
+                        </div>
                         {row.instalacion_documento ? (
                             <a
                                 href={resolverDocumentoCentro(row.instalacion_documento)}

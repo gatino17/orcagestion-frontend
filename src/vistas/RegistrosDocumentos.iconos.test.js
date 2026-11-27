@@ -77,9 +77,24 @@ test('tener una fecha de instalacion no equivale a tener documento', async () =>
 test('muestra la cantidad de documentos manuales solo en instalacion', async () => {
   filas = [{ ...centro, instalacion_documento: '/api/filtro/documento/Instalaciones/9', cantidad_documentos_instalacion: 3 }];
   await abrir();
-  expect(within(screen.getByTestId('celda-Instalacion')).getByText('3 documentos')).toBeInTheDocument();
+  const instalacion = within(screen.getByTestId('celda-Instalacion'));
+  expect(instalacion.getByLabelText('Documentos manuales de instalacion')).toHaveTextContent(/^3$/);
+  expect(instalacion.getByLabelText('Documentos manuales de instalacion').parentElement).toHaveTextContent('Manual3');
+  expect(instalacion.queryByText('3 documentos')).not.toBeInTheDocument();
   expect(within(screen.getByTestId('celda-Instalacion')).getByRole('link', { name: 'Abrir documento' })).toHaveAttribute('href', 'https://orca.example/api/filtro/documento/Instalaciones/9');
   expect(within(screen.getByTestId('celda-Mantenciones')).queryByText('3 documentos')).not.toBeInTheDocument();
+});
+
+test.each([
+  [{ instalacion_documento: '/acta.pdf', cantidad_documentos_instalacion: 1 }, '1'],
+  [{ instalacion_documento: '/acta.pdf' }, '1'],
+  [{}, '0'],
+])('el contador manual es compacto y contempla registros anteriores: %j', async (datos, cantidad) => {
+  filas = [{ ...centro, ...datos }];
+  await abrir();
+  const contador = within(screen.getByTestId('celda-Instalacion')).getByLabelText('Documentos manuales de instalacion');
+  expect(contador.textContent.trim()).toBe(cantidad);
+  expect(contador.closest('.registro-instalacion-manual__head')).not.toBeNull();
 });
 
 test('un respaldo de armado habilita levantamientos sin exigir otro documento manual', async () => {

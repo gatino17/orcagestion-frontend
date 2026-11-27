@@ -484,6 +484,13 @@
   color: #64748b;
 }
 
+.registro-instalacion-manual__head { gap: 8px; }
+.registro-instalacion-manual__label { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.registro-instalacion-manual__label small { word-break: normal; overflow-wrap: normal; }
+.registro-instalacion-manual__label .registro-doc-badge { flex-shrink: 0; min-width: 24px; padding: 2px 7px; font-size: 12px; line-height: 1.4; }
+.registro-instalacion-manual__head .registro-doc-link--icon { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; }
+.registro-doc-section--instalacion .registro-mantencion-row p { word-break: normal; overflow-wrap: normal; }
+
 .registro-centro-cell {
   display: flex;
   flex-direction: column;
