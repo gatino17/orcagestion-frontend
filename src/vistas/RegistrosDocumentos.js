@@ -551,7 +551,6 @@ function RegistrosDocumentos() {
             minWidth: '210px',
             allowOverflow: false,
         },
-        crearColumnaDocumento('Traslado', 'traslado_fecha', 'traslado_documento', 'fa-truck', 'registro-doc-section--traslado', 'traslado'),
         crearColumnaDocumento(
             'Cese',
             'cese_fecha',
@@ -561,6 +560,7 @@ function RegistrosDocumentos() {
             'cese',
             (row) => row.cese_fecha || ((row.estado || '').toLowerCase() === 'cese' ? row.centro_fecha_termino : null)
         ),
+        crearColumnaDocumento('Traslado', 'traslado_fecha', 'traslado_documento', 'fa-truck', 'registro-doc-section--traslado', 'traslado'),
         crearColumnaDocumento('Retiro', 'retiro_fecha', 'retiro_documento', 'fa-times-circle', 'registro-doc-section--retiro', 'retiro'),
         crearColumnaDocumento('Inventario', null, 'inventario_documento', 'fa-box-open', 'registro-doc-section--inventario', 'inventario'),
     ];

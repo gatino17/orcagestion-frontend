@@ -34,6 +34,14 @@ const abrir = async () => {
 };
 const icono = (columna) => screen.getByTestId('celda-' + columna).querySelector('.registro-doc-section__icon');
 
+test('traslado aparece inmediatamente despues de cese en la tabla', async () => {
+  await abrir();
+  const titulos = Array.from(screen.getByTestId('centro-21').querySelectorAll('.registro-doc-section__header strong'));
+  expect(titulos.map((titulo) => titulo.textContent)).toEqual([
+    'Mantenciones', 'Levantamiento', 'Instalacion', 'Cese', 'Traslado', 'Retiro', 'Inventario',
+  ]);
+});
+
 test('todas las actividades sin documento muestran el icono rojo', async () => {
   await abrir();
   for (const columna of ['Levantamiento', 'Instalacion', 'Mantenciones', 'Traslado', 'Cese', 'Retiro', 'Inventario']) {
