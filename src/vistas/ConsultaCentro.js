@@ -11,6 +11,7 @@ import DocumentosInstalacionCentro, { useDocumentosInstalacionCentro } from '../
 import './ConsultaCentro.css';
 import { DocumentosIntervencion } from '../components/IntervencionesMantencion';
 import { resolverDocumentoInstalacion } from '../utils/documentosInstalacion';
+import { resolverDocumentoCentro } from '../utils/documentosCentro';
 
 const compararFecha = (campo) => (a, b) => {
   const fechaA = Date.parse(a?.[campo]);
@@ -472,7 +473,7 @@ const ConsultaCentro = () => {
               {inventario.length > 0 ? (
                 <button
                   className="btn btn-warning"
-                  onClick={() => window.open(inventario[0].documento, '_blank')}
+                  onClick={() => window.open(resolverDocumentoCentro(inventario[0].documento), '_blank')}
                 >
                   <i className="fas fa-clipboard-list mr-2" />
                   Ver inventario
@@ -524,8 +525,8 @@ const ConsultaCentro = () => {
                           ? <>
                             {item.es_soporte_terreno && <p><strong>Mantencion en terreno · Soporte #{item.id_soporte}</strong></p>}
                             <DocumentosIntervencion documentos={item.documentos || []} />
-                          </> : renderDocumento(section.key === 'instalaciones'
-                            ? resolverDocumentoInstalacion(item.documento, item.id_instalacion) : item.documento)}
+                          </> : renderDocumento(resolverDocumentoCentro(section.key === 'instalaciones'
+                            ? resolverDocumentoInstalacion(item.documento, item.id_instalacion) : item.documento))}
                         {renderExtraInfo(section.key, item)}
                       </div>
                     ))
